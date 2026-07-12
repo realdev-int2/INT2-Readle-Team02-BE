@@ -1,0 +1,26 @@
+minimum_pre_commit_version: '3.0.0'
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: local
+    hooks:
+      - id: backend-spotless-check
+        name: Backend Spotless check
+        entry: scripts/hooks/run_gradle.py spotlessCheck
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: gitleaks
+        name: Secret scan with gitleaks
+        entry: gitleaks protect --staged --config .gitleaks.toml --redact
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: backend-quality-gate
+        name: Backend quality gate
+        entry: scripts/hooks/run_gradle.py spotlessCheck test build
+        language: script
+        pass_filenames: false
+        stages: [pre-push]

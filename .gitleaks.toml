@@ -1,0 +1,10 @@
+title = "Readle gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore generated build artifacts"
+paths = [
+    '''(^|/)build/''',
+]

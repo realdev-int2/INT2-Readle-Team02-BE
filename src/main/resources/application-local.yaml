@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/${MYSQL_DATABASE:readle}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${SPRING_DATASOURCE_USERNAME:${MYSQL_USER:readleuser}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${MYSQL_PASSWORD:readle_local_password}}
+    hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:5}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:1}
+
+  cloud:
+    aws:
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:test}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+      region:
+        static: ${AWS_REGION:ap-northeast-2}
+      s3:
+        endpoint: ${S3_ENDPOINT:http://localhost:4566}
+        path-style-access-enabled: true
+
+readle:
+  storage:
+    s3:
+      bucket: ${S3_BUCKET:readle-local}
+
+management:
+  endpoint:
+    health:
+      show-details: always
