@@ -37,10 +37,10 @@ public class QuizResult {
   @Column(name = "accuracy_rate", nullable = false, precision = 5, scale = 2)
   private BigDecimal accuracyRate;
 
-  @Column(name = "correct_count", nullable = false, columnDefinition="SMALLINT")
+  @Column(name = "correct_count", nullable = false, columnDefinition = "SMALLINT")
   private Integer correctCount;
 
-  @Column(name = "total_count", nullable = false, columnDefinition="SMALLINT")
+  @Column(name = "total_count", nullable = false, columnDefinition = "SMALLINT")
   private Integer totalCount;
 
   @Column(name = "solve_duration_seconds", nullable = false)
