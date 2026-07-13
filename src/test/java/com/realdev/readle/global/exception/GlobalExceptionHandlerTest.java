@@ -1,5 +1,6 @@
 package com.realdev.readle.global.exception;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,7 +25,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@WebMvcTest(controllers = {TestController.class, GlobalExceptionHandler.class})
+@WebMvcTest(
+    controllers = {
+      ValidatedController.class,
+      NonValidatedController.class,
+      GlobalExceptionHandler.class
+    })
 @Import(SecurityConfig.class)
 class GlobalExceptionHandlerTest {
 
@@ -93,10 +99,21 @@ class GlobalExceptionHandlerTest {
   }
 
   @Test
-  @DisplayName("ConstraintViolationException 발생 시 400 INVALID_INPUT과 예외 메시지를 반환한다")
+  @DisplayName("ConstraintViolationException 발생 시 위반 항목들의 메시지를 반환한다")
   void handleConstraintViolationException() throws Exception {
     mockMvc
-        .perform(get("/test/constraint-violation"))
+        .perform(get("/test/validated/constraint-violation").param("name", "   "))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.message").value(containsString("must not be blank")))
+        .andExpect(jsonPath("$.timestamp").exists());
+  }
+
+  @Test
+  @DisplayName("ConstraintViolationException 발생 시 위반 정보(violations)가 없으면 기본 에러 메시지를 반환한다")
+  void handleConstraintViolationExceptionWithNullViolations() throws Exception {
+    mockMvc
+        .perform(get("/test/manual/constraint-violation-null"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
         .andExpect(jsonPath("$.message").value("유효한 입력 형식이 아닙니다."))
@@ -107,10 +124,10 @@ class GlobalExceptionHandlerTest {
   @DisplayName("컨트롤러 파라미터 검증 실패 시(HandlerMethodValidationException) 400 INVALID_INPUT을 반환한다")
   void handleHandlerMethodValidationException() throws Exception {
     mockMvc
-        .perform(get("/test/handler-method-validation").param("name", "   "))
+        .perform(get("/test/non-validated/handler-method-validation").param("name", "   "))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value("must not be blank"))
+        .andExpect(jsonPath("$.message").value(containsString("must not be blank")))
         .andExpect(jsonPath("$.timestamp").exists());
   }
 
@@ -143,7 +160,7 @@ class GlobalExceptionHandlerTest {
   @DisplayName("필수 쿼리 파라미터 누락 시 400 INVALID_INPUT을 반환한다")
   void handleMissingServletRequestParameter() throws Exception {
     mockMvc
-        .perform(get("/test/handler-method-validation"))
+        .perform(get("/test/non-validated/handler-method-validation"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
         .andExpect(jsonPath("$.message").value("유효한 입력 형식이 아닙니다."))
@@ -198,7 +215,14 @@ class GlobalExceptionHandlerTest {
 
 @RestController
 @Validated
-class TestController {
+class ValidatedController {
+
+  @GetMapping("/test/validated/constraint-violation")
+  public void triggerConstraintViolation(@RequestParam @NotBlank String name) {}
+}
+
+@RestController
+class NonValidatedController {
 
   @GetMapping("/test/custom-exception")
   public void triggerCustomException() {
@@ -223,12 +247,7 @@ class TestController {
   @PostMapping("/test/validation")
   public void triggerValidation(@Valid @RequestBody TestRequest request) {}
 
-  @GetMapping("/test/constraint-violation")
-  public void triggerConstraintViolation() {
-    throw new ConstraintViolationException("must not be blank", null);
-  }
-
-  @GetMapping("/test/handler-method-validation")
+  @GetMapping("/test/non-validated/handler-method-validation")
   public void triggerHandlerMethodValidation(@RequestParam @NotBlank String name) {}
 
   @GetMapping("/test/type-mismatch")
@@ -237,6 +256,11 @@ class TestController {
   @GetMapping(value = "/test/html", produces = MediaType.TEXT_HTML_VALUE)
   public String triggerHtml() {
     return "<html></html>";
+  }
+
+  @GetMapping("/test/manual/constraint-violation-null")
+  public void triggerConstraintViolationNull() {
+    throw new ConstraintViolationException("must not be blank", null);
   }
 }
 
