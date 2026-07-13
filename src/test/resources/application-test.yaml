@@ -12,8 +12,7 @@ spring:
       ddl-auto: validate
     properties:
       hibernate:
-        # H2를 MySQL처럼 사용하기 위한 설정
-        dialect: org.hibernate.dialect.MySQLDialect
+        dialect: org.hibernate.dialect.H2Dialect
 
   flyway:
     enabled: true

@@ -71,7 +71,7 @@ PRIMARY KEY (id),
 CONSTRAINT fk_member_refresh_token_member
     FOREIGN KEY (member_id)
     REFERENCES member(id)
-    ON DELETE RESTRICT
+    ON DELETE CASCADE
     ON UPDATE RESTRICT,
 
 CONSTRAINT uq_member_refresh_token_hash
