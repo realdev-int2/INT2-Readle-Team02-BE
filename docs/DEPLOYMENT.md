@@ -7,10 +7,12 @@ This repository builds and publishes the backend image. It does not own the EC2 
 On a successful `main` push, GitHub Actions publishes:
 
 ```text
-ghcr.io/programmers-intern-program/int2-readle-team02-be:<commit-sha>
+ghcr.io/<repository-owner>/int2-readle-team02-be:<commit-sha>
 ```
 
 `:main` is a convenience tag only. The deployment layer must set `IMAGE_REF` to the full commit-SHA tag.
+
+The image namespace follows `github.repository_owner`. Before the repository transfer it is `realdev-int2`; after the transfer it is `programmers-intern-program`. Update the EC2 `IMAGE_REF` after the first successful image publish in the new namespace.
 
 ## EC2 runtime contract
 
@@ -28,7 +30,7 @@ Run these on EC2 before adopting GHCR delivery:
 uname -m # x86_64 expected
 docker version
 docker compose version
-docker pull ghcr.io/programmers-intern-program/int2-readle-team02-be:<commit-sha>
+docker pull ghcr.io/<repository-owner>/int2-readle-team02-be:<commit-sha>
 ```
 
 The workflow publishes `linux/amd64`. If EC2 is not `x86_64`, stop and add the required platform deliberately. If the pull cannot work because of EC2 outbound access or GitHub package policy, stop and choose a separate artifact-transfer design. Do not add a GitHub token to this repository.
