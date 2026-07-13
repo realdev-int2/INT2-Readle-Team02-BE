@@ -225,11 +225,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(ConstraintViolationException.class)
   protected ResponseEntity<Object> handleConstraintViolationException(
       ConstraintViolationException exception) {
-    String message =
-        exception.getConstraintViolations().stream()
-            .map(violation -> violation.getMessage())
-            .filter(Objects::nonNull)
-            .collect(Collectors.joining(", "));
+    String message = "";
+    if (exception.getConstraintViolations() != null) {
+      message =
+          exception.getConstraintViolations().stream()
+              .map(violation -> violation.getMessage())
+              .filter(Objects::nonNull)
+              .collect(Collectors.joining(", "));
+    }
 
     if (message.isBlank()) {
       message = INVALID_INPUT.getMessage();
