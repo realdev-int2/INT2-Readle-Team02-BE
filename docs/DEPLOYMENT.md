@@ -24,17 +24,20 @@ The image namespace follows `github.repository_owner`. Before the repository tra
 
 ## Required first-deploy checks
 
+The GHCR package remains **private**. EC2 authenticates with a dedicated GitHub account credential that has only `read:packages` and package read access. Store `GHCR_USERNAME` and `GHCR_PULL_TOKEN` only in the EC2 deployment environment; never commit them to this repository.
+
 Run these on EC2 before adopting GHCR delivery:
 
 ```bash
 uname -m # x86_64 expected
 docker version
 docker compose version
+printf '%s' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 docker pull ghcr.io/<repository-owner>/int2-readle-team02-be:<commit-sha>
 ```
 
-The workflow publishes `linux/amd64`. If EC2 is not `x86_64`, stop and add the required platform deliberately. If the pull cannot work because of EC2 outbound access or GitHub package policy, stop and choose a separate artifact-transfer design. Do not add a GitHub token to this repository.
+The workflow publishes `linux/amd64`. If EC2 is not `x86_64`, stop and add the required platform deliberately. If the pull cannot work because of EC2 outbound access or GitHub package policy, stop and choose a separate artifact-transfer design.
 
 ## Rollback
 
-Set the deployment layer's `IMAGE_REF` to the previous successful commit-SHA image and use the same candidate/Nginx validation path.
+Authenticate with the same EC2-only read credential, set the deployment layer's `IMAGE_REF` to the previous successful commit-SHA image, then use the same candidate/Nginx validation path.
