@@ -46,22 +46,61 @@ public class QuizQuestion {
   private Integer orderNo;
 
   @Lob
-  @Column(name = "question_text", nullable = false)
+  @Column(name = "question_text", nullable = false, columnDefinition = "TEXT")
   private String questionText;
 
   @Lob
-  @Column(name = "code_snippet")
+  @Column(name = "code_snippet", columnDefinition = "TEXT")
   private String codeSnippet;
 
   @Lob
-  @Column(name = "correct_answer")
+  @Column(name = "correct_answer", columnDefinition = "TEXT")
   private String correctAnswer;
 
   @Lob
-  @Column(name = "explanation")
+  @Column(name = "explanation", columnDefinition = "TEXT")
   private String explanation;
 
   @Lob
-  @Column(name = "source_excerpt")
+  @Column(name = "source_excerpt", columnDefinition = "TEXT")
   private String sourceExcerpt;
+
+  private QuizQuestion(
+      QuizSet quizSet,
+      Integer orderNo,
+      QuestionType questionType,
+      String questionText,
+      String codeSnippet,
+      String correctAnswer,
+      String explanation,
+      String sourceExcerpt) {
+    this.quizSet = quizSet;
+    this.orderNo = orderNo;
+    this.questionType = questionType;
+    this.questionText = questionText;
+    this.codeSnippet = codeSnippet;
+    this.correctAnswer = correctAnswer;
+    this.explanation = explanation;
+    this.sourceExcerpt = sourceExcerpt;
+  }
+
+  public static QuizQuestion create(
+      QuizSet quizSet,
+      Integer orderNo,
+      QuestionType questionType,
+      String questionText,
+      String codeSnippet,
+      String correctAnswer,
+      String explanation,
+      String sourceExcerpt) {
+    return new QuizQuestion(
+        quizSet,
+        orderNo,
+        questionType,
+        questionText,
+        codeSnippet,
+        correctAnswer,
+        explanation,
+        sourceExcerpt);
+  }
 }

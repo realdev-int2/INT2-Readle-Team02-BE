@@ -1,6 +1,7 @@
 package com.realdev.readle.domain.quiz.entity;
 
 import com.realdev.readle.domain.member.entity.Member;
+import com.realdev.readle.global.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -24,7 +25,7 @@ import lombok.NoArgsConstructor;
     indexes = {@Index(name = "idx_attempt_member_started", columnList = "member_id, started_at")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QuizAttempt {
+public class QuizAttempt extends BaseTimeEntity {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -56,13 +57,13 @@ public class QuizAttempt {
     this.startedAt = LocalDateTime.now();
   }
 
-  public static QuizAttempt create(QuizSet quizSet, Member member) {
+  public static QuizAttempt createInProgress(QuizSet quizSet, Member member) {
     return new QuizAttempt(quizSet, member);
   }
 
   public void submit() {
     if (this.status != AttemptStatus.IN_PROGRESS) {
-      throw new IllegalStateException("이미 제출된 퀴즈 시도입니다.");
+      throw new IllegalStateException("이미 제출된 풀이 시도입니다.");
     }
     this.status = AttemptStatus.SUBMITTED;
     this.submittedAt = LocalDateTime.now();

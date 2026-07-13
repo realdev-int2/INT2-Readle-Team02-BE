@@ -48,21 +48,22 @@ public class QuizSet extends BaseCreatedAtEntity {
   private LocalDateTime completedAt;
 
   @Column(name = "is_bypassed", nullable = false)
-  private boolean bypassed;
+  private Boolean isBypassed;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "source_validation_id", nullable = false)
   private ContentValidation sourceValidation;
 
-  private QuizSet(Content content, ContentValidation sourceValidation, boolean isBypassed) {
+  private QuizSet(Content content, ContentValidation sourceValidation, Boolean isBypassed) {
+    validateIntegration(content, sourceValidation);
     this.content = content;
     this.sourceValidation = sourceValidation;
-    this.bypassed = isBypassed;
+    this.isBypassed = isBypassed;
     this.status = QuizSetStatus.GENERATING;
   }
 
   public static QuizSet create(
-      Content content, ContentValidation sourceValidation, boolean isBypassed) {
+      Content content, ContentValidation sourceValidation, Boolean isBypassed) {
     return new QuizSet(content, sourceValidation, isBypassed);
   }
 
@@ -85,5 +86,14 @@ public class QuizSet extends BaseCreatedAtEntity {
     }
     this.status = QuizSetStatus.FAILED;
     this.completedAt = LocalDateTime.now();
+  }
+
+  private void validateIntegration(Content content, ContentValidation sourceValidation) {
+    if (content == null || sourceValidation == null) {
+      throw new IllegalArgumentException("Content와 ContentValidation은 필수 입력값입니다.");
+    }
+    if (!sourceValidation.getContent().getId().equals(content.getId())) {
+      throw new IllegalArgumentException("검증 정보(sourceValidation)의 콘텐츠와 퀴즈 세트의 콘텐츠가 일치하지 않습니다.");
+    }
   }
 }

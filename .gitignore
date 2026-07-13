@@ -276,3 +276,6 @@ bin
 
 # macOS local JDK symlink (Homebrew-specific, machine-local)
 openjdk.jdk
+
+# AI Workspace Customizations
+.agents/
