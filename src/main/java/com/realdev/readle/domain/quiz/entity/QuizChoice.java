@@ -36,7 +36,7 @@ public class QuizChoice {
   @JoinColumn(name = "question_id", nullable = false)
   private QuizQuestion quizQuestion;
 
-  @Column(name = "order_no", nullable = false)
+  @Column(name = "order_no", nullable = false, columnDefinition="SMALLINT")
   private Integer orderNo;
 
   @Lob

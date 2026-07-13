@@ -37,7 +37,7 @@ public class Member extends BaseTimeEntity {
   @Column(name = "id", nullable = false)
   private Long id;
 
-  @Column(name = "uuid", nullable = false, updatable = false, length = 36)
+  @Column(name = "uuid", nullable = false, updatable = false, columnDefinition = "CHAR(36)")
   private String uuid;
 
   @Enumerated(EnumType.STRING)

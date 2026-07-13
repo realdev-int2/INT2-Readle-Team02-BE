@@ -42,7 +42,7 @@ public class QuizQuestion {
   @Column(name = "question_type", nullable = false, length = 20)
   private QuestionType questionType;
 
-  @Column(name = "order_no", nullable = false)
+  @Column(name = "order_no", nullable = false, columnDefinition="SMALLINT")
   private Integer orderNo;
 
   @Lob

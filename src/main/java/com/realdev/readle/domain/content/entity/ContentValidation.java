@@ -55,7 +55,7 @@ public class ContentValidation extends BaseCreatedAtEntity {
   private RejectReasonCode rejectReasonCode;
 
   @Lob
-  @Column(name = "evidence_snippets")
+  @Column(name = "evidence_snippets", columnDefinition = "TEXT")
   private String evidenceSnippets;
 
   @Enumerated(EnumType.STRING)

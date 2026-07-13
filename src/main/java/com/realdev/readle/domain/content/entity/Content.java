@@ -47,11 +47,11 @@ public class Content extends BaseTimeEntity {
   private String originalUrl;
 
   @Lob
-  @Column(name = "raw_text")
+  @Column(name = "raw_text", columnDefinition = "LONGTEXT")
   private String rawText;
 
   @Lob
-  @Column(name = "extracted_text")
+  @Column(name = "extracted_text", columnDefinition = "LONGTEXT")
   private String extractedText;
 
   @Enumerated(EnumType.STRING)
