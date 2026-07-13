@@ -26,6 +26,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class QuizSet extends BaseCreatedAtEntity {
 
+  private static final int MIN_QUESTION_COUNT = 1;
+  private static final int MAX_QUESTION_COUNT = 5;
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   @Column(name = "id", nullable = false)
@@ -51,4 +54,31 @@ public class QuizSet extends BaseCreatedAtEntity {
   @OneToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "source_validation_id", nullable = false)
   private ContentValidation sourceValidation;
+
+  private QuizSet(Content content, ContentValidation sourceValidation, boolean isBypassed) {
+    this.content = content;
+    this.sourceValidation = sourceValidation;
+    this.bypassed = isBypassed;
+    this.status = QuizSetStatus.GENERATING;
+  }
+
+  public static QuizSet create(
+      Content content, ContentValidation sourceValidation, boolean isBypassed) {
+    return new QuizSet(content, sourceValidation, isBypassed);
+  }
+
+  public void complete(int questionCount) {
+    if (questionCount < MIN_QUESTION_COUNT || questionCount > MAX_QUESTION_COUNT) {
+      throw new IllegalArgumentException(
+          "퀴즈 문항 수는 " + MIN_QUESTION_COUNT + "개에서 " + MAX_QUESTION_COUNT + "개 사이여야 합니다.");
+    }
+    this.status = QuizSetStatus.COMPLETED;
+    this.questionCount = (short) questionCount;
+    this.completedAt = LocalDateTime.now();
+  }
+
+  public void fail() {
+    this.status = QuizSetStatus.FAILED;
+    this.completedAt = LocalDateTime.now();
+  }
 }

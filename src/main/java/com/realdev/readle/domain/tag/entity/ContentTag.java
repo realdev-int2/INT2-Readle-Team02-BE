@@ -42,4 +42,13 @@ public class ContentTag extends BaseCreatedAtEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "tag_id", nullable = false)
   private Tag tag;
+
+  private ContentTag(Content content, Tag tag) {
+    this.content = content;
+    this.tag = tag;
+  }
+
+  public static ContentTag create(Content content, Tag tag) {
+    return new ContentTag(content, tag);
+  }
 }

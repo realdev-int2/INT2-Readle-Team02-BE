@@ -48,4 +48,23 @@ public class QuizAttempt {
 
   @Column(name = "submitted_at")
   private LocalDateTime submittedAt;
+
+  private QuizAttempt(QuizSet quizSet, Member member) {
+    this.quizSet = quizSet;
+    this.member = member;
+    this.status = AttemptStatus.IN_PROGRESS;
+    this.startedAt = LocalDateTime.now();
+  }
+
+  public static QuizAttempt create(QuizSet quizSet, Member member) {
+    return new QuizAttempt(quizSet, member);
+  }
+
+  public void submit() {
+    if (this.status != AttemptStatus.IN_PROGRESS) {
+      throw new IllegalStateException("이미 제출된 퀴즈 시도입니다.");
+    }
+    this.status = AttemptStatus.SUBMITTED;
+    this.submittedAt = LocalDateTime.now();
+  }
 }

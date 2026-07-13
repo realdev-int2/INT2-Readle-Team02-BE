@@ -1,5 +1,6 @@
 package com.realdev.readle.domain.content.entity;
 
+import com.realdev.readle.global.common.entity.BaseCreatedAtEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -27,7 +28,7 @@ import lombok.NoArgsConstructor;
     })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class ContentValidation {
+public class ContentValidation extends BaseCreatedAtEntity {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -60,9 +61,6 @@ public class ContentValidation {
   @Enumerated(EnumType.STRING)
   @Column(name = "error_code", length = 30)
   private ErrorCode errorCode;
-
-  @Column(name = "created_at", nullable = false, updatable = false)
-  private LocalDateTime createdAt;
 
   @Column(name = "validated_at")
   private LocalDateTime validatedAt;

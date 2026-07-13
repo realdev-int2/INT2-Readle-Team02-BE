@@ -27,4 +27,12 @@ public class Tag extends BaseCreatedAtEntity {
 
   @Column(name = "name", nullable = false, length = 50)
   private String name;
+
+  private Tag(String name) {
+    this.name = name;
+  }
+
+  public static Tag create(String name) {
+    return new Tag(name);
+  }
 }

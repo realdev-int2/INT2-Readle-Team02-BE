@@ -48,4 +48,19 @@ public class MemberRefreshToken extends BaseCreatedAtEntity {
 
   @Column(name = "revoked_at")
   private LocalDateTime revokedAt;
+
+  private MemberRefreshToken(Member member, String tokenHash, LocalDateTime expiresAt) {
+    this.member = member;
+    this.tokenHash = tokenHash;
+    this.expiresAt = expiresAt;
+  }
+
+  public static MemberRefreshToken create(
+      Member member, String tokenHash, LocalDateTime expiresAt) {
+    return new MemberRefreshToken(member, tokenHash, expiresAt);
+  }
+
+  public void revoke() {
+    this.revokedAt = LocalDateTime.now();
+  }
 }
