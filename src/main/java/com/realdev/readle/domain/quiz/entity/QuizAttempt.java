@@ -13,43 +13,39 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
 @Entity
 @Table(
     name = "quiz_attempt",
-    indexes = {
-        @Index(name = "idx_attempt_member_started", columnList = "member_id, started_at")
-    }
-)
+    indexes = {@Index(name = "idx_attempt_member_started", columnList = "member_id, started_at")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class QuizAttempt {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Column(name = "id", nullable = false)
+  private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quiz_set_id", nullable = false)
-    private QuizSet quizSet;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "quiz_set_id", nullable = false)
+  private QuizSet quizSet;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "member_id", nullable = false)
-    private Member member;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "member_id", nullable = false)
+  private Member member;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    private AttemptStatus status;
+  @Enumerated(EnumType.STRING)
+  @Column(name = "status", nullable = false, length = 20)
+  private AttemptStatus status;
 
-    @Column(name = "started_at", nullable = false, updatable = false)
-    private LocalDateTime startedAt;
+  @Column(name = "started_at", nullable = false, updatable = false)
+  private LocalDateTime startedAt;
 
-    @Column(name = "submitted_at")
-    private LocalDateTime submittedAt;
+  @Column(name = "submitted_at")
+  private LocalDateTime submittedAt;
 }

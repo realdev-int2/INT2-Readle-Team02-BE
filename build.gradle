@@ -83,6 +83,7 @@ tasks.withType(JavaCompile).configureEach {
 
 spotless {
 	java {
+		target 'src/**/*.java'
 		googleJavaFormat('1.28.0')
 		removeUnusedImports()
 		formatAnnotations()

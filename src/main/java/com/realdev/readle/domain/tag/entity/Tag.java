@@ -15,19 +15,16 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(
     name = "tag",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uq_tag_name", columnNames = "name")
-    }
-)
+    uniqueConstraints = {@UniqueConstraint(name = "uq_tag_name", columnNames = "name")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Tag extends BaseCreatedAtEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Column(name = "id", nullable = false)
+  private Long id;
 
-    @Column(name = "name", nullable = false, length = 50)
-    private String name;
+  @Column(name = "name", nullable = false, length = 50)
+  private String name;
 }

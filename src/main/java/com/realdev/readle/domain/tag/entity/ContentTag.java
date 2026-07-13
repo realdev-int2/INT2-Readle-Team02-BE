@@ -1,7 +1,7 @@
 package com.realdev.readle.domain.tag.entity;
 
-import com.realdev.readle.global.common.entity.BaseCreatedAtEntity;
 import com.realdev.readle.domain.content.entity.Content;
+import com.realdev.readle.global.common.entity.BaseCreatedAtEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -21,26 +21,25 @@ import lombok.NoArgsConstructor;
 @Table(
     name = "content_tag",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uq_content_tag", columnNames = {"content_id", "tag_id"})
+      @UniqueConstraint(
+          name = "uq_content_tag",
+          columnNames = {"content_id", "tag_id"})
     },
-    indexes = {
-        @Index(name = "idx_content_tag_tag_content", columnList = "tag_id, content_id")
-    }
-)
+    indexes = {@Index(name = "idx_content_tag_tag_content", columnList = "tag_id, content_id")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ContentTag extends BaseCreatedAtEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Column(name = "id", nullable = false)
+  private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "content_id", nullable = false)
-    private Content content;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "content_id", nullable = false)
+  private Content content;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tag_id", nullable = false)
-    private Tag tag;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "tag_id", nullable = false)
+  private Tag tag;
 }

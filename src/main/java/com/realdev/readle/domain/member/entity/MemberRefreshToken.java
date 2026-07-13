@@ -12,42 +12,40 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
 
 @Entity
 @Table(
     name = "member_refresh_token",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uq_member_refresh_token_hash", columnNames = "token_hash")
+      @UniqueConstraint(name = "uq_member_refresh_token_hash", columnNames = "token_hash")
     },
     indexes = {
-        @Index(name = "idx_member_refresh_token_member", columnList = "member_id"),
-        @Index(name = "idx_member_refresh_token_expires", columnList = "expires_at")
-    }
-)
+      @Index(name = "idx_member_refresh_token_member", columnList = "member_id"),
+      @Index(name = "idx_member_refresh_token_expires", columnList = "expires_at")
+    })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MemberRefreshToken extends BaseCreatedAtEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Column(name = "id", nullable = false)
+  private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "member_id", nullable = false)
-    private Member member;
+  @OneToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "member_id", nullable = false)
+  private Member member;
 
-    @Column(name = "token_hash", nullable = false)
-    private String tokenHash;
+  @Column(name = "token_hash", nullable = false)
+  private String tokenHash;
 
-    @Column(name = "expires_at", nullable = false)
-    private LocalDateTime expiresAt;
+  @Column(name = "expires_at", nullable = false)
+  private LocalDateTime expiresAt;
 
-    @Column(name = "revoked_at")
-    private LocalDateTime revokedAt;
+  @Column(name = "revoked_at")
+  private LocalDateTime revokedAt;
 }
