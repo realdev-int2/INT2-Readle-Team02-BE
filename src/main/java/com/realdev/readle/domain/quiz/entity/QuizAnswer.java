@@ -1,6 +1,5 @@
 package com.realdev.readle.domain.quiz.entity;
 
-import com.realdev.readle.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -27,7 +26,7 @@ import lombok.NoArgsConstructor;
     })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QuizAnswer extends BaseTimeEntity {
+public class QuizAnswer {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)

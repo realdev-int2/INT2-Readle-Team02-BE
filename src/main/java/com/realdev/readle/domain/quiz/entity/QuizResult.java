@@ -1,6 +1,5 @@
 package com.realdev.readle.domain.quiz.entity;
 
-import com.realdev.readle.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -24,7 +23,7 @@ import lombok.NoArgsConstructor;
     uniqueConstraints = {@UniqueConstraint(name = "uq_result_attempt", columnNames = "attempt_id")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QuizResult extends BaseTimeEntity {
+public class QuizResult {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)

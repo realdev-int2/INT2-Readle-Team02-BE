@@ -1,7 +1,6 @@
 package com.realdev.readle.domain.quiz.entity;
 
 import com.realdev.readle.domain.member.entity.Member;
-import com.realdev.readle.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -25,7 +24,7 @@ import lombok.NoArgsConstructor;
     indexes = {@Index(name = "idx_attempt_member_started", columnList = "member_id, started_at")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QuizAttempt extends BaseTimeEntity {
+public class QuizAttempt {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
