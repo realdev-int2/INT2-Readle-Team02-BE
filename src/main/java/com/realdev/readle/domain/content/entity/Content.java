@@ -46,11 +46,9 @@ public class Content extends BaseTimeEntity {
   @Column(name = "original_url", length = 500)
   private String originalUrl;
 
-  @Lob
   @Column(name = "raw_text", columnDefinition = "LONGTEXT")
   private String rawText;
 
-  @Lob
   @Column(name = "extracted_text", columnDefinition = "LONGTEXT")
   private String extractedText;
 

@@ -22,6 +22,7 @@ spring:
     properties:
       hibernate:
         default_batch_fetch_size: 100
+        deferred_validation: true
         # Canonical server time authority for point_history.created_at etc. is Asia/Seoul (KST).
         jdbc:
           time_zone: Asia/Seoul

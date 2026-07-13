@@ -1,4 +1,6 @@
 spring:
+  main:
+    allow-circular-references: true
   datasource:
     url: jdbc:h2:mem:readle-test;MODE=MySQL;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
@@ -12,7 +14,6 @@ spring:
       hibernate:
         # H2를 MySQL처럼 사용하기 위한 설정
         dialect: org.hibernate.dialect.MySQLDialect
-    defer-datasource-initialization: true
 
   flyway:
     enabled: true

@@ -45,23 +45,18 @@ public class QuizQuestion {
   @Column(name = "order_no", nullable = false, columnDefinition="SMALLINT")
   private Integer orderNo;
 
-  @Lob
   @Column(name = "question_text", nullable = false, columnDefinition = "TEXT")
   private String questionText;
 
-  @Lob
   @Column(name = "code_snippet", columnDefinition = "TEXT")
   private String codeSnippet;
 
-  @Lob
   @Column(name = "correct_answer", columnDefinition = "TEXT")
   private String correctAnswer;
 
-  @Lob
   @Column(name = "explanation", columnDefinition = "TEXT")
   private String explanation;
 
-  @Lob
   @Column(name = "source_excerpt", columnDefinition = "TEXT")
   private String sourceExcerpt;
 

@@ -54,7 +54,6 @@ public class ContentValidation extends BaseCreatedAtEntity {
   @Column(name = "reject_reason_code", length = 30)
   private RejectReasonCode rejectReasonCode;
 
-  @Lob
   @Column(name = "evidence_snippets", columnDefinition = "TEXT")
   private String evidenceSnippets;
 

@@ -39,7 +39,6 @@ public class QuizChoice {
   @Column(name = "order_no", nullable = false, columnDefinition="SMALLINT")
   private Integer orderNo;
 
-  @Lob
   @Column(name = "choice_text", nullable = false, columnDefinition = "TEXT")
   private String choiceText;
 
