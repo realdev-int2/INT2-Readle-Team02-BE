@@ -12,7 +12,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -46,12 +45,10 @@ public class Content extends BaseTimeEntity {
   @Column(name = "original_url", length = 500)
   private String originalUrl;
 
-  @Lob
-  @Column(name = "raw_text")
+  @Column(name = "raw_text", columnDefinition = "LONGTEXT")
   private String rawText;
 
-  @Lob
-  @Column(name = "extracted_text")
+  @Column(name = "extracted_text", columnDefinition = "LONGTEXT")
   private String extractedText;
 
   @Enumerated(EnumType.STRING)

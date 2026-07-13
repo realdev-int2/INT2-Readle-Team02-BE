@@ -41,7 +41,7 @@ public class QuizSet extends BaseCreatedAtEntity {
   @Column(name = "status", nullable = false, length = 20)
   private QuizSetStatus status;
 
-  @Column(name = "question_count")
+  @Column(name = "question_count", columnDefinition = "SMALLINT")
   private Integer questionCount;
 
   @Column(name = "completed_at")

@@ -11,7 +11,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -54,8 +53,7 @@ public class ContentValidation extends BaseCreatedAtEntity {
   @Column(name = "reject_reason_code", length = 30)
   private RejectReasonCode rejectReasonCode;
 
-  @Lob
-  @Column(name = "evidence_snippets")
+  @Column(name = "evidence_snippets", columnDefinition = "TEXT")
   private String evidenceSnippets;
 
   @Enumerated(EnumType.STRING)

@@ -7,7 +7,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -41,7 +40,6 @@ public class QuizAnswer {
   @JoinColumn(name = "question_id", nullable = false)
   private QuizQuestion quizQuestion;
 
-  @Lob
   @Column(name = "submitted_answer_text", columnDefinition = "TEXT")
   private String submittedAnswerText;
 
@@ -52,7 +50,6 @@ public class QuizAnswer {
   @Column(name = "is_correct", nullable = false)
   private Boolean isCorrect;
 
-  @Lob
   @Column(name = "ai_feedback", columnDefinition = "TEXT")
   private String aiFeedback;
 

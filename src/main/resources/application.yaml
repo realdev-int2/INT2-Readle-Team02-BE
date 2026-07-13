@@ -13,8 +13,11 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0
+    encoding: UTF-8 # 스크립트 인코딩 설정
 
   jpa:
+    hibernate:
+      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:

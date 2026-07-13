@@ -7,7 +7,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -36,10 +35,9 @@ public class QuizChoice {
   @JoinColumn(name = "question_id", nullable = false)
   private QuizQuestion quizQuestion;
 
-  @Column(name = "order_no", nullable = false)
+  @Column(name = "order_no", nullable = false, columnDefinition = "SMALLINT")
   private Integer orderNo;
 
-  @Lob
   @Column(name = "choice_text", nullable = false, columnDefinition = "TEXT")
   private String choiceText;
 
