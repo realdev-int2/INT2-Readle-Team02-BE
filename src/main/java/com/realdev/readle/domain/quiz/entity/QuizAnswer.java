@@ -42,7 +42,7 @@ public class QuizAnswer {
   private QuizQuestion quizQuestion;
 
   @Lob
-  @Column(name = "submitted_answer_text")
+  @Column(name = "submitted_answer_text", columnDefinition = "TEXT")
   private String submittedAnswerText;
 
   @ManyToOne(fetch = FetchType.LAZY)
@@ -53,9 +53,55 @@ public class QuizAnswer {
   private Boolean isCorrect;
 
   @Lob
-  @Column(name = "ai_feedback")
+  @Column(name = "ai_feedback", columnDefinition = "TEXT")
   private String aiFeedback;
 
   @Column(name = "evaluated_at", nullable = false)
   private LocalDateTime evaluatedAt;
+
+  private QuizAnswer(
+      QuizAttempt quizAttempt,
+      QuizQuestion quizQuestion,
+      String submittedAnswerText,
+      QuizChoice submittedChoice,
+      Boolean isCorrect,
+      String aiFeedback,
+      LocalDateTime evaluatedAt) {
+    this.quizAttempt = quizAttempt;
+    this.quizQuestion = quizQuestion;
+    this.submittedAnswerText = submittedAnswerText;
+    this.submittedChoice = submittedChoice;
+    this.isCorrect = isCorrect;
+    this.aiFeedback = aiFeedback;
+    this.evaluatedAt = evaluatedAt;
+  }
+
+  public static QuizAnswer createForWritten(
+      QuizAttempt quizAttempt,
+      QuizQuestion quizQuestion,
+      String submittedAnswerText,
+      Boolean isCorrect,
+      String aiFeedback) {
+    return new QuizAnswer(
+        quizAttempt,
+        quizQuestion,
+        submittedAnswerText,
+        null,
+        isCorrect,
+        aiFeedback,
+        LocalDateTime.now());
+  }
+
+  public static QuizAnswer createForChoice(
+      QuizAttempt quizAttempt,
+      QuizQuestion quizQuestion,
+      QuizChoice submittedChoice,
+      Boolean isCorrect) {
+    if (submittedChoice == null
+        || !submittedChoice.getQuizQuestion().getId().equals(quizQuestion.getId())) {
+      throw new IllegalArgumentException("선택한 답안이 해당 문제에 속하지 않습니다.");
+    }
+    return new QuizAnswer(
+        quizAttempt, quizQuestion, null, submittedChoice, isCorrect, null, LocalDateTime.now());
+  }
 }

@@ -37,12 +37,25 @@ public class QuizChoice {
   private QuizQuestion quizQuestion;
 
   @Column(name = "order_no", nullable = false)
-  private short orderNo;
+  private Integer orderNo;
 
   @Lob
-  @Column(name = "choice_text", nullable = false)
+  @Column(name = "choice_text", nullable = false, columnDefinition = "TEXT")
   private String choiceText;
 
   @Column(name = "is_correct", nullable = false)
   private Boolean isCorrect;
+
+  private QuizChoice(
+      QuizQuestion quizQuestion, Integer orderNo, String choiceText, Boolean isCorrect) {
+    this.quizQuestion = quizQuestion;
+    this.orderNo = orderNo;
+    this.choiceText = choiceText;
+    this.isCorrect = isCorrect;
+  }
+
+  public static QuizChoice create(
+      QuizQuestion quizQuestion, Integer orderNo, String choiceText, Boolean isCorrect) {
+    return new QuizChoice(quizQuestion, orderNo, choiceText, isCorrect);
+  }
 }
