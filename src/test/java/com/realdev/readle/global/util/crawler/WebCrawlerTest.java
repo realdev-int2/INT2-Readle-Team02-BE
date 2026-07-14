@@ -191,4 +191,20 @@ class WebCrawlerTest {
 
     assertThat(successCount.get()).isEqualTo(numberOfThreads);
   }
+
+  @Test
+  @DisplayName("SSRF 공격 시도(루프백, 사설IP, 링크로컬 대역) 발생 시 CustomException 예외가 전파된다")
+  void ssrfBlockException() {
+    // 127.0.0.1 대역 차단 검증
+    assertThatThrownBy(() -> webCrawler.crawl("http://127.0.0.1:8080/admin"))
+        .isInstanceOf(CustomException.class);
+
+    // 192.168.x.x 사설 대역 차단 검증
+    assertThatThrownBy(() -> webCrawler.crawl("http://192.168.0.1/status"))
+        .isInstanceOf(CustomException.class);
+
+    // AWS 인스턴스 메타데이터 API 대역 차단 검증
+    assertThatThrownBy(() -> webCrawler.crawl("http://169.254.169.254/latest/meta-data"))
+        .isInstanceOf(CustomException.class);
+  }
 }
