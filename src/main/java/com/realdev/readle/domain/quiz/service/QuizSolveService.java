@@ -51,8 +51,7 @@ public class QuizSolveService {
     // 퀴즈 세트 상태 검증: COMPLETED 상태가 아니면 시작 불가
     if (quizSet.getStatus() != com.realdev.readle.domain.quiz.entity.QuizSetStatus.COMPLETED) {
       throw new CustomException(
-          GlobalErrorCode.INVALID_INPUT,
-          "아직 생성이 완료되지 않은 퀴즈 세트입니다. 현재 상태: " + quizSet.getStatus());
+          GlobalErrorCode.INVALID_INPUT, "아직 생성이 완료되지 않은 퀴즈 세트입니다. 현재 상태: " + quizSet.getStatus());
     }
 
     // 권한 검증: quizSet의 content 작성자와 memberUuid가 일치하는지 확인

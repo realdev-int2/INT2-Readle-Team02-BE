@@ -84,12 +84,15 @@ public class QuizGenerationService {
     try {
       // 2. AI Prompt 생성 및 호출 (Non-Transactional)
       // transactionTemplate으로 조회해 LazyInitializationException 방지
-      String articleText = transactionTemplate.execute(txStatus -> {
-        ContentValidation v = contentValidationRepository.findById(sourceValidationId).orElseThrow();
-        return v.getContent().getRawText() != null
-            ? v.getContent().getRawText()
-            : v.getContent().getExtractedText();
-      });
+      String articleText =
+          transactionTemplate.execute(
+              txStatus -> {
+                ContentValidation v =
+                    contentValidationRepository.findById(sourceValidationId).orElseThrow();
+                return v.getContent().getRawText() != null
+                    ? v.getContent().getRawText()
+                    : v.getContent().getExtractedText();
+              });
 
       if (articleText == null || articleText.isBlank()) {
         throw new IllegalArgumentException("퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
@@ -131,8 +134,7 @@ public class QuizGenerationService {
               // SHORT_ANSWER / CODE_BLANK는 정답이 null이거나 공백이면 거부
               if (type != QuestionType.MULTIPLE_CHOICE) {
                 if (quizDto.getAnswer() == null || quizDto.getAnswer().isBlank()) {
-                  throw new QuizGenerationException(
-                      type.name() + " 문제의 정답(answer)이 비어있습니다.");
+                  throw new QuizGenerationException(type.name() + " 문제의 정답(answer)이 비어있습니다.");
                 }
               }
 

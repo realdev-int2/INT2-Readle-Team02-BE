@@ -162,21 +162,31 @@ class QuizGenerationServiceTest {
     // given
     given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
     given(contentValidationRepository.findById(100L)).willReturn(Optional.of(validation));
-    // content.getRawText() stub 불필요: transactionTemplate이 null 반환 ->
-    // articleText == null -> catch -> QuizGenerationException
+    org.mockito.BDDMockito.lenient().when(content.getRawText()).thenReturn("   ");
+    org.mockito.BDDMockito.lenient().when(content.getExtractedText()).thenReturn("   ");
 
     given(transactionTemplate.execute(any()))
         .willAnswer(
             invocation -> {
-              // 1번째 호출(QuizSet 생성): null 반환 -> quizSet == null
-              // -> quizSet.getId() NPE -> catch -> QuizGenerationException
-              return null;
+              org.springframework.transaction.support.TransactionCallback callback =
+                  invocation.getArgument(0);
+              return callback.doInTransaction(null);
             });
+
+    given(quizSetRepository.findBySourceValidationId(100L)).willReturn(Optional.empty());
+
+    QuizSet expectedQuizSet = QuizSet.create(content, validation, false);
+    ReflectionTestUtils.setField(expectedQuizSet, "id", 200L);
+    given(quizSetRepository.saveAndFlush(any(QuizSet.class))).willReturn(expectedQuizSet);
+    given(quizSetRepository.findById(200L)).willReturn(Optional.of(expectedQuizSet));
 
     // when & then
     assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
         .isInstanceOf(QuizGenerationException.class)
-        .hasMessageContaining("오류가 발생했습니다");
+        .hasMessageContaining("오류가 발생했습니다")
+        .cause()
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
   }
 
   @Test
