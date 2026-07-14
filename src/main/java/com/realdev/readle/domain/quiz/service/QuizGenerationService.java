@@ -83,17 +83,20 @@ public class QuizGenerationService {
 
     try {
       // 2. AI Prompt 생성 및 호출 (Non-Transactional)
-      String articleText =
-          validation.getContent().getRawText() != null
-              ? validation.getContent().getRawText()
-              : validation.getContent().getExtractedText();
+      // transactionTemplate으로 조회해 LazyInitializationException 방지
+      String articleText = transactionTemplate.execute(txStatus -> {
+        ContentValidation v = contentValidationRepository.findById(sourceValidationId).orElseThrow();
+        return v.getContent().getRawText() != null
+            ? v.getContent().getRawText()
+            : v.getContent().getExtractedText();
+      });
 
       if (articleText == null || articleText.isBlank()) {
-        throw new ValidationNotPassedException("퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
+        throw new IllegalArgumentException("퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
       }
 
-      // 방어: </source_content> 인젝션 치환
-      articleText = articleText.replace("</source_content>", "< /source_content>");
+      // 방어: </source_content> 인젝션 치환 (대소문자·공백 무관하게 처리)
+      articleText = articleText.replaceAll("(?i)</\\s*source_content\\s*>", "< /source_content>");
 
       String additionalRule = "";
       if (!articleText.contains("{")
@@ -118,7 +121,20 @@ public class QuizGenerationService {
 
             int orderNo = 1;
             for (ClaudeQuizResponseDto.ClaudeQuizDto quizDto : parsedResponse.getQuizzes()) {
-              QuestionType type = QuestionType.valueOf(quizDto.getType().toUpperCase());
+              QuestionType type;
+              try {
+                type = QuestionType.valueOf(quizDto.getType().toUpperCase());
+              } catch (IllegalArgumentException e) {
+                throw new QuizGenerationException("알 수 없는 문제 유형입니다: " + quizDto.getType());
+              }
+
+              // SHORT_ANSWER / CODE_BLANK는 정답이 null이거나 공백이면 거부
+              if (type != QuestionType.MULTIPLE_CHOICE) {
+                if (quizDto.getAnswer() == null || quizDto.getAnswer().isBlank()) {
+                  throw new QuizGenerationException(
+                      type.name() + " 문제의 정답(answer)이 비어있습니다.");
+                }
+              }
 
               QuizQuestion question =
                   QuizQuestion.create(

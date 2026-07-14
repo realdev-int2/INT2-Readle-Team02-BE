@@ -278,6 +278,9 @@ CONSTRAINT fk_quiz_set_source_validation
     ON DELETE RESTRICT
     ON UPDATE RESTRICT,
 
+CONSTRAINT uq_quiz_set_source_validation
+    UNIQUE (source_validation_id),
+
 CONSTRAINT chk_quiz_set_status
     CHECK (
         status IN (

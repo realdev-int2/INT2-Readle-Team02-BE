@@ -104,6 +104,9 @@ class QuizSolveServiceTest {
   @DisplayName("퀴즈 풀이 시작 성공")
   void startQuiz_Success() {
     given(quizSetRepository.findById(100L)).willReturn(Optional.of(quizSet));
+    given(quizSet.getStatus())
+        .willReturn(com.realdev.readle.domain.quiz.entity.QuizSetStatus.COMPLETED);
+    given(member.getUuid()).willReturn("test-uuid");
     given(memberRepository.findByUuid("test-uuid")).willReturn(Optional.of(member));
 
     Long attemptId = quizSolveService.startQuiz(100L, "test-uuid");
