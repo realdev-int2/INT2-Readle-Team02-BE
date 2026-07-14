@@ -83,10 +83,13 @@ class QuizGenerationServiceTest {
     given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
     given(contentValidationRepository.findById(100L)).willReturn(Optional.of(validation));
 
-    given(transactionTemplate.execute(any())).willAnswer(invocation -> {
-      org.springframework.transaction.support.TransactionCallback callback = invocation.getArgument(0);
-      return callback.doInTransaction(null);
-    });
+    given(transactionTemplate.execute(any()))
+        .willAnswer(
+            invocation -> {
+              org.springframework.transaction.support.TransactionCallback callback =
+                  invocation.getArgument(0);
+              return callback.doInTransaction(null);
+            });
 
     QuizSet expectedQuizSet = QuizSet.create(content, validation, false);
     ReflectionTestUtils.setField(expectedQuizSet, "id", 200L);
@@ -137,5 +140,32 @@ class QuizGenerationServiceTest {
     assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
         .isInstanceOf(ValidationNotPassedException.class)
         .hasMessageContaining("생성이 불가능한 상태입니다");
+  }
+
+  @Test
+  @DisplayName("FAILED 상태의 검증본은 퀴즈 생성 불가 예외 발생")
+  void createQuizSet_ThrowsWhenFailed() {
+    // given
+    given(validation.getStatus()).willReturn(ValidationStatus.FAILED);
+    given(contentValidationRepository.findById(100L)).willReturn(Optional.of(validation));
+
+    // when & then
+    assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
+        .isInstanceOf(ValidationNotPassedException.class)
+        .hasMessageContaining("생성이 불가능한 상태입니다");
+  }
+
+  @Test
+  @DisplayName("본문 텍스트가 비어 있으면 예외 발생")
+  void createQuizSet_ThrowsWhenContentTextIsBlank() {
+    // given
+    given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
+    given(contentValidationRepository.findById(100L)).willReturn(Optional.of(validation));
+    org.mockito.BDDMockito.given(content.getRawText()).willReturn("   ");
+
+    // when & then
+    assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
   }
 }

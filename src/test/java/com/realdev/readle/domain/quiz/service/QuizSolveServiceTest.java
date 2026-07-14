@@ -62,6 +62,7 @@ class QuizSolveServiceTest {
   void setUp() {
     member = mock(Member.class);
     lenient().when(member.getId()).thenReturn(1L);
+    lenient().when(member.getUuid()).thenReturn("test-uuid");
 
     com.realdev.readle.domain.content.entity.Content content =
         mock(com.realdev.readle.domain.content.entity.Content.class);
@@ -103,9 +104,9 @@ class QuizSolveServiceTest {
   @DisplayName("퀴즈 풀이 시작 성공")
   void startQuiz_Success() {
     given(quizSetRepository.findById(100L)).willReturn(Optional.of(quizSet));
-    given(memberRepository.findById(1L)).willReturn(Optional.of(member));
+    given(memberRepository.findByUuid("test-uuid")).willReturn(Optional.of(member));
 
-    Long attemptId = quizSolveService.startQuiz(100L, 1L);
+    Long attemptId = quizSolveService.startQuiz(100L, "test-uuid");
 
     verify(quizAttemptRepository).save(any(QuizAttempt.class));
   }
@@ -130,7 +131,7 @@ class QuizSolveServiceTest {
     ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
 
     lenient().when(quizAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
-    QuizSubmitResponse response = quizSolveService.submitAnswers(200L, 1L, request);
+    QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
 
     assertThat(response.getTotalCount()).isEqualTo(2);
     assertThat(response.getCorrectCount()).isEqualTo(2); // 둘 다 정답 처리됨 (Mocking 로직)
@@ -154,7 +155,7 @@ class QuizSolveServiceTest {
     // 1개만 제출
     ReflectionTestUtils.setField(request, "answers", List.of(ans1));
 
-    assertThatThrownBy(() -> quizSolveService.submitAnswers(200L, 1L, request))
+    assertThatThrownBy(() -> quizSolveService.submitAnswers(200L, "test-uuid", request))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("답안의 개수가 퀴즈 세트의 문제 개수와 일치하지 않습니다");
   }

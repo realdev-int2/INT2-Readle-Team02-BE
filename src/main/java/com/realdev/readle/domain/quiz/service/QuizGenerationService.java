@@ -58,25 +58,28 @@ public class QuizGenerationService {
     final boolean isBypassed = isBypassedTemp;
 
     // 1. 초기 QuizSet 레코드 생성 및 저장 (Transaction 분리)
-    QuizSet quizSet = transactionTemplate.execute(status -> {
-      QuizSet existing = quizSetRepository.findBySourceValidationId(sourceValidationId).orElse(null);
-      if (existing != null) {
-        if (existing.getStatus() == QuizSetStatus.FAILED) {
-          quizSetRepository.delete(existing);
-          quizSetRepository.flush();
-        } else {
-          throw new QuizGenerationException("이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.");
-        }
-      }
+    QuizSet quizSet =
+        transactionTemplate.execute(
+            status -> {
+              QuizSet existing =
+                  quizSetRepository.findBySourceValidationId(sourceValidationId).orElse(null);
+              if (existing != null) {
+                if (existing.getStatus() == QuizSetStatus.FAILED) {
+                  quizSetRepository.delete(existing);
+                  quizSetRepository.flush();
+                } else {
+                  throw new QuizGenerationException("이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.");
+                }
+              }
 
-      QuizSet newQuizSet;
-      try {
-        newQuizSet = QuizSet.create(validation.getContent(), validation, isBypassed);
-        return quizSetRepository.saveAndFlush(newQuizSet);
-      } catch (DataIntegrityViolationException e) {
-        throw new QuizGenerationException("이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.");
-      }
-    });
+              QuizSet newQuizSet;
+              try {
+                newQuizSet = QuizSet.create(validation.getContent(), validation, isBypassed);
+                return quizSetRepository.saveAndFlush(newQuizSet);
+              } catch (DataIntegrityViolationException e) {
+                throw new QuizGenerationException("이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.");
+              }
+            });
 
     try {
       // 2. AI Prompt 생성 및 호출 (Non-Transactional)
@@ -109,57 +112,60 @@ public class QuizGenerationService {
       ClaudeQuizResponseDto parsedResponse = parseAndValidate(jsonResponse);
 
       // 3. 문제 및 선택지 엔티티 저장 및 완료 (Transaction 분리)
-      return transactionTemplate.execute(status -> {
-        QuizSet activeQuizSet = quizSetRepository.findById(quizSet.getId()).orElseThrow();
-        
-        int orderNo = 1;
-        for (ClaudeQuizResponseDto.ClaudeQuizDto quizDto : parsedResponse.getQuizzes()) {
-          QuestionType type = QuestionType.valueOf(quizDto.getType().toUpperCase());
+      return transactionTemplate.execute(
+          status -> {
+            QuizSet activeQuizSet = quizSetRepository.findById(quizSet.getId()).orElseThrow();
 
-          QuizQuestion question =
-              QuizQuestion.create(
-                  activeQuizSet,
-                  orderNo++,
-                  type,
-                  quizDto.getQuestion(),
-                  quizDto.getCodeSnippet(),
-                  type == QuestionType.MULTIPLE_CHOICE ? null : quizDto.getAnswer(),
-                  null,
-                  null);
-          quizQuestionRepository.save(question);
+            int orderNo = 1;
+            for (ClaudeQuizResponseDto.ClaudeQuizDto quizDto : parsedResponse.getQuizzes()) {
+              QuestionType type = QuestionType.valueOf(quizDto.getType().toUpperCase());
 
-          if (type == QuestionType.MULTIPLE_CHOICE) {
-            if (quizDto.getOptions() == null || quizDto.getOptions().isEmpty()) {
-              throw new QuizGenerationException("객관식 문제에 선택지가 없습니다.");
-            }
-            
-            int correctChoiceCount = 0;
-            int choiceOrderNo = 1;
-            for (String optionText : quizDto.getOptions()) {
-              boolean isCorrect = String.valueOf(choiceOrderNo - 1).equals(quizDto.getAnswer());
-              if (isCorrect) correctChoiceCount++;
-              QuizChoice choice = QuizChoice.create(question, choiceOrderNo++, optionText, isCorrect);
-              quizChoiceRepository.save(choice);
-            }
-            if (correctChoiceCount != 1) {
-              throw new QuizGenerationException("객관식 문제의 정답 개수가 1개가 아닙니다.");
-            }
-          }
-        }
+              QuizQuestion question =
+                  QuizQuestion.create(
+                      activeQuizSet,
+                      orderNo++,
+                      type,
+                      quizDto.getQuestion(),
+                      quizDto.getCodeSnippet(),
+                      type == QuestionType.MULTIPLE_CHOICE ? null : quizDto.getAnswer(),
+                      null,
+                      null);
+              quizQuestionRepository.save(question);
 
-        activeQuizSet.complete(parsedResponse.getQuizzes().size());
-        return QuizCreateResponse.from(activeQuizSet);
-      });
+              if (type == QuestionType.MULTIPLE_CHOICE) {
+                if (quizDto.getOptions() == null || quizDto.getOptions().isEmpty()) {
+                  throw new QuizGenerationException("객관식 문제에 선택지가 없습니다.");
+                }
+
+                int correctChoiceCount = 0;
+                int choiceOrderNo = 1;
+                for (String optionText : quizDto.getOptions()) {
+                  boolean isCorrect = String.valueOf(choiceOrderNo - 1).equals(quizDto.getAnswer());
+                  if (isCorrect) correctChoiceCount++;
+                  QuizChoice choice =
+                      QuizChoice.create(question, choiceOrderNo++, optionText, isCorrect);
+                  quizChoiceRepository.save(choice);
+                }
+                if (correctChoiceCount != 1) {
+                  throw new QuizGenerationException("객관식 문제의 정답 개수가 1개가 아닙니다.");
+                }
+              }
+            }
+
+            activeQuizSet.complete(parsedResponse.getQuizzes().size());
+            return QuizCreateResponse.from(activeQuizSet);
+          });
 
     } catch (Exception e) {
-      transactionTemplate.execute(status -> {
-        QuizSet activeQuizSet = quizSetRepository.findById(quizSet.getId()).orElse(null);
-        if (activeQuizSet != null) {
-          activeQuizSet.fail();
-          quizSetRepository.save(activeQuizSet);
-        }
-        return null;
-      });
+      transactionTemplate.execute(
+          status -> {
+            QuizSet activeQuizSet = quizSetRepository.findById(quizSet.getId()).orElse(null);
+            if (activeQuizSet != null) {
+              activeQuizSet.fail();
+              quizSetRepository.save(activeQuizSet);
+            }
+            return null;
+          });
       log.error("퀴즈 생성 실패: {}", e.getMessage(), e);
       throw new QuizGenerationException("퀴즈 생성 중 오류가 발생했습니다.", e);
     }
@@ -184,7 +190,10 @@ public class QuizGenerationService {
       if (response.getQuizzes().size() < 1 || response.getQuizzes().size() > 5) {
         throw new QuizGenerationException("생성된 문제 수가 1~5개 범위를 벗어납니다.");
       }
-      if (response.getTags() == null || response.getTags().isEmpty() || response.getTags().size() < 1 || response.getTags().size() > 3) {
+      if (response.getTags() == null
+          || response.getTags().isEmpty()
+          || response.getTags().size() < 1
+          || response.getTags().size() > 3) {
         throw new QuizGenerationException("생성된 태그 수가 1~3개 범위를 벗어나거나 비어있습니다.");
       }
 

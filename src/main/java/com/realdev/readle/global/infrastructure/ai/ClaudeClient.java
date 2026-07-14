@@ -1,9 +1,9 @@
 package com.realdev.readle.global.infrastructure.ai;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.global.config.ClaudeProperties;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeRequest;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +23,8 @@ public class ClaudeClient {
   private final ClaudeProperties properties;
   private final ObjectMapper objectMapper;
 
-  public ClaudeClient(RestClient claudeRestClient, ClaudeProperties properties, ObjectMapper objectMapper) {
+  public ClaudeClient(
+      RestClient claudeRestClient, ClaudeProperties properties, ObjectMapper objectMapper) {
     this.claudeRestClient = claudeRestClient;
     this.properties = properties;
     this.objectMapper = objectMapper;

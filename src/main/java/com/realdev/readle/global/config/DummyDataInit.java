@@ -20,21 +20,45 @@ public class DummyDataInit {
   public void init() {
     try {
       Integer count =
-          jdbcTemplate.queryForObject("SELECT COUNT(*) FROM member WHERE id = 1", Integer.class);
+          jdbcTemplate.queryForObject(
+              "SELECT COUNT(*) FROM member WHERE email = 'test@test.com'", Integer.class);
       if (count != null && count == 0) {
         log.info("로컬 테스트를 위한 더미 데이터(Member, Content, ContentValidation) 초기화를 진행합니다.");
 
-        jdbcTemplate.execute(
-            "INSERT INTO member (id, uuid, email, nickname, oauth_provider, oauth_id, created_at, updated_at) "
-                + "VALUES (1, 'test-uuid-1234', 'test@test.com', '테스터', 'GOOGLE', 'test-oauth-id', NOW(), NOW())");
+        org.springframework.jdbc.support.KeyHolder keyHolder =
+            new org.springframework.jdbc.support.GeneratedKeyHolder();
 
-        jdbcTemplate.execute(
-            "INSERT INTO content (id, member_id, title, input_type, raw_text, crawl_status, created_at, updated_at) "
-                + "VALUES (1, 1, '테스트 제목', 'TEXT', '스프링 프레임워크와 의존성 주입(DI)에 대한 본문입니다. 객체지향의 특징을 잘 보여주며, 빈(Bean) 스코프에 대한 내용도 포함합니다.', 'NOT_APPLICABLE', NOW(), NOW())");
+        jdbcTemplate.update(
+            connection -> {
+              java.sql.PreparedStatement ps =
+                  connection.prepareStatement(
+                      "INSERT INTO member (uuid, email, nickname, oauth_provider, oauth_id, created_at, updated_at) "
+                          + "VALUES ('test-uuid-1234', 'test@test.com', '테스터', 'GOOGLE', 'test-oauth-id', NOW(), NOW())",
+                      java.sql.Statement.RETURN_GENERATED_KEYS);
+              return ps;
+            },
+            keyHolder);
 
-        jdbcTemplate.execute(
-            "INSERT INTO content_validation (id, content_id, validation_method, status, validation_score, created_at) "
-                + "VALUES (1, 1, 'AI', 'PASSED', 100.0, NOW())");
+        Long memberId = keyHolder.getKey().longValue();
+
+        jdbcTemplate.update(
+            connection -> {
+              java.sql.PreparedStatement ps =
+                  connection.prepareStatement(
+                      "INSERT INTO content (member_id, title, input_type, raw_text, crawl_status, created_at, updated_at) "
+                          + "VALUES (?, '테스트 제목', 'TEXT', '스프링 프레임워크와 의존성 주입(DI)에 대한 본문입니다. 객체지향의 특징을 잘 보여주며, 빈(Bean) 스코프에 대한 내용도 포함합니다.', 'NOT_APPLICABLE', NOW(), NOW())",
+                      java.sql.Statement.RETURN_GENERATED_KEYS);
+              ps.setLong(1, memberId);
+              return ps;
+            },
+            keyHolder);
+
+        Long contentId = keyHolder.getKey().longValue();
+
+        jdbcTemplate.update(
+            "INSERT INTO content_validation (content_id, validation_method, status, validation_score, created_at) "
+                + "VALUES (?, 'AI', 'PASSED', 100.0, NOW())",
+            contentId);
 
         log.info("더미 데이터 초기화 완료! 이제 POST /api/quizzes API부터 바로 호출 가능합니다.");
       }

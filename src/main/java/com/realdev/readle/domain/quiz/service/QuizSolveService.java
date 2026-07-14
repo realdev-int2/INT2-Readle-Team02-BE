@@ -42,20 +42,20 @@ public class QuizSolveService {
   private final MemberRepository memberRepository;
 
   @Transactional
-  public Long startQuiz(Long quizSetId, Long memberId) {
+  public Long startQuiz(Long quizSetId, String memberUuid) {
     QuizSet quizSet =
         quizSetRepository
             .findById(quizSetId)
             .orElseThrow(() -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 퀴즈 세트입니다."));
 
-    // 권한 검증: quizSet의 content 작성자와 memberId가 일치하는지 확인
-    if (!quizSet.getContent().getMember().getId().equals(memberId)) {
+    // 권한 검증: quizSet의 content 작성자와 memberUuid가 일치하는지 확인
+    if (!quizSet.getContent().getMember().getUuid().equals(memberUuid)) {
       throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 퀴즈에 대한 접근 권한이 없습니다.");
     }
 
     Member member =
         memberRepository
-            .findById(memberId)
+            .findByUuid(memberUuid)
             .orElseThrow(() -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 사용자입니다."));
 
     QuizAttempt attempt = QuizAttempt.createInProgress(quizSet, member);
@@ -65,13 +65,13 @@ public class QuizSolveService {
   }
 
   @Transactional(readOnly = true)
-  public QuizDetailResponse getQuizAttemptDetail(Long attemptId, Long memberId) {
+  public QuizDetailResponse getQuizAttemptDetail(Long attemptId, String memberUuid) {
     QuizAttempt attempt =
         quizAttemptRepository
             .findById(attemptId)
             .orElseThrow(() -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 풀이 시도입니다."));
 
-    if (!attempt.getMember().getId().equals(memberId)) {
+    if (!attempt.getMember().getUuid().equals(memberUuid)) {
       throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 풀이 정보에 대한 접근 권한이 없습니다.");
     }
 
@@ -84,13 +84,13 @@ public class QuizSolveService {
 
   @Transactional
   public QuizSubmitResponse submitAnswers(
-      Long attemptId, Long memberId, QuizSubmitRequest request) {
+      Long attemptId, String memberUuid, QuizSubmitRequest request) {
     QuizAttempt attempt =
         quizAttemptRepository
             .findById(attemptId)
             .orElseThrow(() -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 풀이 시도입니다."));
 
-    if (!attempt.getMember().getId().equals(memberId)) {
+    if (!attempt.getMember().getUuid().equals(memberUuid)) {
       throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 풀이 정보에 대한 권한이 없습니다.");
     }
 
@@ -130,7 +130,8 @@ public class QuizSolveService {
         QuizChoice choice =
             quizChoiceRepository
                 .findById(answerReq.getSubmittedChoiceId())
-                .orElseThrow(() -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 선택지입니다."));
+                .orElseThrow(
+                    () -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 선택지입니다."));
 
         if (!choice.getQuizQuestion().getId().equals(question.getId())) {
           throw new IllegalArgumentException("선택한 답안이 해당 문제에 속하지 않습니다.");

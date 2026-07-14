@@ -5,6 +5,8 @@ import com.realdev.readle.domain.quiz.dto.QuizDetailResponse;
 import com.realdev.readle.domain.quiz.dto.QuizSubmitRequest;
 import com.realdev.readle.domain.quiz.dto.QuizSubmitResponse;
 import com.realdev.readle.domain.quiz.service.QuizSolveService;
+import com.realdev.readle.global.exception.CustomException;
+import com.realdev.readle.global.exception.GlobalErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,34 +24,44 @@ public class QuizSolveController {
 
   private final QuizSolveService quizSolveService;
 
-  private Long getCurrentMemberId() {
+  private String getCurrentMemberUuid() {
     try {
-      return Long.valueOf(org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName());
+      String uuid =
+          org.springframework.security.core.context.SecurityContextHolder.getContext()
+              .getAuthentication()
+              .getName();
+      if (uuid == null || uuid.isBlank() || "anonymousUser".equals(uuid)) {
+        throw new CustomException(GlobalErrorCode.FORBIDDEN, "인증되지 않은 사용자입니다.");
+      }
+      return uuid;
+    } catch (CustomException e) {
+      throw e;
     } catch (Exception e) {
-      return 1L; // Fallback
+      throw new CustomException(GlobalErrorCode.FORBIDDEN, "인증 정보를 파싱할 수 없습니다.");
     }
   }
 
   @PostMapping("/{quizSetId}/attempts")
-  public ResponseEntity<QuizAttemptStartResponse> startQuiz(@PathVariable("quizSetId") Long quizSetId) {
-    Long memberId = getCurrentMemberId();
-    Long attemptId = quizSolveService.startQuiz(quizSetId, memberId);
+  public ResponseEntity<QuizAttemptStartResponse> startQuiz(
+      @PathVariable("quizSetId") Long quizSetId) {
+    String memberUuid = getCurrentMemberUuid();
+    Long attemptId = quizSolveService.startQuiz(quizSetId, memberUuid);
     return ResponseEntity.ok(QuizAttemptStartResponse.of(attemptId));
   }
 
   @GetMapping("/attempts/{attemptId}")
   public ResponseEntity<QuizDetailResponse> getQuizAttemptDetail(
       @PathVariable("attemptId") Long attemptId) {
-    Long memberId = getCurrentMemberId();
-    QuizDetailResponse response = quizSolveService.getQuizAttemptDetail(attemptId, memberId);
+    String memberUuid = getCurrentMemberUuid();
+    QuizDetailResponse response = quizSolveService.getQuizAttemptDetail(attemptId, memberUuid);
     return ResponseEntity.ok(response);
   }
 
   @PostMapping("/attempts/{attemptId}/submit")
   public ResponseEntity<QuizSubmitResponse> submitAnswers(
       @PathVariable("attemptId") Long attemptId, @Valid @RequestBody QuizSubmitRequest request) {
-    Long memberId = getCurrentMemberId();
-    QuizSubmitResponse response = quizSolveService.submitAnswers(attemptId, memberId, request);
+    String memberUuid = getCurrentMemberUuid();
+    QuizSubmitResponse response = quizSolveService.submitAnswers(attemptId, memberUuid, request);
     return ResponseEntity.ok(response);
   }
 }

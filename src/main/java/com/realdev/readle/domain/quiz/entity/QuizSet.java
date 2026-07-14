@@ -23,9 +23,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(
     name = "quiz_set",
-    uniqueConstraints = {
-      @UniqueConstraint(columnNames = {"source_validation_id"})
-    })
+    uniqueConstraints = {@UniqueConstraint(columnNames = {"source_validation_id"})})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class QuizSet extends BaseCreatedAtEntity {
