@@ -43,7 +43,7 @@ class ContentControllerTest {
     // when & then
     mockMvc
         .perform(
-            post("/contents/extract")
+            post("/api/contents/extract")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
@@ -60,7 +60,7 @@ class ContentControllerTest {
     // when & then
     mockMvc
         .perform(
-            post("/contents/extract")
+            post("/api/contents/extract")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest())
@@ -79,7 +79,7 @@ class ContentControllerTest {
     // when & then
     mockMvc
         .perform(
-            post("/contents/extract")
+            post("/api/contents/extract")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest())
@@ -98,7 +98,7 @@ class ContentControllerTest {
     // when & then
     mockMvc
         .perform(
-            post("/contents/extract")
+            post("/api/contents/extract")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isUnprocessableEntity())
@@ -117,7 +117,7 @@ class ContentControllerTest {
     // when & then
     mockMvc
         .perform(
-            post("/contents/extract")
+            post("/api/contents/extract")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isUnprocessableEntity())
