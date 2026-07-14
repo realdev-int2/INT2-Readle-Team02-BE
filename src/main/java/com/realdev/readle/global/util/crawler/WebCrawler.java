@@ -18,6 +18,7 @@ import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -25,6 +26,7 @@ import org.jsoup.nodes.Element;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 public class WebCrawler {
 
@@ -35,62 +37,77 @@ public class WebCrawler {
   private static final int MAX_REDIRECTS = 3;
 
   public CrawledDocument crawl(String url) {
+    log.info("[CRAWL_START] URL: {}", url);
     String currentUrl = url;
     int redirectCount = 0;
 
-    while (true) {
-      URL parsedUrl;
-      try {
-        parsedUrl = new URL(currentUrl);
-      } catch (MalformedURLException e) {
-        throw new CustomException(ContentErrorCode.INVALID_URL, e);
-      }
-
-      String protocol = parsedUrl.getProtocol();
-      if (!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
-        throw new CustomException(ContentErrorCode.INVALID_URL, "지원하지 않는 프로토콜 스킴입니다: " + protocol);
-      }
-
-      String host = parsedUrl.getHost();
-
-      // 1. 다중 A/AAAA 레코드 전체 조회 및 검증을 통한 연결 대상 고정(Pinning)
-      InetAddress safeAddress = validateAndSelectSafeAddress(host);
-
-      try {
-        // IP 주소 기반 직접 연결 요청 (2차 DNS 룩업 차단을 통한 Rebinding 방어)
-        Document doc = fetchHtml(currentUrl, host, safeAddress);
-        return parse(doc);
-
-      } catch (RedirectException e) {
-        if (++redirectCount > MAX_REDIRECTS) {
-          throw new CustomException(ContentErrorCode.EXTRACT_FAILED, "리다이렉트 횟수가 초과되었습니다.");
-        }
-        String redirectLocation = e.getLocation();
-        if (redirectLocation == null || redirectLocation.isBlank()) {
-          throw new CustomException(ContentErrorCode.EXTRACT_FAILED, "리다이렉트 대상 주소가 비어있습니다.");
+    try {
+      while (true) {
+        URL parsedUrl;
+        try {
+          parsedUrl = new URL(currentUrl);
+        } catch (MalformedURLException e) {
+          throw new CustomException(ContentErrorCode.INVALID_URL, e);
         }
 
-        // 상대 경로 주소일 경우 절대 경로로 복원
-        if (!redirectLocation.startsWith("http://") && !redirectLocation.startsWith("https://")) {
-          try {
-            URL base = new URL(currentUrl);
-            redirectLocation = new URL(base, redirectLocation).toString();
-          } catch (MalformedURLException ex) {
-            throw new CustomException(ContentErrorCode.INVALID_URL, ex);
+        String protocol = parsedUrl.getProtocol();
+        if (!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
+          throw new CustomException(
+              ContentErrorCode.INVALID_URL, "지원하지 않는 프로토콜 스킴입니다: " + protocol);
+        }
+
+        String host = parsedUrl.getHost();
+
+        // 1. 다중 A/AAAA 레코드 전체 조회 및 검증을 통한 연결 대상 고정(Pinning)
+        InetAddress safeAddress = validateAndSelectSafeAddress(host);
+
+        try {
+          // IP 주소 기반 직접 연결 요청 (2차 DNS 룩업 차단을 통한 Rebinding 방어)
+          Document doc = fetchHtml(currentUrl, host, safeAddress);
+          CrawledDocument result = parse(doc);
+          log.info("[CRAWL_SUCCESS] URL: {}", url);
+          return result;
+
+        } catch (RedirectException e) {
+          if (++redirectCount > MAX_REDIRECTS) {
+            throw new CustomException(ContentErrorCode.EXTRACT_FAILED, "리다이렉트 횟수가 초과되었습니다.");
           }
+          currentUrl = getSafeRedirectLocation(e, currentUrl);
+          log.info("[CRAWL_REDIRECT] Target URL: {}", currentUrl);
+
+        } catch (IllegalArgumentException | MalformedURLException e) {
+          throw new CustomException(ContentErrorCode.INVALID_URL, e);
+        } catch (SocketTimeoutException e) {
+          throw new CustomException(ContentErrorCode.CRAWLING_TIMEOUT, e);
+        } catch (IOException e) {
+          throw new CustomException(ContentErrorCode.EXTRACT_FAILED, e);
         }
+      }
+    } catch (CustomException e) {
+      log.warn(
+          "[CRAWL_FAILED] URL: {}, Code: {}, Reason: {}", url, e.getErrorCode(), e.getMessage());
+      throw e;
+    }
+  }
 
-        currentUrl = redirectLocation;
-        continue;
+  private static String getSafeRedirectLocation(RedirectException e, String currentUrl) {
+    String redirectLocation = e.getLocation();
+    if (redirectLocation == null || redirectLocation.isBlank()) {
+      throw new CustomException(ContentErrorCode.EXTRACT_FAILED, "리다이렉트 대상 주소가 비어있습니다.");
+    }
 
-      } catch (IllegalArgumentException | MalformedURLException e) {
-        throw new CustomException(ContentErrorCode.INVALID_URL, e);
-      } catch (SocketTimeoutException e) {
-        throw new CustomException(ContentErrorCode.CRAWLING_TIMEOUT, e);
-      } catch (IOException e) {
-        throw new CustomException(ContentErrorCode.EXTRACT_FAILED, e);
+    // 상대 경로 주소일 경우 절대 경로로 복원
+    String lower = redirectLocation.toLowerCase(java.util.Locale.ENGLISH);
+
+    if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
+      try {
+        URL base = new URL(currentUrl);
+        return new URL(base, redirectLocation).toString();
+      } catch (MalformedURLException ex) {
+        throw new CustomException(ContentErrorCode.INVALID_URL, ex);
       }
     }
+    return redirectLocation;
   }
 
   // Jsoup 파싱 로직 검증용 default 제한자 제공
@@ -195,6 +212,13 @@ public class WebCrawler {
 
     byte[] bytes = address.getAddress();
 
+    // IPv4-Mapped IPv6 주소 (::ffff:x.x.x.x) 처리
+    if (bytes.length == 16 && isIPv4MappedIPv6(bytes)) {
+      byte[] ipv4Bytes = new byte[4];
+      System.arraycopy(bytes, 12, ipv4Bytes, 0, 4);
+      bytes = ipv4Bytes;
+    }
+
     // 1) IPv4 검증
     if (bytes.length == 4) {
       int first = bytes[0] & 0xFF;
@@ -224,6 +248,15 @@ public class WebCrawler {
 
     // 2) IPv6 ULA (Unique Local Address) 대역 차단: fc00::/7 (bits 1111110x)
     return bytes.length != 16 || ((bytes[0] & 0xFF) & 0xFE) != 0xFC;
+  }
+
+  private boolean isIPv4MappedIPv6(byte[] bytes) {
+    for (int i = 0; i < 10; i++) {
+      if (bytes[i] != 0) {
+        return false;
+      }
+    }
+    return (bytes[10] & 0xFF) == 0xFF && (bytes[11] & 0xFF) == 0xFF;
   }
 
   private String extractTitle(Document doc) {
@@ -278,6 +311,7 @@ public class WebCrawler {
     }
 
     private Socket configureSocket(Socket socket) {
+
       if (socket instanceof SSLSocket sslSocket) {
         try {
           SSLParameters params = sslSocket.getSSLParameters();
@@ -382,6 +416,11 @@ public class WebCrawler {
         }
       }
       return result;
+    }
+
+    @Override
+    public int read(byte @NonNull [] b) throws IOException {
+      return read(b, 0, b.length);
     }
 
     @Override

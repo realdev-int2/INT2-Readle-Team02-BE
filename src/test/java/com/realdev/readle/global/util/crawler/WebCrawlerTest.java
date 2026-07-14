@@ -221,6 +221,18 @@ class WebCrawlerTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(ContentErrorCode.INVALID_URL);
+
+    // IPv4-Mapped IPv6 루프백 차단 검증
+    assertThatThrownBy(() -> webCrawler.crawl("http://[::ffff:127.0.0.1]/status"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
+
+    // IPv4-Mapped IPv6 사설망 차단 검증
+    assertThatThrownBy(() -> webCrawler.crawl("http://[::ffff:192.168.0.1]/status"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
   }
 
   @Test
@@ -464,5 +476,55 @@ class WebCrawlerTest {
     } finally {
       System.clearProperty("sun.net.http.allowRestrictedHeaders");
     }
+  }
+
+  @Test
+  @DisplayName("리다이렉트 대상 주소의 대소문자(경로 및 파라미터)가 훼손되지 않고 보존된다")
+  void redirectPreservesCaseOfPathAndParameters() throws IOException {
+    HttpURLConnection firstConn = mock(HttpURLConnection.class);
+    when(firstConn.getResponseCode()).thenReturn(302);
+    // 대소문자가 혼용된 상대 경로 설정
+    when(firstConn.getHeaderField("Location")).thenReturn("/Relative-Path?Token=AbCdEf");
+
+    HttpURLConnection secondConn = mock(HttpURLConnection.class);
+    when(secondConn.getResponseCode()).thenReturn(200);
+    byte[] mockHtml = "<html><head><title>성공</title></head><body>본문</body></html>".getBytes();
+    when(secondConn.getInputStream()).thenReturn(new java.io.ByteArrayInputStream(mockHtml));
+
+    java.util.List<String> requestedUrls = new java.util.ArrayList<>();
+
+    WebCrawler testCrawler =
+        new WebCrawler() {
+          private int callCount = 0;
+
+          @Override
+          HttpURLConnection getHttpURLConnection(
+              String currentUrl, String host, InetAddress safeAddress) {
+            requestedUrls.add(currentUrl);
+            callCount++;
+            if (callCount == 1) {
+              return firstConn;
+            } else {
+              return secondConn;
+            }
+          }
+
+          @Override
+          InetAddress validateAndSelectSafeAddress(String host) {
+            if ("public-site.com".equals(host)) {
+              InetAddress mockAddr = mock(InetAddress.class);
+              when(mockAddr.getHostAddress()).thenReturn("8.8.8.8");
+              return mockAddr;
+            }
+            return super.validateAndSelectSafeAddress(host);
+          }
+        };
+
+    testCrawler.crawl("https://public-site.com");
+
+    // 두 번째 요청(리다이렉트 대상)의 URL에 대소문자가 정확히 유지되었는지 검증
+    assertThat(requestedUrls).hasSize(2);
+    assertThat(requestedUrls.get(1))
+        .isEqualTo("https://public-site.com/Relative-Path?Token=AbCdEf");
   }
 }
