@@ -207,4 +207,38 @@ class WebCrawlerTest {
     assertThatThrownBy(() -> webCrawler.crawl("http://169.254.169.254/latest/meta-data"))
         .isInstanceOf(CustomException.class);
   }
+
+  @Test
+  @DisplayName("BoundedInputStream: 지정된 바이트 크기를 초과하여 읽으려 하면 IOException이 발생한다")
+  void boundedInputStreamThrowsOnLimitExceeded() {
+    byte[] data = "123456".getBytes();
+    java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(data);
+    WebCrawler.BoundedInputStream boundedIs = new WebCrawler.BoundedInputStream(bis, 5);
+
+    assertThatThrownBy(
+            () -> {
+              byte[] buffer = new byte[10];
+              int read;
+              while ((read = boundedIs.read(buffer)) != -1) {
+                // read until end or exception
+              }
+            })
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("본문 크기가 제한을 초과했습니다");
+  }
+
+  @Test
+  @DisplayName("BoundedInputStream: 지정된 바이트 크기 이하의 데이터는 정상적으로 모두 읽을 수 있다")
+  void boundedInputStreamReadsNormalData() throws java.io.IOException {
+    byte[] data = "12345".getBytes();
+    java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(data);
+    WebCrawler.BoundedInputStream boundedIs = new WebCrawler.BoundedInputStream(bis, 5);
+
+    byte[] buffer = new byte[10];
+    int bytesRead = boundedIs.read(buffer);
+
+    assertThat(bytesRead).isEqualTo(5);
+    assertThat(new String(buffer, 0, bytesRead)).isEqualTo("12345");
+    assertThat(boundedIs.read()).isEqualTo(-1); // EOF
+  }
 }
