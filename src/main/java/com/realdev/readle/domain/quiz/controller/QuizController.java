@@ -17,11 +17,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class QuizController {
 
-    private final QuizGenerationService quizGenerationService;
+  private final QuizGenerationService quizGenerationService;
 
-    @PostMapping
-    public ResponseEntity<QuizCreateResponse> createQuiz(@Valid @RequestBody QuizCreateRequest request) {
-        QuizCreateResponse response = quizGenerationService.createQuizSet(request.getSourceValidationId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+  @PostMapping
+  public ResponseEntity<QuizCreateResponse> createQuiz(
+      @Valid @RequestBody QuizCreateRequest request) {
+    QuizCreateResponse response =
+        quizGenerationService.createQuizSet(request.getSourceValidationId());
+    return ResponseEntity.status(HttpStatus.CREATED).body(response);
+  }
 }

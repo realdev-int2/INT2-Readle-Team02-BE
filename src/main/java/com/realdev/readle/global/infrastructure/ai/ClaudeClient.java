@@ -3,6 +3,7 @@ package com.realdev.readle.global.infrastructure.ai;
 import com.realdev.readle.global.config.ClaudeProperties;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeRequest;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,10 +21,12 @@ public class ClaudeClient {
 
   private final RestClient claudeRestClient;
   private final ClaudeProperties properties;
+  private final ObjectMapper objectMapper;
 
-  public ClaudeClient(RestClient claudeRestClient, ClaudeProperties properties) {
+  public ClaudeClient(RestClient claudeRestClient, ClaudeProperties properties, ObjectMapper objectMapper) {
     this.claudeRestClient = claudeRestClient;
     this.properties = properties;
+    this.objectMapper = objectMapper;
   }
 
   // 기본 모델(properties.getModel())을 사용하는 기본 버전
@@ -85,19 +88,15 @@ public class ClaudeClient {
                 List.of(ClaudeRequest.Message.builder().role("user").content(userPrompt).build()))
             .build();
 
-    String rawResponse = claudeRestClient
-        .post()
-        .uri("/v1/messages")
-        .body(request)
-        .retrieve()
-        .body(String.class);
-    
-    log.info("[CLAUDE_RAW_RESPONSE] {}", rawResponse);
-    
+    String rawResponse =
+        claudeRestClient.post().uri("/v1/messages").body(request).retrieve().body(String.class);
+
+    log.debug("[CLAUDE_RAW_RESPONSE] {}", rawResponse);
+
     try {
-        return new com.fasterxml.jackson.databind.ObjectMapper().readValue(rawResponse, ClaudeResponse.class);
+      return objectMapper.readValue(rawResponse, ClaudeResponse.class);
     } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-        throw new IllegalStateException("Claude 응답 파싱 실패", e);
+      throw new IllegalStateException("Claude 응답 파싱 실패", e);
     }
   }
 
@@ -112,13 +111,14 @@ public class ClaudeClient {
     if (response == null || response.getContent() == null || response.getContent().isEmpty()) {
       throw new IllegalStateException("Claude API로부터 비어있는 응답을 받았습니다.");
     }
-    
+
     // "thinking" 블록 등이 섞여 올 수 있으므로 type == "text"인 블록을 찾습니다.
-    String generatedText = response.getContent().stream()
-        .filter(block -> "text".equals(block.getType()))
-        .map(ClaudeResponse.Content::getText)
-        .findFirst()
-        .orElse(null);
+    String generatedText =
+        response.getContent().stream()
+            .filter(block -> "text".equals(block.getType()))
+            .map(ClaudeResponse.Content::getText)
+            .findFirst()
+            .orElse(null);
 
     if (generatedText == null || generatedText.isBlank()) {
       throw new IllegalStateException("Claude API 응답에 유효한 텍스트 블록이 없습니다.");

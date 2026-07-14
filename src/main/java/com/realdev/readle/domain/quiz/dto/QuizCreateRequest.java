@@ -10,6 +10,5 @@ import lombok.Setter;
 @NoArgsConstructor
 public class QuizCreateRequest {
 
-    @NotNull(message = "검증 완료된 원본 콘텐츠 ID는 필수입니다.")
-    private Long sourceValidationId;
+  @NotNull(message = "검증 완료된 원본 콘텐츠 ID는 필수입니다.") private Long sourceValidationId;
 }

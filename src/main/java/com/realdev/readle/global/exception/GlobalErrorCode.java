@@ -16,6 +16,7 @@ public enum GlobalErrorCode implements ErrorCode {
   METHOD_NOT_SUPPORTED(METHOD_NOT_ALLOWED, "지원하지 않는 HTTP 메서드입니다."),
   SERVER_ERROR(INTERNAL_SERVER_ERROR, "예상치 못한 문제가 발생했습니다."),
   NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다."),
+  FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
   NOT_ACCEPTABLE(HttpStatus.NOT_ACCEPTABLE, "요청한 응답 형식을 지원하지 않습니다."),
   UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 Content-Type 입니다.");
 
