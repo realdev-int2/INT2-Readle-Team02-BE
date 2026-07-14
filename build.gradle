@@ -115,6 +115,8 @@ tasks.named('test') {
 tasks.register('liveTest', Test) {
 	group = 'verification'
 	description = 'Runs live integration tests against the actual Claude API.'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
 	useJUnitPlatform {
 		includeTags 'live'
 	}

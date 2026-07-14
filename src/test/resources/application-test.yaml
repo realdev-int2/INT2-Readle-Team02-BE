@@ -28,3 +28,11 @@ spring:
       s3:
         endpoint: http://localhost:4566 # LocalStack or mock S3
         path-style-access-enabled: true
+
+# 테스트 환경용 Claude API Mock 설정 (실제 API 호출 없음)
+anthropic:
+  claude:
+    api-key: mock-test-key
+    base-url: https://api.anthropic.com
+    model: claude-sonnet-5
+    version: 2023-06-01

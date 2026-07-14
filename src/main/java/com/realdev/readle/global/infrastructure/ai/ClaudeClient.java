@@ -52,10 +52,16 @@ public class ClaudeClient {
     return statusCode.is5xxServerError() || statusCode.value() == 429;
   }
 
-  // 1회 백그라운드 재시도 처리 수행
+  // 1회 재시도 전 500ms 백오프 후 재시도 수행
   private ClaudeResponse retryCall(
       String model, String systemPrompt, String userPrompt, RestClientException e) {
-    log.warn("[CLAUDE_API_WARNING] Claude API 일시적 호출 실패. 1회 재시도를 진행합니다. 에러: {}", e.getMessage());
+    log.warn(
+        "[CLAUDE_API_WARNING] Claude API 일시적 호출 실패. 500ms 후 1회 재시도를 진행합니다. 에러: {}", e.getMessage());
+    try {
+      Thread.sleep(500);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+    }
     try {
       return executeGenerateMessage(model, systemPrompt, userPrompt);
     } catch (RestClientException retryEx) {
@@ -98,6 +104,10 @@ public class ClaudeClient {
     if (response == null || response.getContent() == null || response.getContent().isEmpty()) {
       throw new IllegalStateException("Claude API로부터 비어있는 응답을 받았습니다.");
     }
-    return response.getContent().get(0).getText();
+    ClaudeResponse.Content firstBlock = response.getContent().get(0);
+    if (firstBlock == null || firstBlock.getText() == null || firstBlock.getText().isBlank()) {
+      throw new IllegalStateException("Claude API 응답의 첫 번째 콘텐츠 블록이 유효하지 않습니다.");
+    }
+    return firstBlock.getText();
   }
 }

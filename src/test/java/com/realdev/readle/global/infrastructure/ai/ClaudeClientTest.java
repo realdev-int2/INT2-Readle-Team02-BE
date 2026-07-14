@@ -108,6 +108,36 @@ class ClaudeClientTest {
   }
 
   @Test
+  @DisplayName(
+      "Claude API 응답의 첫 번째 콘텐츠 블록의 text가 비어있으면 getGeneratedText 호출 시 IllegalStateException을 던져야 한다")
+  void getGeneratedTextThrowsExceptionOnBlankTextBlock() throws Exception {
+    // given
+    String systemPrompt = "You are a quiz master";
+    String userPrompt = "Generate quiz";
+
+    Map<String, Object> mockResponseMap =
+        Map.of(
+            "id", "msg_12345",
+            "type", "message",
+            "role", "assistant",
+            "content", List.of(Map.of("type", "text", "text", "")),
+            "model", "claude-sonnet-5",
+            "usage", Map.of("input_tokens", 100, "output_tokens", 200));
+    String responseJson = objectMapper.writeValueAsString(mockResponseMap);
+
+    server
+        .expect(requestTo("https://api.anthropic.com/v1/messages"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON));
+
+    // when & then
+    assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("첫 번째 콘텐츠 블록이 유효하지 않습니다.");
+    server.verify();
+  }
+
+  @Test
   @DisplayName("Claude API 최초 호출 시 5xx 에러가 발생하면 1회 재시도하여 성공적인 응답을 반환해야 한다")
   void generateMessageFailsAndRetriesOnApiException() throws Exception {
     // given
