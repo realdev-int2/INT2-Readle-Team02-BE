@@ -37,7 +37,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
-  // ErrorCode의 HTTP status를 응답 status로 사용하고, body는 {code, message} 형식으로 반환한다.
+  // ErrorCode의 HTTP status를 응답 status로 사용하고, body는 {error: {code, message, details}} 형식으로 반환한다.
   private ResponseEntity<Object> errorResponse(ErrorCode errorCode) {
     ErrorResponse response = ErrorResponse.error(errorCode);
 
@@ -51,14 +51,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return ResponseEntity.status(response.status()).body(response);
   }
 
-  // ErrorCode 기반 {code, message} 응답을 만들고, Spring MVC가 전달한 HTTP headers를 보존한다.
+  // ErrorCode 기반 error envelope를 만들고, Spring MVC가 전달한 HTTP headers를 보존한다.
   private ResponseEntity<Object> errorResponse(ErrorCode errorCode, HttpHeaders headers) {
     ErrorResponse response = ErrorResponse.error(errorCode);
 
     return ResponseEntity.status(response.status()).headers(headers).body(response);
   }
 
-  // CustomException의 ErrorCode와 메시지를 그대로 사용해 {code, message} 형식으로 반환한다.
+  // CustomException의 ErrorCode와 메시지를 그대로 사용해 error envelope로 반환한다.
   private ResponseEntity<Object> errorResponse(CustomException exception) {
     ErrorResponse response = ErrorResponse.error(exception);
 
@@ -76,7 +76,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     };
   }
 
-  // 비즈니스 예외를 ErrorResponse {code, message}로 반환한다. HTTP status는 ErrorCode를 따른다.
+  // 비즈니스 예외를 ErrorResponse error envelope로 반환한다. HTTP status는 ErrorCode를 따른다.
   @ExceptionHandler(CustomException.class)
   protected ResponseEntity<Object> handleCustomException(CustomException exception) {
     ErrorCode errorCode = exception.getErrorCode();
@@ -241,7 +241,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return errorResponse(INVALID_INPUT, message);
   }
 
-  // Spring 기본 ProblemDetail 응답을 ErrorResponse {code, message}로 정규화한다. HTTP status는 매핑된 ErrorCode를
+  // Spring 기본 ProblemDetail 응답을 ErrorResponse error envelope로 정규화한다. HTTP status는 매핑된 ErrorCode를
   // 따른다.
   @Override
   protected ResponseEntity<Object> createResponseEntity(

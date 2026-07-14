@@ -7,15 +7,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.realdev.readle.global.security.SecurityConfig;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.validation.annotation.Validated;
@@ -31,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
       NonValidatedController.class,
       GlobalExceptionHandler.class
     })
-@Import(SecurityConfig.class)
+@AutoConfigureMockMvc(addFilters = false)
 class GlobalExceptionHandlerTest {
 
   @Autowired private MockMvc mockMvc;
@@ -39,14 +38,14 @@ class GlobalExceptionHandlerTest {
   @Autowired private ObjectMapper objectMapper;
 
   @Test
-  @DisplayName("CustomException(4xx)이 발생하면 mapped status와 {code, message, timestamp}를 반환한다")
+  @DisplayName("CustomException(4xx)이 발생하면 mapped status와 error envelope를 반환한다")
   void handleCustomException() throws Exception {
     mockMvc
         .perform(get("/test/custom-exception"))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-        .andExpect(jsonPath("$.message").value("요청한 리소스를 찾을 수 없습니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("NOT_FOUND"))
+        .andExpect(jsonPath("$.error.message").value("요청한 리소스를 찾을 수 없습니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -55,9 +54,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/custom-exception-message"))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-        .andExpect(jsonPath("$.message").value("ID가 5인 회원을 찾을 수 없습니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("NOT_FOUND"))
+        .andExpect(jsonPath("$.error.message").value("ID가 5인 회원을 찾을 수 없습니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -66,9 +65,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/custom-server-error"))
         .andExpect(status().isInternalServerError())
-        .andExpect(jsonPath("$.code").value("SERVER_ERROR"))
-        .andExpect(jsonPath("$.message").value("예상치 못한 문제가 발생했습니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("SERVER_ERROR"))
+        .andExpect(jsonPath("$.error.message").value("예상치 못한 문제가 발생했습니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -77,9 +76,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/unexpected-exception"))
         .andExpect(status().isInternalServerError())
-        .andExpect(jsonPath("$.code").value("SERVER_ERROR"))
-        .andExpect(jsonPath("$.message").value("예상치 못한 문제가 발생했습니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("SERVER_ERROR"))
+        .andExpect(jsonPath("$.error.message").value("예상치 못한 문제가 발생했습니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -93,9 +92,9 @@ class GlobalExceptionHandlerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(invalidRequest)))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value("name: 이름은 필수입니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.error.message").value("name: 이름은 필수입니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -104,9 +103,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/validated/constraint-violation").param("name", "   "))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value(containsString("must not be blank")))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.error.message").value(containsString("must not be blank")))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -115,9 +114,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/manual/constraint-violation-null"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value("유효한 입력 형식이 아닙니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.error.message").value("유효한 입력 형식이 아닙니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -126,9 +125,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/non-validated/handler-method-validation").param("name", "   "))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value(containsString("must not be blank")))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.error.message").value(containsString("must not be blank")))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -137,9 +136,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(post("/test/custom-exception"))
         .andExpect(status().isMethodNotAllowed())
-        .andExpect(jsonPath("$.code").value("METHOD_NOT_SUPPORTED"))
-        .andExpect(jsonPath("$.message").value("지원하지 않는 HTTP 메서드입니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("METHOD_NOT_SUPPORTED"))
+        .andExpect(jsonPath("$.error.message").value("지원하지 않는 HTTP 메서드입니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -151,9 +150,9 @@ class GlobalExceptionHandlerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{ invalid json }"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value("유효한 입력 형식이 아닙니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.error.message").value("유효한 입력 형식이 아닙니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -162,9 +161,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/non-validated/handler-method-validation"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value("유효한 입력 형식이 아닙니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.error.message").value("유효한 입력 형식이 아닙니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -173,9 +172,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/type-mismatch").param("age", "abc"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value("age 파라미터 타입이 올바르지 않습니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.error.message").value("age 파라미터 타입이 올바르지 않습니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -185,9 +184,9 @@ class GlobalExceptionHandlerTest {
         .perform(
             post("/test/validation").contentType(MediaType.TEXT_PLAIN).content("some raw text"))
         .andExpect(status().isUnsupportedMediaType())
-        .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"))
-        .andExpect(jsonPath("$.message").value("지원하지 않는 Content-Type 입니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("UNSUPPORTED_MEDIA_TYPE"))
+        .andExpect(jsonPath("$.error.message").value("지원하지 않는 Content-Type 입니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -196,9 +195,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/html").accept(MediaType.APPLICATION_JSON))
         .andExpect(status().isNotAcceptable())
-        .andExpect(jsonPath("$.code").value("NOT_ACCEPTABLE"))
-        .andExpect(jsonPath("$.message").value("요청한 응답 형식을 지원하지 않습니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("NOT_ACCEPTABLE"))
+        .andExpect(jsonPath("$.error.message").value("요청한 응답 형식을 지원하지 않습니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 
   @Test
@@ -207,9 +206,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/non-existent-route"))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-        .andExpect(jsonPath("$.message").value("요청한 리소스를 찾을 수 없습니다."))
-        .andExpect(jsonPath("$.timestamp").exists());
+        .andExpect(jsonPath("$.error.code").value("NOT_FOUND"))
+        .andExpect(jsonPath("$.error.message").value("요청한 리소스를 찾을 수 없습니다."))
+        .andExpect(jsonPath("$.error.details").isEmpty());
   }
 }
 
