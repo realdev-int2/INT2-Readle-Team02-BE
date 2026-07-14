@@ -1,0 +1,264 @@
+package com.realdev.readle.domain.content.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.realdev.readle.domain.content.dto.request.ContentCreateRequest;
+import com.realdev.readle.domain.content.dto.response.ContentCreateResponse;
+import com.realdev.readle.domain.content.entity.Content;
+import com.realdev.readle.domain.content.entity.CrawlStatus;
+import com.realdev.readle.domain.content.entity.InputType;
+import com.realdev.readle.domain.content.entity.ValidationStatus;
+import com.realdev.readle.domain.content.exception.ContentErrorCode;
+import com.realdev.readle.domain.content.repository.ContentRepository;
+import com.realdev.readle.domain.member.entity.Member;
+import com.realdev.readle.domain.member.exception.MemberErrorCode;
+import com.realdev.readle.domain.member.repository.MemberRepository;
+import com.realdev.readle.global.exception.CustomException;
+import com.realdev.readle.global.exception.GlobalErrorCode;
+import com.realdev.readle.global.util.crawler.WebCrawler;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+@ExtendWith(MockitoExtension.class)
+class ContentServiceTest {
+
+  @Mock private WebCrawler webCrawler;
+  @Mock private ContentRepository contentRepository;
+  @Mock private MemberRepository memberRepository;
+  @InjectMocks private ContentService contentService;
+
+  @Test
+  @DisplayName("memberUuid가 null이면 DB 조회 없이 UNAUTHORIZED 예외가 발생한다")
+  void createContent_nullMemberUuid_throwsUnauthorized() {
+    ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문");
+
+    assertThatThrownBy(() -> contentService.createContent(request, null))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(GlobalErrorCode.UNAUTHORIZED);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("UUID에 해당하는 회원이 없으면 MEMBER_NOT_FOUND 예외가 발생한다")
+  void createContent_memberNotFound_throwsMemberNotFound() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문");
+
+    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("텍스트가 15,000자를 초과하면 DB 조회 없이 CONTENT_TOO_LARGE 예외가 발생한다")
+  void createContent_textTooLarge_throwsBeforeDbQuery() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.TEXT, "제목", null, null, "가".repeat(15_001));
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.CONTENT_TOO_LARGE);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("텍스트가 정확히 15,000자이면 예외 없이 정상 저장된다")
+  void createContent_textExactly15000_success() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    String text = "가".repeat(15_000);
+    ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, text);
+    Content savedContent = stubSave(Content.fromText(mockMember, "제목", text), 1L);
+
+    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.of(mockMember));
+    when(contentRepository.save(any(Content.class))).thenReturn(savedContent);
+
+    ContentCreateResponse response = contentService.createContent(request, memberUuid);
+
+    assertThat(response.contentId()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("inputType=URL이면 텍스트 길이 제한 검사를 수행하지 않는다")
+  void createContent_urlType_skipsTextLengthCheck() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    // URL 타입에 긴 텍스트가 있어도 예외 없이 통과
+    ContentCreateRequest request =
+        new ContentCreateRequest(
+            InputType.URL, "제목", "https://example.com", "가".repeat(15_001), null);
+    Content savedContent =
+        stubSave(Content.fromUrl(mockMember, "제목", "https://example.com", "가".repeat(15_001)), 1L);
+
+    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.of(mockMember));
+    when(contentRepository.save(any(Content.class))).thenReturn(savedContent);
+
+    ContentCreateResponse response = contentService.createContent(request, memberUuid);
+
+    assertThat(response.contentId()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("inputType=TEXT이고 title이 null이면 text 앞 30자가 제목으로 저장된다")
+  void createContent_textType_nullTitle_useFirst30Chars() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    String text = "가".repeat(50);
+    ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, null, null, null, text);
+
+    setupMemberAndCaptureContent(memberUuid, mockMember);
+
+    contentService.createContent(request, memberUuid);
+
+    Content captured = captureContent();
+    assertThat(captured.getTitle()).isEqualTo("가".repeat(30));
+  }
+
+  @Test
+  @DisplayName("inputType=TEXT이고 title이 공백이면 text 앞 30자가 제목으로 저장된다")
+  void createContent_textType_blankTitle_useFirst30Chars() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    String text = "나".repeat(50);
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.TEXT, "   ", null, null, text);
+
+    setupMemberAndCaptureContent(memberUuid, mockMember);
+
+    contentService.createContent(request, memberUuid);
+
+    Content captured = captureContent();
+    assertThat(captured.getTitle()).isEqualTo("나".repeat(30));
+  }
+
+  @Test
+  @DisplayName("inputType=TEXT이고 text가 30자 미만이면 text 전체가 제목으로 저장된다")
+  void createContent_textType_blankTitle_textShorterThan30Chars() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    String text = "짧은 본문";
+    ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "", null, null, text);
+
+    setupMemberAndCaptureContent(memberUuid, mockMember);
+
+    contentService.createContent(request, memberUuid);
+
+    Content captured = captureContent();
+    assertThat(captured.getTitle()).isEqualTo("짧은 본문");
+  }
+
+  @Test
+  @DisplayName("inputType=TEXT이고 title이 주어지면 제공된 title이 그대로 저장된다")
+  void createContent_textType_titleProvided_usesProvidedTitle() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.TEXT, "직접 입력한 제목", null, null, "본문 내용");
+
+    setupMemberAndCaptureContent(memberUuid, mockMember);
+
+    contentService.createContent(request, memberUuid);
+
+    Content captured = captureContent();
+    assertThat(captured.getTitle()).isEqualTo("직접 입력한 제목");
+  }
+
+  @Test
+  @DisplayName("inputType=TEXT이면 crawlStatus=NOT_APPLICABLE, rawText가 저장되고 originalUrl은 null이다")
+  void createContent_textType_mapsCorrectly() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문 내용");
+
+    setupMemberAndCaptureContent(memberUuid, mockMember);
+
+    contentService.createContent(request, memberUuid);
+
+    Content captured = captureContent();
+    assertThat(captured.getInputType()).isEqualTo(InputType.TEXT);
+    assertThat(captured.getCrawlStatus()).isEqualTo(CrawlStatus.NOT_APPLICABLE);
+    assertThat(captured.getRawText()).isEqualTo("본문 내용");
+    assertThat(captured.getOriginalUrl()).isNull();
+    assertThat(captured.getExtractedText()).isNull();
+  }
+
+  @Test
+  @DisplayName("inputType=URL이면 crawlStatus=SUCCESS, originalUrl과 extractedText가 저장된다")
+  void createContent_urlType_mapsCorrectly() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, "제목", "https://example.com", "추출된 본문", null);
+
+    setupMemberAndCaptureContent(memberUuid, mockMember);
+
+    contentService.createContent(request, memberUuid);
+
+    Content captured = captureContent();
+    assertThat(captured.getInputType()).isEqualTo(InputType.URL);
+    assertThat(captured.getCrawlStatus()).isEqualTo(CrawlStatus.SUCCESS);
+    assertThat(captured.getOriginalUrl()).isEqualTo("https://example.com");
+    assertThat(captured.getExtractedText()).isEqualTo("추출된 본문");
+    assertThat(captured.getRawText()).isNull();
+  }
+
+  @Test
+  @DisplayName("정상 저장 후 contentId와 validationStatus=PENDING이 반환된다")
+  void createContent_returnsPendingStatus() {
+    UUID memberUuid = UUID.randomUUID();
+    Member mockMember = mockMember();
+    ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문");
+    Content savedContent = stubSave(Content.fromText(mockMember, "제목", "본문"), 42L);
+
+    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.of(mockMember));
+    when(contentRepository.save(any(Content.class))).thenReturn(savedContent);
+
+    ContentCreateResponse response = contentService.createContent(request, memberUuid);
+
+    assertThat(response.contentId()).isEqualTo(42L);
+    assertThat(response.validationStatus()).isEqualTo(ValidationStatus.PENDING);
+  }
+
+  private final ArgumentCaptor<Content> contentCaptor = ArgumentCaptor.forClass(Content.class);
+
+  private Member mockMember() {
+    return org.mockito.Mockito.mock(Member.class);
+  }
+
+  private Content stubSave(Content content, Long id) {
+    ReflectionTestUtils.setField(content, "id", id);
+    return content;
+  }
+
+  private void setupMemberAndCaptureContent(UUID memberUuid, Member mockMember) {
+    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.of(mockMember));
+    when(contentRepository.save(contentCaptor.capture()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
+
+  private Content captureContent() {
+    return contentCaptor.getValue();
+  }
+}
