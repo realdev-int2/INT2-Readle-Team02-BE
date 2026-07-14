@@ -44,7 +44,7 @@ public class OAuthAuthorizationState extends BaseCreatedAtEntity {
   @Column(name = "oauth_provider", nullable = false, length = 20)
   private OAuthProvider oauthProvider;
 
-  @Column(name = "return_to", nullable = false, length = 255)
+  @Column(name = "return_to", nullable = false, length = 2048)
   private String returnTo;
 
   @Column(name = "code_verifier_ciphertext", nullable = false, length = 1024)

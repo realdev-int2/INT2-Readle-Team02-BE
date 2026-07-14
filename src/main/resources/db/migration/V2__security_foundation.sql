@@ -2,7 +2,7 @@ CREATE TABLE oauth_authorization_state (
   id BIGINT NOT NULL AUTO_INCREMENT,
   state_hash VARCHAR(64) NOT NULL,
   oauth_provider VARCHAR(20) NOT NULL,
-  return_to VARCHAR(255) NOT NULL,
+  return_to VARCHAR(2048) NOT NULL,
   code_verifier_ciphertext VARCHAR(1024) NOT NULL,
   expires_at DATETIME NOT NULL,
   used_at DATETIME NULL,

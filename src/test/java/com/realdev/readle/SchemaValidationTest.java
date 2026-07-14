@@ -36,9 +36,13 @@ class SchemaValidationTest {
   void v2AddsOnlyOauthAuthorizationState() throws Exception {
     try (var connection = dataSource.getConnection()) {
       var state = connection.getMetaData().getTables(null, null, "OAUTH_AUTHORIZATION_STATE", null);
+      var returnTo =
+          connection.getMetaData().getColumns(null, null, "OAUTH_AUTHORIZATION_STATE", "RETURN_TO");
       var email = connection.getMetaData().getColumns(null, null, "MEMBER", "EMAIL");
 
       assertThat(state.next()).isTrue();
+      assertThat(returnTo.next()).isTrue();
+      assertThat(returnTo.getInt("COLUMN_SIZE")).isEqualTo(2048);
       assertThat(email.next()).isTrue();
       assertThat(email.getInt("NULLABLE")).isEqualTo(java.sql.DatabaseMetaData.columnNullable);
     }
