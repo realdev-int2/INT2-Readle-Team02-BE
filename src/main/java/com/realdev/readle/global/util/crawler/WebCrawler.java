@@ -131,7 +131,7 @@ public class WebCrawler {
     }
   }
 
-  private static @NonNull HttpURLConnection getHttpURLConnection(
+  @NonNull HttpURLConnection getHttpURLConnection(
       String currentUrl, String host, InetAddress safeAddress) throws IOException {
     URL parsedUrl = new URL(currentUrl);
     String ipString = safeAddress.getHostAddress();

@@ -2,8 +2,14 @@ package com.realdev.readle.global.util.crawler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.global.exception.CustomException;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -154,7 +160,9 @@ class WebCrawlerTest {
   @DisplayName("잘못된 URL 요청 시 CustomException 예외가 전파된다")
   void invalidUrlException() {
     assertThatThrownBy(() -> webCrawler.crawl("invalid-url-scheme"))
-        .isInstanceOf(CustomException.class);
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
   }
 
   @Test
@@ -197,15 +205,119 @@ class WebCrawlerTest {
   void ssrfBlockException() {
     // 127.0.0.1 대역 차단 검증
     assertThatThrownBy(() -> webCrawler.crawl("http://127.0.0.1:8080/admin"))
-        .isInstanceOf(CustomException.class);
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
 
     // 192.168.x.x 사설 대역 차단 검증
     assertThatThrownBy(() -> webCrawler.crawl("http://192.168.0.1/status"))
-        .isInstanceOf(CustomException.class);
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
 
     // AWS 인스턴스 메타데이터 API 대역 차단 검증
     assertThatThrownBy(() -> webCrawler.crawl("http://169.254.169.254/latest/meta-data"))
-        .isInstanceOf(CustomException.class);
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
+  }
+
+  @Test
+  @DisplayName("공개 URL에서 사설 IP로의 리다이렉트 발생 시 CustomException(INVALID_URL)이 발생한다")
+  void redirectToPrivateIpThrowsInvalidUrl() throws IOException {
+    HttpURLConnection mockConn = mock(HttpURLConnection.class);
+    when(mockConn.getResponseCode()).thenReturn(302);
+    when(mockConn.getHeaderField("Location")).thenReturn("http://192.168.0.1/status");
+
+    WebCrawler testCrawler =
+        new WebCrawler() {
+          @Override
+          HttpURLConnection getHttpURLConnection(
+              String currentUrl, String host, InetAddress safeAddress) {
+            return mockConn;
+          }
+        };
+
+    assertThatThrownBy(() -> testCrawler.crawl("https://public-site.com"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
+  }
+
+  @Test
+  @DisplayName("상대 경로 리다이렉트 시 절대 경로로 복원하여 정상적으로 파싱한다")
+  void relativeRedirectResolvesCorrectly() throws IOException {
+    HttpURLConnection firstConn = mock(HttpURLConnection.class);
+    when(firstConn.getResponseCode()).thenReturn(302);
+    when(firstConn.getHeaderField("Location")).thenReturn("/relative-path");
+
+    HttpURLConnection secondConn = mock(HttpURLConnection.class);
+    when(secondConn.getResponseCode()).thenReturn(200);
+    byte[] mockHtml = "<html><head><title>성공</title></head><body>본문</body></html>".getBytes();
+    when(secondConn.getInputStream()).thenReturn(new java.io.ByteArrayInputStream(mockHtml));
+
+    WebCrawler testCrawler =
+        new WebCrawler() {
+          private int callCount = 0;
+
+          @Override
+          HttpURLConnection getHttpURLConnection(
+              String currentUrl, String host, InetAddress safeAddress) {
+            callCount++;
+            if (callCount == 1) {
+              return firstConn;
+            } else {
+              return secondConn;
+            }
+          }
+        };
+
+    WebCrawler.CrawledDocument result = testCrawler.crawl("https://public-site.com");
+    assertThat(result.title()).isEqualTo("성공");
+  }
+
+  @Test
+  @DisplayName("리다이렉트 횟수가 최대 제한(3회)을 초과하면 CustomException(EXTRACT_FAILED)이 발생한다")
+  void redirectCountExceededThrowsExtractFailed() throws IOException {
+    HttpURLConnection mockConn = mock(HttpURLConnection.class);
+    when(mockConn.getResponseCode()).thenReturn(302);
+    when(mockConn.getHeaderField("Location")).thenReturn("https://public-site.com/redirect");
+
+    WebCrawler testCrawler =
+        new WebCrawler() {
+          @Override
+          HttpURLConnection getHttpURLConnection(
+              String currentUrl, String host, InetAddress safeAddress) {
+            return mockConn;
+          }
+        };
+
+    assertThatThrownBy(() -> testCrawler.crawl("https://public-site.com"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.EXTRACT_FAILED);
+  }
+
+  @Test
+  @DisplayName("리다이렉트 대상 주소(Location)가 비어있으면 CustomException(EXTRACT_FAILED)이 발생한다")
+  void emptyRedirectLocationThrowsExtractFailed() throws IOException {
+    HttpURLConnection mockConn = mock(HttpURLConnection.class);
+    when(mockConn.getResponseCode()).thenReturn(302);
+    when(mockConn.getHeaderField("Location")).thenReturn("   ");
+
+    WebCrawler testCrawler =
+        new WebCrawler() {
+          @Override
+          HttpURLConnection getHttpURLConnection(
+              String currentUrl, String host, InetAddress safeAddress) {
+            return mockConn;
+          }
+        };
+
+    assertThatThrownBy(() -> testCrawler.crawl("https://public-site.com"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.EXTRACT_FAILED);
   }
 
   @Test
