@@ -20,13 +20,31 @@ public class MarkdownConverter {
                 case "h1" -> markdown.append("\n\n# ");
                 case "h2" -> markdown.append("\n\n## ");
                 case "h3" -> markdown.append("\n\n### ");
-                case "h4", "h5", "h6" -> markdown.append("\n\n#### ");
+                case "h4" -> markdown.append("\n\n#### ");
+                case "h5" -> markdown.append("\n\n##### ");
+                case "h6" -> markdown.append("\n\n###### ");
                 case "p", "div" -> {
                   if (!markdown.isEmpty() && markdown.charAt(markdown.length() - 1) != '\n') {
                     markdown.append("\n\n");
                   }
                 }
-                case "li" -> markdown.append("\n- ");
+                case "li" -> {
+                  Element parent = el.parent();
+                  if (parent != null && parent.tagName().equals("ol")) {
+                    int index = 1;
+                    for (Element sibling : parent.children()) {
+                      if (sibling == el) {
+                        break;
+                      }
+                      if (sibling.tagName().equals("li")) {
+                        index++;
+                      }
+                    }
+                    markdown.append("\n").append(index).append(". ");
+                  } else {
+                    markdown.append("\n- ");
+                  }
+                }
                 case "br" -> markdown.append("\n");
               }
             } else if (node instanceof TextNode textNode) {

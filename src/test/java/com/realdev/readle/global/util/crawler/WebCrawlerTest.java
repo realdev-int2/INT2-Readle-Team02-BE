@@ -39,6 +39,16 @@ class WebCrawlerTest {
   }
 
   @Test
+  @DisplayName("og:title 메타 태그가 존재하더라도 content 속성이 비어있으면 2순위인 title 태그 값을 제목으로 추출한다")
+  void extractTitleOgTitleEmptyContentFallback() {
+    String html = "<html><head><meta property=\"og:title\" content=\"   \"><title>기본 타이틀</title></head><body>본문</body></html>";
+    Document doc = Jsoup.parse(html);
+
+    WebCrawler.CrawledDocument result = webCrawler.parse(doc);
+    assertThat(result.title()).isEqualTo("기본 타이틀");
+  }
+
+  @Test
   @DisplayName("모든 제목 정보가 유실되면 '제목 없음'을 반환한다")
   void extractTitleFallback() {
     String html = "<html><body>본문</body></html>";
@@ -75,6 +85,36 @@ class WebCrawlerTest {
     // 3. 압축률 검증 (HTML 소스 대비 마크다운 압축률)
     double reductionRate = 1.0 - ((double) compressedMarkdown.length() / rawHtml.length());
     assertThat(reductionRate).isGreaterThan(0.40);
+  }
+
+  @Test
+  @DisplayName("article 태그가 존재하면 main 이나 body의 다른 영역을 제외하고 article 태그의 본문만 추출한다")
+  void extractBodyArticlePriority() {
+    String html = "<html><body><main><p>메인 영역 외 노이즈</p><article><p>아티클 본문</p></article></main></body></html>";
+    Document doc = Jsoup.parse(html);
+
+    String content = webCrawler.parse(doc).content();
+    assertThat(content).isEqualTo("아티클 본문");
+  }
+
+  @Test
+  @DisplayName("article 태그가 없고 main 태그가 존재하면 main 태그의 본문만 추출한다")
+  void extractBodyMainPriority() {
+    String html = "<html><body><p>바디 영역 외 노이즈</p><main><p>메인 본문</p></main></body></html>";
+    Document doc = Jsoup.parse(html);
+
+    String content = webCrawler.parse(doc).content();
+    assertThat(content).isEqualTo("메인 본문");
+  }
+
+  @Test
+  @DisplayName("article과 main 태그가 모두 없으면 body 전체를 본문으로 판단하여 추출한다")
+  void extractBodyFallbackToBody() {
+    String html = "<html><body><p>전체 바디 본문</p></body></html>";
+    Document doc = Jsoup.parse(html);
+
+    String content = webCrawler.parse(doc).content();
+    assertThat(content).isEqualTo("전체 바디 본문");
   }
 
   @Test
