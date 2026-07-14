@@ -41,7 +41,8 @@ class WebCrawlerTest {
   @Test
   @DisplayName("og:title 메타 태그가 존재하더라도 content 속성이 비어있으면 2순위인 title 태그 값을 제목으로 추출한다")
   void extractTitleOgTitleEmptyContentFallback() {
-    String html = "<html><head><meta property=\"og:title\" content=\"   \"><title>기본 타이틀</title></head><body>본문</body></html>";
+    String html =
+        "<html><head><meta property=\"og:title\" content=\"   \"><title>기본 타이틀</title></head><body>본문</body></html>";
     Document doc = Jsoup.parse(html);
 
     WebCrawler.CrawledDocument result = webCrawler.parse(doc);
@@ -90,7 +91,8 @@ class WebCrawlerTest {
   @Test
   @DisplayName("article 태그가 존재하면 main 이나 body의 다른 영역을 제외하고 article 태그의 본문만 추출한다")
   void extractBodyArticlePriority() {
-    String html = "<html><body><main><p>메인 영역 외 노이즈</p><article><p>아티클 본문</p></article></main></body></html>";
+    String html =
+        "<html><body><main><p>메인 영역 외 노이즈</p><article><p>아티클 본문</p></article></main></body></html>";
     Document doc = Jsoup.parse(html);
 
     String content = webCrawler.parse(doc).content();
