@@ -16,13 +16,24 @@ class SecurityPropertiesTest {
   }
 
   @Test
-  void rejectsNonContractTokenAndStateTtls() {
-    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 29, 14, 10))
+  void rejectsTokenAndStateTtlsOutsideAllowedRanges() {
+    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 0, 14, 10))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 30, 13, 10))
+    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 61, 14, 10))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 30, 14, 9))
+    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 30, 0, 10))
         .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 30, 31, 10))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 30, 14, 0))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> properties(validJwtSecret(), validStateKey(), 30, 14, 11))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void acceptsNonDefaultTokenAndStateTtlsWithinAllowedRanges() {
+    properties(validJwtSecret(), validStateKey(), 15, 7, 5);
   }
 
   private SecurityProperties properties(String jwtSecret, String stateEncryptionKey) {
@@ -46,8 +57,8 @@ class SecurityPropertiesTest {
         "http://localhost:8080",
         List.of("/"),
         new SecurityProperties.OAuthProviders(
-            new SecurityProperties.OAuthProviderSettings(),
-            new SecurityProperties.OAuthProviderSettings()));
+            new SecurityProperties.OAuthProviderSettings("", "", "", "", ""),
+            new SecurityProperties.OAuthProviderSettings("", "", "", "", "")));
   }
 
   private String validJwtSecret() {

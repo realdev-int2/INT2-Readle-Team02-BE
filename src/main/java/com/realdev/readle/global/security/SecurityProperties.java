@@ -20,9 +20,9 @@ public record SecurityProperties(
   public SecurityProperties {
     requireAtLeast(jwtSecret, 32, "JWT secret");
     requireAesKey(stateEncryptionKey);
-    requireExactly(accessTokenMinutes, 30, "Access-token TTL");
-    requireExactly(refreshTokenDays, 14, "Refresh-token TTL");
-    requireExactly(stateMinutes, 10, "OAuth state TTL");
+    requireInRange(accessTokenMinutes, 1, 60, "Access-token TTL");
+    requireInRange(refreshTokenDays, 1, 30, "Refresh-token TTL");
+    requireInRange(stateMinutes, 1, 10, "OAuth state TTL");
   }
 
   private static void requireAtLeast(String value, int minimumBytes, String name) {
@@ -39,9 +39,9 @@ public record SecurityProperties(
     }
   }
 
-  private static void requireExactly(int value, int expected, String name) {
-    if (value != expected) {
-      throw new IllegalArgumentException(name + " must be " + expected);
+  private static void requireInRange(int value, int minimum, int maximum, String name) {
+    if (value < minimum || value > maximum) {
+      throw new IllegalArgumentException(name + " must be between " + minimum + " and " + maximum);
     }
   }
 
@@ -52,9 +52,5 @@ public record SecurityProperties(
       String clientSecret,
       String authorizationUrl,
       String tokenUrl,
-      String userInfoUrl) {
-    public OAuthProviderSettings() {
-      this("", "", "", "", "");
-    }
-  }
+      String userInfoUrl) {}
 }
