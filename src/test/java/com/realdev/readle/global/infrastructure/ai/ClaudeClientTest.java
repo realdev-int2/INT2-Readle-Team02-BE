@@ -24,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 
 @RestClientTest(ClaudeClient.class)
@@ -166,6 +167,25 @@ class ClaudeClientTest {
     // when & then
     assertThatThrownBy(() -> claudeClient.generateMessage(systemPrompt, userPrompt))
         .isInstanceOf(RestClientException.class);
+    server.verify();
+  }
+
+  @Test
+  @DisplayName("Claude API 호출 시 4xx 클라이언트 예외(400, 401 등)가 발생하면 재시도를 하지 않고 즉시 예외를 전파해야 한다")
+  void generateMessageDoesNotRetryOn4xxClientException() {
+    // given
+    String systemPrompt = "You are a quiz master";
+    String userPrompt = "Generate quiz";
+
+    // 1차 시도: 400 Bad Request 모킹
+    server
+        .expect(requestTo("https://api.anthropic.com/v1/messages"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withStatus(HttpStatus.BAD_REQUEST));
+
+    // when & then
+    assertThatThrownBy(() -> claudeClient.generateMessage(systemPrompt, userPrompt))
+        .isInstanceOf(HttpClientErrorException.class);
     server.verify();
   }
 }

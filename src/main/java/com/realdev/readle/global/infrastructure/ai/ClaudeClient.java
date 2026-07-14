@@ -6,9 +6,12 @@ import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class ClaudeClient {
@@ -28,22 +31,39 @@ public class ClaudeClient {
     return generateMessage(properties.getModel(), systemPrompt, userPrompt);
   }
 
-  // 외부 주입된 가변 모델명을 사용하며 1회 재시도 가드가 적용된 오버로딩 버전
+  // 외부 주입된 가변 모델명을 사용하며 일시적 에러(429/5xx/네트워크 끊김)에 대해서만 1회 재시도하는 오버로딩 버전
   public ClaudeResponse generateMessage(String model, String systemPrompt, String userPrompt) {
     try {
       return executeGenerateMessage(model, systemPrompt, userPrompt);
-    } catch (RestClientException e) {
-      log.warn("[CLAUDE_API_WARNING] Claude API 최초 호출 실패. 1회 재시도를 진행합니다. 에러: {}", e.getMessage());
-      try {
-        // 딱 1회 백그라운드 재시도 정책 수행
-        return executeGenerateMessage(model, systemPrompt, userPrompt);
-      } catch (RestClientException retryEx) {
-        log.error(
-            "[CLAUDE_API_ERROR] Claude API 재시도 호출도 실패하였습니다. 최종 실패 처리합니다. 에러: {}",
-            retryEx.getMessage(),
-            retryEx);
-        throw retryEx;
+    } catch (RestClientResponseException e) {
+      // 429 Too Many Requests 또는 5xx Server Error인 경우에만 1회 재시도
+      if (isRetryable(e.getStatusCode())) {
+        return retryCall(model, systemPrompt, userPrompt, e);
       }
+      throw e;
+    } catch (ResourceAccessException e) {
+      // I/O 연결 장애 발생 시 1회 재시도
+      return retryCall(model, systemPrompt, userPrompt, e);
+    }
+  }
+
+  // HTTP 상태 코드에 따른 재시도 대상 판정
+  private boolean isRetryable(HttpStatusCode statusCode) {
+    return statusCode.is5xxServerError() || statusCode.value() == 429;
+  }
+
+  // 1회 백그라운드 재시도 처리 수행
+  private ClaudeResponse retryCall(
+      String model, String systemPrompt, String userPrompt, RestClientException e) {
+    log.warn("[CLAUDE_API_WARNING] Claude API 일시적 호출 실패. 1회 재시도를 진행합니다. 에러: {}", e.getMessage());
+    try {
+      return executeGenerateMessage(model, systemPrompt, userPrompt);
+    } catch (RestClientException retryEx) {
+      log.error(
+          "[CLAUDE_API_ERROR] Claude API 재시도 호출도 실패하였습니다. 최종 실패 처리합니다. 에러: {}",
+          retryEx.getMessage(),
+          retryEx);
+      throw retryEx;
     }
   }
 
