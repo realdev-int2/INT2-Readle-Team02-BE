@@ -4,9 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.realdev.readle.global.exception.CustomException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Date;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +35,18 @@ class JwtServiceTest {
         new JwtService(properties("abcdefghijklmnopqrstuvwxyz123456"), clock);
 
     assertThatThrownBy(() -> anotherService.memberUuid(token)).isInstanceOf(CustomException.class);
+  }
+
+  @Test
+  void rejectsTokenWithoutSubject() {
+    assertThatThrownBy(() -> jwtService.memberUuid(signedToken(null)))
+        .isInstanceOf(CustomException.class);
+  }
+
+  @Test
+  void rejectsTokenWithWhitespaceOnlySubject() {
+    assertThatThrownBy(() -> jwtService.memberUuid(signedToken("   ")))
+        .isInstanceOf(CustomException.class);
   }
 
   @Test
@@ -83,6 +100,23 @@ class JwtServiceTest {
 
   private SecurityProperties properties(String jwtSecret) {
     return properties(jwtSecret, "readle-test-issuer", "readle-api", 30);
+  }
+
+  private String signedToken(String subject) {
+    var builder =
+        Jwts.builder()
+            .issuer(properties.jwtIssuer())
+            .audience()
+            .add(properties.jwtAudience())
+            .and()
+            .issuedAt(Date.from(clock.instant()))
+            .expiration(
+                Date.from(
+                    clock.instant().plus(Duration.ofMinutes(properties.accessTokenMinutes()))))
+            .signWith(
+                Keys.hmacShaKeyFor(properties.jwtSecret().getBytes(StandardCharsets.UTF_8)),
+                Jwts.SIG.HS256);
+    return subject == null ? builder.compact() : builder.subject(subject).compact();
   }
 
   private SecurityProperties properties(String jwtSecret, int accessTokenMinutes) {
