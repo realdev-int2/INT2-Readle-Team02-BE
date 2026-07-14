@@ -64,8 +64,8 @@ class ContentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-        .andExpect(jsonPath("$.message").value("url: URL은 필수 입력값입니다."));
+        .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"))
+        .andExpect(jsonPath("$.error.message").value("url: URL은 필수 입력값입니다."));
   }
 
   @Test
@@ -83,8 +83,8 @@ class ContentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_URL"))
-        .andExpect(jsonPath("$.message").value("올바르지 않은 URL 형식입니다."));
+        .andExpect(jsonPath("$.error.code").value("INVALID_URL"))
+        .andExpect(jsonPath("$.error.message").value("올바르지 않은 URL 형식입니다."));
   }
 
   @Test
@@ -102,8 +102,8 @@ class ContentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isUnprocessableEntity())
-        .andExpect(jsonPath("$.code").value("CRAWLING_TIMEOUT"))
-        .andExpect(jsonPath("$.message").value("웹 페이지 요청 시간이 초과되었습니다."));
+        .andExpect(jsonPath("$.error.code").value("CRAWLING_TIMEOUT"))
+        .andExpect(jsonPath("$.error.message").value("웹 페이지 요청 시간이 초과되었습니다."));
   }
 
   @Test
@@ -121,7 +121,7 @@ class ContentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isUnprocessableEntity())
-        .andExpect(jsonPath("$.code").value("EXTRACT_FAILED"))
-        .andExpect(jsonPath("$.message").value("콘텐츠 본문 추출에 실패했습니다. 본문 텍스트를 직접 입력해 주세요."));
+        .andExpect(jsonPath("$.error.code").value("EXTRACT_FAILED"))
+        .andExpect(jsonPath("$.error.message").value("콘텐츠 본문 추출에 실패했습니다. 본문 텍스트를 직접 입력해 주세요."));
   }
 }
