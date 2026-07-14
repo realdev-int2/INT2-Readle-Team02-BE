@@ -36,3 +36,11 @@ management:
     web:
       exposure:
         include: health,info,prometheus
+
+anthropic:
+  claude:
+    api-key: ${CLAUDE_API_KEY:}
+    version: "2023-06-01"
+    model: claude-sonnet-5
+    base-url: https://api.anthropic.com
+    max-tokens: 4000
