@@ -16,6 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -232,9 +233,19 @@ class WebCrawlerTest {
     WebCrawler testCrawler =
         new WebCrawler() {
           @Override
-          HttpURLConnection getHttpURLConnection(
+          @NonNull HttpURLConnection getHttpURLConnection(
               String currentUrl, String host, InetAddress safeAddress) {
             return mockConn;
+          }
+
+          @Override
+          InetAddress validateAndSelectSafeAddress(String host) {
+            if ("public-site.com".equals(host)) {
+              InetAddress mockAddr = mock(InetAddress.class);
+              when(mockAddr.getHostAddress()).thenReturn("8.8.8.8");
+              return mockAddr;
+            }
+            return super.validateAndSelectSafeAddress(host);
           }
         };
 
@@ -261,7 +272,7 @@ class WebCrawlerTest {
           private int callCount = 0;
 
           @Override
-          HttpURLConnection getHttpURLConnection(
+          @NonNull HttpURLConnection getHttpURLConnection(
               String currentUrl, String host, InetAddress safeAddress) {
             callCount++;
             if (callCount == 1) {
@@ -269,6 +280,16 @@ class WebCrawlerTest {
             } else {
               return secondConn;
             }
+          }
+
+          @Override
+          InetAddress validateAndSelectSafeAddress(String host) {
+            if ("public-site.com".equals(host)) {
+              InetAddress mockAddr = mock(InetAddress.class);
+              when(mockAddr.getHostAddress()).thenReturn("8.8.8.8");
+              return mockAddr;
+            }
+            return super.validateAndSelectSafeAddress(host);
           }
         };
 
@@ -286,9 +307,19 @@ class WebCrawlerTest {
     WebCrawler testCrawler =
         new WebCrawler() {
           @Override
-          HttpURLConnection getHttpURLConnection(
+          @NonNull HttpURLConnection getHttpURLConnection(
               String currentUrl, String host, InetAddress safeAddress) {
             return mockConn;
+          }
+
+          @Override
+          InetAddress validateAndSelectSafeAddress(String host) {
+            if ("public-site.com".equals(host)) {
+              InetAddress mockAddr = mock(InetAddress.class);
+              when(mockAddr.getHostAddress()).thenReturn("8.8.8.8");
+              return mockAddr;
+            }
+            return super.validateAndSelectSafeAddress(host);
           }
         };
 
@@ -308,9 +339,19 @@ class WebCrawlerTest {
     WebCrawler testCrawler =
         new WebCrawler() {
           @Override
-          HttpURLConnection getHttpURLConnection(
+          @NonNull HttpURLConnection getHttpURLConnection(
               String currentUrl, String host, InetAddress safeAddress) {
             return mockConn;
+          }
+
+          @Override
+          InetAddress validateAndSelectSafeAddress(String host) {
+            if ("public-site.com".equals(host)) {
+              InetAddress mockAddr = mock(InetAddress.class);
+              when(mockAddr.getHostAddress()).thenReturn("8.8.8.8");
+              return mockAddr;
+            }
+            return super.validateAndSelectSafeAddress(host);
           }
         };
 
@@ -330,10 +371,7 @@ class WebCrawlerTest {
     assertThatThrownBy(
             () -> {
               byte[] buffer = new byte[10];
-              int read;
-              while ((read = boundedIs.read(buffer)) != -1) {
-                // read until end or exception
-              }
+              boundedIs.read(buffer);
             })
         .isInstanceOf(java.io.IOException.class)
         .hasMessageContaining("본문 크기가 제한을 초과했습니다");
@@ -352,5 +390,51 @@ class WebCrawlerTest {
     assertThat(bytesRead).isEqualTo(5);
     assertThat(new String(buffer, 0, bytesRead)).isEqualTo("12345");
     assertThat(boundedIs.read()).isEqualTo(-1); // EOF
+  }
+
+  @Test
+  @DisplayName("HTTP 또는 HTTPS가 아닌 프로토콜 스킴(예: ftp, file) 요청 시 CustomException(INVALID_URL)이 발생한다")
+  void nonHttpSchemeThrowsInvalidUrl() {
+    assertThatThrownBy(() -> webCrawler.crawl("ftp://example.com/file"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
+
+    assertThatThrownBy(() -> webCrawler.crawl("file:///etc/passwd"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
+  }
+
+  @Test
+  @DisplayName("리다이렉트 타겟 프로토콜 스킴이 HTTP 또는 HTTPS가 아닌 경우 CustomException(INVALID_URL)이 발생한다")
+  void redirectNonHttpSchemeThrowsInvalidUrl() throws IOException {
+    HttpURLConnection mockConn = mock(HttpURLConnection.class);
+    when(mockConn.getResponseCode()).thenReturn(302);
+    when(mockConn.getHeaderField("Location")).thenReturn("ftp://example.com/file");
+
+    WebCrawler testCrawler =
+        new WebCrawler() {
+          @Override
+          @NonNull HttpURLConnection getHttpURLConnection(
+              String currentUrl, String host, InetAddress safeAddress) {
+            return mockConn;
+          }
+
+          @Override
+          InetAddress validateAndSelectSafeAddress(String host) {
+            if ("public-site.com".equals(host)) {
+              InetAddress mockAddr = mock(InetAddress.class);
+              when(mockAddr.getHostAddress()).thenReturn("8.8.8.8");
+              return mockAddr;
+            }
+            return super.validateAndSelectSafeAddress(host);
+          }
+        };
+
+    assertThatThrownBy(() -> testCrawler.crawl("https://public-site.com"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
   }
 }

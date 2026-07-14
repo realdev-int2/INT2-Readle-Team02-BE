@@ -46,6 +46,11 @@ public class WebCrawler {
         throw new CustomException(ContentErrorCode.INVALID_URL, e);
       }
 
+      String protocol = parsedUrl.getProtocol();
+      if (!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
+        throw new CustomException(ContentErrorCode.INVALID_URL, "지원하지 않는 프로토콜 스킴입니다: " + protocol);
+      }
+
       String host = parsedUrl.getHost();
 
       // 1. 다중 A/AAAA 레코드 전체 조회 및 검증을 통한 연결 대상 고정(Pinning)
@@ -147,13 +152,13 @@ public class WebCrawler {
     conn.setRequestProperty("User-Agent", USER_AGENT);
     conn.setRequestProperty("Host", host); // HTTP 가상 호스트 라우팅 보존
     conn.setRequestProperty(
-        "Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp, *//*;q=0.8");
+        "Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp, */*;q=0.8");
     conn.setRequestProperty("Accept-Language", "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7");
     return conn;
   }
 
   // 다중 A/AAAA IP 레코드 전체 조회 및 안전한 IP 검증 후 고정 연결 대상 반환
-  private InetAddress validateAndSelectSafeAddress(String host) {
+  InetAddress validateAndSelectSafeAddress(String host) {
     try {
       InetAddress[] addresses = InetAddress.getAllByName(host);
       if (addresses == null || addresses.length == 0) {
