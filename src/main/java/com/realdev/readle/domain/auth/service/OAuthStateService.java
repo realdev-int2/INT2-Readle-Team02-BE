@@ -6,6 +6,7 @@ import com.realdev.readle.domain.member.entity.OAuthProvider;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
+import jakarta.persistence.PessimisticLockException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -24,6 +25,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.server.PathContainer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,17 +90,28 @@ public class OAuthStateService {
     if (rawState == null || rawState.isBlank()) {
       throw oauthFailure();
     }
-    OAuthAuthorizationState state =
-        stateRepository
-            .findByStateHashAndOauthProvider(sha256(rawState), provider)
-            .orElseThrow(this::oauthFailure);
+    OAuthAuthorizationState state;
+    try {
+      state =
+          stateRepository
+              .findByStateHashAndOauthProvider(sha256(rawState), provider)
+              .orElseThrow(this::oauthFailure);
+    } catch (PessimisticLockException | CannotAcquireLockException exception) {
+      throw oauthFailure();
+    }
     if (!state.isUsableAt(now())) {
       stateRepository.delete(state);
       throw oauthFailure();
     }
     state.consume(now());
     stateRepository.saveAndFlush(state);
-    String verifier = decrypt(state.getCodeVerifierCiphertext(), provider);
+    String verifier;
+    try {
+      verifier = decrypt(state.getCodeVerifierCiphertext(), provider);
+    } catch (CustomException exception) {
+      stateRepository.delete(state);
+      throw exception;
+    }
     stateRepository.delete(state);
     return new ConsumedOAuthState(state.getReturnTo(), verifier);
   }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,7 +12,9 @@ import com.realdev.readle.domain.auth.entity.OAuthAuthorizationState;
 import com.realdev.readle.domain.auth.repository.OAuthAuthorizationStateRepository;
 import com.realdev.readle.domain.member.entity.OAuthProvider;
 import com.realdev.readle.global.exception.CustomException;
+import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
+import jakarta.persistence.PessimisticLockException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -23,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -64,6 +68,27 @@ class OAuthStateServiceTest {
     verify(stateRepository).delete(saved.getValue());
     assertThatThrownBy(() -> service.consume(OAuthProvider.GOOGLE, start.state()))
         .isInstanceOf(CustomException.class);
+  }
+
+  @Test
+  void mapsLockAcquisitionFailuresToOAuthFailure() {
+    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    when(stateRepository.findByStateHashAndOauthProvider(any(), any()))
+        .thenThrow(new PessimisticLockException());
+
+    assertThatThrownBy(() -> service.consume(OAuthProvider.GOOGLE, "state"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
+
+    reset(stateRepository);
+    when(stateRepository.findByStateHashAndOauthProvider(any(), any()))
+        .thenThrow(new CannotAcquireLockException("lock unavailable"));
+
+    assertThatThrownBy(() -> service.consume(OAuthProvider.GOOGLE, "state"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
   }
 
   @Test
@@ -125,6 +150,8 @@ class OAuthStateServiceTest {
 
     assertThatThrownBy(() -> service.consume(OAuthProvider.GOOGLE, start.state()))
         .isInstanceOf(CustomException.class);
+
+    verify(stateRepository).delete(saved.getValue());
   }
 
   @Test
