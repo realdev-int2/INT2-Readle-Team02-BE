@@ -1,5 +1,6 @@
 package com.realdev.readle.domain.content.service;
 
+import com.realdev.readle.domain.content.entity.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,5 +22,9 @@ public class ContentValidationService {
       log.info("[VALIDATION] 1,2차 통과. 3차 AI 검증으로 위임. Content ID: {}", contentId);
       aiValidationService.runAiValidation(result.content());
     }
+  }
+
+  public void markAsFailed(Long contentId, ErrorCode errorCode) {
+    contentGuardrailService.markAsFailed(contentId, errorCode);
   }
 }

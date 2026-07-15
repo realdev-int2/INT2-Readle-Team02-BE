@@ -70,6 +70,24 @@ public class ContentGuardrailService {
         .build();
   }
 
+  @Transactional
+  public void markAsFailed(Long contentId, ErrorCode errorCode) {
+    contentRepository
+        .findById(contentId)
+        .ifPresent(
+            content -> {
+              ContentValidation validation =
+                  ContentValidation.builder()
+                      .content(content)
+                      .validationMethod(ValidationMethod.STATIC_GUARDRAIL)
+                      .build();
+
+              validation.markFailed(errorCode);
+
+              contentValidationRepository.save(validation);
+            });
+  }
+
   public record GuardrailResult(boolean needsAiValidation, Content content) {
     static GuardrailResult done() {
       return new GuardrailResult(false, null);
