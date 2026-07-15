@@ -132,8 +132,7 @@ class QuizAiGradingServiceTest {
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
 
     // 두 번 모두 isCorrect 필드가 누락된 JSON 반환
-    given(claudeClient.getGeneratedText(any(), any()))
-        .willReturn("{\"aiFeedback\": \"어쩌구저쩌구\"}");
+    given(claudeClient.getGeneratedText(any(), any())).willReturn("{\"aiFeedback\": \"어쩌구저쩌구\"}");
 
     ClaudeGradingResponseDto mockDto = new ClaudeGradingResponseDto(null, "어쩌구저쩌구");
     given(objectMapper.readValue("{\"aiFeedback\": \"어쩌구저쩌구\"}", ClaudeGradingResponseDto.class))

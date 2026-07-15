@@ -198,9 +198,11 @@ public class QuizSolveService {
       quizAnswerRepository.saveAll(aiAnswers);
     }
 
-    int correctCount = (int) Stream.concat(staticAnswers.stream(), aiAnswers.stream())
-        .filter(QuizAnswer::getIsCorrect)
-        .count();
+    int correctCount =
+        (int)
+            Stream.concat(staticAnswers.stream(), aiAnswers.stream())
+                .filter(QuizAnswer::getIsCorrect)
+                .count();
 
     attempt.submit();
     quizAttemptRepository.save(attempt); // 명시적 저장

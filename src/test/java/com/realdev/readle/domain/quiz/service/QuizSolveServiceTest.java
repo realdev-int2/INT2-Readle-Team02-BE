@@ -203,8 +203,7 @@ class QuizSolveServiceTest {
     given(quizAiGradingService.gradeAnswerAsync(any(), any(), any()))
         .willReturn(
             java.util.concurrent.CompletableFuture.completedFuture(
-                new QuizAiGradingService.AiEvaluationResult(
-                    question2, "자바", false, "틀렸습니다.")));
+                new QuizAiGradingService.AiEvaluationResult(question2, "자바", false, "틀렸습니다.")));
 
     QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
 
