@@ -94,6 +94,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return errorResponse(exception);
   }
 
+  // IllegalArgumentException 등 잘못된 인자 예외를 INVALID_INPUT으로 반환한다. HTTP status는 400이다.
+  @ExceptionHandler(IllegalArgumentException.class)
+  protected ResponseEntity<Object> handleIllegalArgumentException(
+      IllegalArgumentException exception) {
+    log.warn("[BAD_REQUEST] message={}", exception.getMessage());
+    return errorResponse(INVALID_INPUT, exception.getMessage());
+  }
+
   // 명시적으로 처리하지 못한 서버 예외를 SERVER_ERROR로 반환한다. HTTP status는 500이다.
   @ExceptionHandler(Exception.class)
   protected ResponseEntity<Object> handleException(Exception exception) {

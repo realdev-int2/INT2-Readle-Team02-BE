@@ -1,12 +1,16 @@
 package com.realdev.readle.global.infrastructure.ai.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
+@Setter
 @NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ClaudeResponse {
 
   @JsonProperty("id")
@@ -28,7 +32,9 @@ public class ClaudeResponse {
   private Usage usage;
 
   @Getter
+  @Setter
   @NoArgsConstructor
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static class Content {
     @JsonProperty("type")
     private String type;
@@ -38,7 +44,9 @@ public class ClaudeResponse {
   }
 
   @Getter
+  @Setter
   @NoArgsConstructor
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static class Usage {
     @JsonProperty("input_tokens")
     private int inputTokens;

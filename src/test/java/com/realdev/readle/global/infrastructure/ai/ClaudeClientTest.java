@@ -143,7 +143,7 @@ class ClaudeClientTest {
     // when & then
     assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("첫 번째 콘텐츠 블록이 유효하지 않습니다.");
+        .hasMessageContaining("Claude API 응답에 유효한 텍스트 블록이 없습니다.");
     server.verify();
   }
 
