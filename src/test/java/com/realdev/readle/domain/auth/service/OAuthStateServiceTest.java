@@ -58,7 +58,7 @@ class OAuthStateServiceTest {
         ArgumentCaptor.forClass(OAuthAuthorizationState.class);
     verify(stateRepository).save(saved.capture());
     when(stateRepository.findByStateHashAndOauthProvider(any(), any()))
-        .thenReturn(Optional.of(saved.getValue()));
+        .thenReturn(Optional.of(saved.getValue()), Optional.empty());
 
     OAuthStateService.ConsumedOAuthState consumed =
         service.consume(OAuthProvider.GOOGLE, start.state());

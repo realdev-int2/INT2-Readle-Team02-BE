@@ -103,8 +103,6 @@ public class OAuthStateService {
       stateRepository.delete(state);
       throw oauthFailure();
     }
-    state.consume(now());
-    stateRepository.saveAndFlush(state);
     String verifier;
     try {
       verifier = decrypt(state.getCodeVerifierCiphertext(), provider);
