@@ -21,9 +21,12 @@ import com.realdev.readle.domain.quiz.repository.QuizResultRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -90,7 +93,6 @@ public class QuizSolveService {
     return QuizDetailResponse.of(attempt, questions, allChoices);
   }
 
-  @Transactional
   public QuizSubmitResponse submitAnswers(
       Long attemptId, String memberUuid, QuizSubmitRequest request) {
     QuizAttempt attempt =
@@ -122,16 +124,14 @@ public class QuizSolveService {
       answerMap.put(a.getQuestionId(), a);
     }
 
-    List<QuizAnswer> quizAnswers = new java.util.ArrayList<>();
-    List<java.util.concurrent.CompletableFuture<QuizAiGradingService.AiEvaluationResult>> aiTasks =
-        new java.util.ArrayList<>();
+    List<QuizAnswer> staticAnswers = new ArrayList<>();
+    List<CompletableFuture<QuizAiGradingService.AiEvaluationResult>> aiTasks = new ArrayList<>();
 
-    String articleText = null;
+    String articleText = "";
     if (questions.stream().anyMatch(q -> q.getQuestionType() != QuestionType.MULTIPLE_CHOICE)) {
-      articleText =
-          attempt.getQuizSet().getContent().getRawText() != null
-              ? attempt.getQuizSet().getContent().getRawText()
-              : attempt.getQuizSet().getContent().getExtractedText();
+      String raw = attempt.getQuizSet().getContent().getRawText();
+      String extracted = attempt.getQuizSet().getContent().getExtractedText();
+      articleText = raw != null ? raw : (extracted != null ? extracted : "");
     }
 
     for (QuizQuestion question : questions) {
@@ -156,7 +156,7 @@ public class QuizSolveService {
         }
 
         boolean isCorrect = choice.getIsCorrect();
-        quizAnswers.add(QuizAnswer.createForChoice(attempt, question, choice, isCorrect));
+        staticAnswers.add(QuizAnswer.createForChoice(attempt, question, choice, isCorrect));
       } else {
         // 주관식/코드 빈칸 로직
         if (answerReq.getSubmittedAnswerText() == null
@@ -166,7 +166,7 @@ public class QuizSolveService {
 
         if (isStaticMatch(question.getCorrectAnswer(), answerReq.getSubmittedAnswerText())) {
           // 1차 정적 매칭 통과 -> 즉시 정답 처리 (AI 호출 생략)
-          quizAnswers.add(
+          staticAnswers.add(
               QuizAnswer.createForWritten(
                   attempt, question, answerReq.getSubmittedAnswerText(), true, null));
         } else {
@@ -178,15 +178,16 @@ public class QuizSolveService {
       }
     }
 
-    // 모든 AI 비동기 태스크가 완료될 때까지 대기 (join)
+    // 1. 정적 채점 결과 먼저 저장 (트랜잭션 분리)
+    quizAnswerRepository.saveAll(staticAnswers);
+
+    // 2. AI 비동기 채점 진행 및 저장
+    List<QuizAnswer> aiAnswers = new ArrayList<>();
     if (!aiTasks.isEmpty()) {
-      java.util.concurrent.CompletableFuture.allOf(
-              aiTasks.toArray(new java.util.concurrent.CompletableFuture[0]))
-          .join();
-      for (java.util.concurrent.CompletableFuture<QuizAiGradingService.AiEvaluationResult>
-          taskFuture : aiTasks) {
+      CompletableFuture.allOf(aiTasks.toArray(new CompletableFuture[0])).join();
+      for (CompletableFuture<QuizAiGradingService.AiEvaluationResult> taskFuture : aiTasks) {
         QuizAiGradingService.AiEvaluationResult aiResult = taskFuture.join();
-        quizAnswers.add(
+        aiAnswers.add(
             QuizAnswer.createForWritten(
                 attempt,
                 aiResult.question(),
@@ -194,17 +195,15 @@ public class QuizSolveService {
                 aiResult.isCorrect(),
                 aiResult.aiFeedback()));
       }
+      quizAnswerRepository.saveAll(aiAnswers);
     }
 
-    int correctCount = 0;
-    for (QuizAnswer ans : quizAnswers) {
-      if (ans.getIsCorrect()) {
-        correctCount++;
-      }
-    }
-    quizAnswerRepository.saveAll(quizAnswers);
+    int correctCount = (int) Stream.concat(staticAnswers.stream(), aiAnswers.stream())
+        .filter(QuizAnswer::getIsCorrect)
+        .count();
 
     attempt.submit();
+    quizAttemptRepository.save(attempt); // 명시적 저장
 
     int solveDurationSeconds =
         (int)

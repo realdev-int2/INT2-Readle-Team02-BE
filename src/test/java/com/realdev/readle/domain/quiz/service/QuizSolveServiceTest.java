@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.realdev.readle.domain.member.entity.Member;
@@ -146,9 +147,71 @@ class QuizSolveServiceTest {
 
     assertThat(response.getTotalCount()).isEqualTo(2);
     assertThat(response.getCorrectCount()).isEqualTo(2); // 둘 다 정답 처리됨 (Mocking 로직)
-    verify(quizAnswerRepository).saveAll(any());
+    verify(quizAnswerRepository, times(2)).saveAll(any());
     verify(quizAttempt).submit();
     verify(quizResultRepository).save(any(QuizResult.class));
+  }
+
+  @Test
+  @DisplayName("정적 매칭(isStaticMatch)으로 AI 호출 없이 정답 처리")
+  void submitAnswers_StaticMatch() {
+    given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
+        .willReturn(List.of(question1, question2));
+    given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
+
+    QuizSubmitRequest request = new QuizSubmitRequest();
+    QuizSubmitRequest.AnswerRequest ans1 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans1, "questionId", 10L);
+    ReflectionTestUtils.setField(ans1, "submittedChoiceId", 50L);
+
+    QuizSubmitRequest.AnswerRequest ans2 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans2, "questionId", 11L);
+    ReflectionTestUtils.setField(ans2, "submittedAnswerText", " 스프링   "); // 정답과 매칭됨
+
+    ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
+    lenient().when(quizAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
+
+    QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
+
+    assertThat(response.getTotalCount()).isEqualTo(2);
+    assertThat(response.getCorrectCount()).isEqualTo(2);
+    verify(quizAiGradingService, times(0)).gradeAnswerAsync(any(), any(), any()); // AI 호출 없음
+    verify(quizAnswerRepository, times(1)).saveAll(any()); // 정적 채점만 저장됨
+  }
+
+  @Test
+  @DisplayName("AI 채점 결과 오답(isCorrect=false)일 경우 correctCount 미증가")
+  void submitAnswers_AiIncorrect() {
+    given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
+        .willReturn(List.of(question1, question2));
+    given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
+
+    QuizSubmitRequest request = new QuizSubmitRequest();
+    QuizSubmitRequest.AnswerRequest ans1 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans1, "questionId", 10L);
+    ReflectionTestUtils.setField(ans1, "submittedChoiceId", 50L);
+
+    QuizSubmitRequest.AnswerRequest ans2 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans2, "questionId", 11L);
+    ReflectionTestUtils.setField(ans2, "submittedAnswerText", "자바"); // 오답
+
+    ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
+    lenient().when(quizAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
+
+    given(quizAiGradingService.gradeAnswerAsync(any(), any(), any()))
+        .willReturn(
+            java.util.concurrent.CompletableFuture.completedFuture(
+                new QuizAiGradingService.AiEvaluationResult(
+                    question2, "자바", false, "틀렸습니다.")));
+
+    QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
+
+    assertThat(response.getTotalCount()).isEqualTo(2);
+    assertThat(response.getCorrectCount()).isEqualTo(1); // 객관식만 정답
+    verify(quizAiGradingService, times(1)).gradeAnswerAsync(any(), any(), any());
+    verify(quizAnswerRepository, times(2)).saveAll(any());
   }
 
   @Test

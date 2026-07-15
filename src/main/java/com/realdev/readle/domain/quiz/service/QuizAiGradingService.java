@@ -9,6 +9,7 @@ import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ public class QuizAiGradingService {
   private final ClaudeClient claudeClient;
   private final PromptLoader promptLoader;
   private final ObjectMapper objectMapper;
+  private final Executor gradingExecutor;
 
   public record AiEvaluationResult(
       QuizQuestion question, String submittedAnswer, boolean isCorrect, String aiFeedback) {}
@@ -33,11 +35,15 @@ public class QuizAiGradingService {
 
   private CompletableFuture<AiEvaluationResult> executeWithTimeoutAndRetry(
       QuizQuestion question, String submittedAnswer, String articleText, int retriesLeft) {
-    return CompletableFuture.supplyAsync(
-            () -> doGrade(question, submittedAnswer, articleText, retriesLeft < 1))
-        .orTimeout(5, TimeUnit.SECONDS)
+    CompletableFuture<AiEvaluationResult> task =
+        CompletableFuture.supplyAsync(
+            () -> doGrade(question, submittedAnswer, articleText, retriesLeft < 1),
+            gradingExecutor);
+
+    return task.orTimeout(5, TimeUnit.SECONDS)
         .exceptionallyCompose(
             ex -> {
+              task.cancel(true);
               if (retriesLeft > 0) {
                 log.warn("AI 채점 실패(타임아웃 또는 오류). 재시도를 진행합니다. 남은 횟수: {}", retriesLeft, ex);
                 return executeWithTimeoutAndRetry(
@@ -86,11 +92,14 @@ public class QuizAiGradingService {
 
   private ClaudeGradingResponseDto parseAndValidate(String jsonResponse) {
     try {
+      jsonResponse = jsonResponse.trim();
       if (jsonResponse.startsWith("```json")) {
         jsonResponse = jsonResponse.substring(7);
-        if (jsonResponse.endsWith("```")) {
-          jsonResponse = jsonResponse.substring(0, jsonResponse.length() - 3);
-        }
+      } else if (jsonResponse.startsWith("```")) {
+        jsonResponse = jsonResponse.substring(3);
+      }
+      if (jsonResponse.endsWith("```")) {
+        jsonResponse = jsonResponse.substring(0, jsonResponse.length() - 3);
       }
       jsonResponse = jsonResponse.trim();
 
@@ -99,14 +108,14 @@ public class QuizAiGradingService {
 
       if (response.getIsCorrect() == null) {
         throw new CustomException(
-            com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GENERATION_FAILED,
+            com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED,
             "AI 응답에 isCorrect 필드가 누락되었습니다.");
       }
 
       return response;
     } catch (JsonProcessingException e) {
       throw new CustomException(
-          com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GENERATION_FAILED,
+          com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED,
           "AI 채점 응답 JSON 파싱에 실패했습니다.",
           e);
     }

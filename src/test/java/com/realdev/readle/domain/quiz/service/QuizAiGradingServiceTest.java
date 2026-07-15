@@ -37,6 +37,9 @@ class QuizAiGradingServiceTest {
 
   @BeforeEach
   void setUp() {
+    ReflectionTestUtils.setField(
+        quizAiGradingService, "gradingExecutor", (java.util.concurrent.Executor) Runnable::run);
+
     question = mock(QuizQuestion.class);
     ReflectionTestUtils.setField(question, "id", 10L);
     given(question.getQuestionText()).willReturn("스프링 빈의 스코프 중 싱글톤은 무엇인가요?");
@@ -121,5 +124,27 @@ class QuizAiGradingServiceTest {
     assertThat(result.isCorrect()).isFalse(); // Fallback 처리됨
     assertThat(result.aiFeedback()).contains("연결이 원활하지 않아");
     verify(claudeClient, times(2)).getGeneratedText(any(), any()); // 최초 + 1회 재시도 = 2번 호출
+  }
+
+  @Test
+  @DisplayName("isCorrect 누락 시 1회 재시도 후 Fallback 결과 반환")
+  void gradeAnswerAsync_MissingIsCorrect_Fallback() throws Exception {
+    given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
+
+    // 두 번 모두 isCorrect 필드가 누락된 JSON 반환
+    given(claudeClient.getGeneratedText(any(), any()))
+        .willReturn("{\"aiFeedback\": \"어쩌구저쩌구\"}");
+
+    ClaudeGradingResponseDto mockDto = new ClaudeGradingResponseDto(null, "어쩌구저쩌구");
+    given(objectMapper.readValue("{\"aiFeedback\": \"어쩌구저쩌구\"}", ClaudeGradingResponseDto.class))
+        .willReturn(mockDto);
+
+    CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
+        quizAiGradingService.gradeAnswerAsync(question, "오답", "본문 텍스트");
+    QuizAiGradingService.AiEvaluationResult result = future.join();
+
+    assertThat(result.isCorrect()).isFalse(); // Fallback
+    assertThat(result.aiFeedback()).contains("연결이 원활하지 않아");
+    verify(claudeClient, times(2)).getGeneratedText(any(), any());
   }
 }
