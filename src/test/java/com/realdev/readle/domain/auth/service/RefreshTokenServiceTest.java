@@ -15,10 +15,13 @@ import com.realdev.readle.domain.member.repository.MemberRefreshTokenRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.security.JwtService;
 import com.realdev.readle.global.security.SecurityProperties;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -33,7 +36,7 @@ class RefreshTokenServiceTest {
   @Mock private MemberRefreshTokenRepository refreshTokenRepository;
 
   @Test
-  void revokesOnlyPresentedRefreshToken() {
+  void revokesOnlyPresentedRefreshToken() throws Exception {
     Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
     SecurityProperties properties =
         new SecurityProperties(
@@ -57,13 +60,22 @@ class RefreshTokenServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
 
     String rawToken = service.issue(member);
+    String expectedHash =
+        HexFormat.of()
+            .formatHex(
+                MessageDigest.getInstance("SHA-256")
+                    .digest(rawToken.getBytes(StandardCharsets.UTF_8)));
     ArgumentCaptor<MemberRefreshToken> saved = ArgumentCaptor.forClass(MemberRefreshToken.class);
     org.mockito.Mockito.verify(refreshTokenRepository).save(saved.capture());
+    assertThat(saved.getValue().getTokenHash()).isEqualTo(expectedHash);
     when(refreshTokenRepository.findByTokenHash(any()))
         .thenReturn(java.util.Optional.of(saved.getValue()));
 
     service.revoke(rawToken);
 
+    ArgumentCaptor<String> tokenHash = ArgumentCaptor.forClass(String.class);
+    verify(refreshTokenRepository).findByTokenHash(tokenHash.capture());
+    assertThat(tokenHash.getValue()).isEqualTo(expectedHash);
     assertThat(saved.getValue().getRevokedAt()).isNotNull();
     assertThatThrownBy(() -> service.refresh(rawToken)).isInstanceOf(CustomException.class);
   }
