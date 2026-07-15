@@ -5,6 +5,7 @@ import com.realdev.readle.global.exception.GlobalErrorCode;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -23,15 +24,72 @@ public class SecurityConfig {
   }
 
   @Bean
-  public SecurityFilterChain securityFilterChain(
+  @Order(1)
+  public SecurityFilterChain authSecurityFilterChain(
       HttpSecurity http, JwtService jwtService, SecurityErrorResponseWriter errorResponseWriter)
       throws Exception {
-    CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-    return http.csrf(
+    return configureCommon(http, jwtService, errorResponseWriter)
+        .securityMatcher("/api/auth/**")
+        .csrf(
             csrf ->
-                csrf.csrfTokenRepository(csrfRepository)
+                csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
-        .sessionManagement(
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers(
+                        "/api/auth/*/start",
+                        "/api/auth/*/callback",
+                        "/api/auth/refresh",
+                        "/api/auth/session")
+                    .permitAll()
+                    .requestMatchers("/api/auth/logout")
+                    .authenticated()
+                    .anyRequest()
+                    .authenticated())
+        .build();
+  }
+
+  @Bean
+  @Order(2)
+  public SecurityFilterChain apiSecurityFilterChain(
+      HttpSecurity http, JwtService jwtService, SecurityErrorResponseWriter errorResponseWriter)
+      throws Exception {
+    return configureCommon(http, jwtService, errorResponseWriter)
+        .securityMatcher("/api/**")
+        .csrf(AbstractHttpConfigurer::disable)
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers("/api/actuator/health/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
+        .build();
+  }
+
+  @Bean
+  @Order(3)
+  public SecurityFilterChain fallbackSecurityFilterChain(
+      HttpSecurity http, JwtService jwtService, SecurityErrorResponseWriter errorResponseWriter)
+      throws Exception {
+    return configureCommon(http, jwtService, errorResponseWriter)
+        .securityMatcher("/**")
+        .csrf(
+            csrf ->
+                csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers("/health", "/actuator/health/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
+        .build();
+  }
+
+  private HttpSecurity configureCommon(
+      HttpSecurity http, JwtService jwtService, SecurityErrorResponseWriter errorResponseWriter)
+      throws Exception {
+    return http.sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .formLogin(AbstractHttpConfigurer::disable)
         .httpBasic(AbstractHttpConfigurer::disable)
@@ -45,22 +103,8 @@ public class SecurityConfig {
                     .accessDeniedHandler(
                         (request, response, exception) ->
                             errorResponseWriter.write(response, GlobalErrorCode.FORBIDDEN)))
-        .authorizeHttpRequests(
-            auth ->
-                auth.requestMatchers(
-                        "/api/auth/*/start",
-                        "/api/auth/*/callback",
-                        "/api/auth/refresh",
-                        "/api/auth/session",
-                        "/api/actuator/health",
-                        "/health",
-                        "/actuator/health")
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
         .addFilterBefore(
             new JwtAuthenticationFilter(jwtService, errorResponseWriter),
-            UsernamePasswordAuthenticationFilter.class)
-        .build();
+            UsernamePasswordAuthenticationFilter.class);
   }
 }
