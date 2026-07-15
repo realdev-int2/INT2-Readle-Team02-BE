@@ -65,4 +65,27 @@ public class Member extends BaseTimeEntity {
       this.uuid = UUID.randomUUID().toString();
     }
   }
+
+  private Member(
+      OAuthProvider oauthProvider,
+      String oauthId,
+      String email,
+      String nickname,
+      String profileImageUrl) {
+    this.oauthProvider = oauthProvider;
+    this.oauthId = oauthId;
+    this.email = email;
+    this.nickname = nickname;
+    this.profileImageUrl = profileImageUrl;
+    this.lastLoginAt = LocalDateTime.now();
+  }
+
+  public static Member create(
+      OAuthProvider oauthProvider,
+      String oauthId,
+      String email,
+      String nickname,
+      String profileImageUrl) {
+    return new Member(oauthProvider, oauthId, email, nickname, profileImageUrl);
+  }
 }
