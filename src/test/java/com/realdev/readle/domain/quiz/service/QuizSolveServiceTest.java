@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.realdev.readle.domain.member.entity.Member;
@@ -15,7 +14,6 @@ import com.realdev.readle.domain.quiz.dto.request.QuizSubmitRequest;
 import com.realdev.readle.domain.quiz.dto.response.QuizSubmitResponse;
 import com.realdev.readle.domain.quiz.entity.AttemptStatus;
 import com.realdev.readle.domain.quiz.entity.QuestionType;
-import com.realdev.readle.domain.quiz.entity.QuizAnswer;
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import com.realdev.readle.domain.quiz.entity.QuizChoice;
 import com.realdev.readle.domain.quiz.entity.QuizQuestion;
@@ -52,6 +50,7 @@ class QuizSolveServiceTest {
   @Mock private QuizAnswerRepository quizAnswerRepository;
   @Mock private QuizResultRepository quizResultRepository;
   @Mock private MemberRepository memberRepository;
+  @Mock private QuizAiGradingService quizAiGradingService;
 
   private Member member;
   private QuizSet quizSet;
@@ -136,11 +135,18 @@ class QuizSolveServiceTest {
     ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
 
     lenient().when(quizAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
+
+    given(quizAiGradingService.gradeAnswerAsync(any(), any(), any()))
+        .willReturn(
+            java.util.concurrent.CompletableFuture.completedFuture(
+                new QuizAiGradingService.AiEvaluationResult(
+                    question2, "스프링 프레임워크", true, "정답입니다.")));
+
     QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
 
     assertThat(response.getTotalCount()).isEqualTo(2);
     assertThat(response.getCorrectCount()).isEqualTo(2); // 둘 다 정답 처리됨 (Mocking 로직)
-    verify(quizAnswerRepository, times(2)).save(any(QuizAnswer.class));
+    verify(quizAnswerRepository).saveAll(any());
     verify(quizAttempt).submit();
     verify(quizResultRepository).save(any(QuizResult.class));
   }

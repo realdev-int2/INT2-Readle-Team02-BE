@@ -41,6 +41,7 @@ public class QuizSolveService {
   private final QuizAnswerRepository quizAnswerRepository;
   private final QuizResultRepository quizResultRepository;
   private final MemberRepository memberRepository;
+  private final QuizAiGradingService quizAiGradingService;
 
   @Transactional
   public Long startQuiz(Long quizSetId, String memberUuid) {
@@ -121,7 +122,17 @@ public class QuizSolveService {
       answerMap.put(a.getQuestionId(), a);
     }
 
-    int correctCount = 0;
+    List<QuizAnswer> quizAnswers = new java.util.ArrayList<>();
+    List<java.util.concurrent.CompletableFuture<QuizAiGradingService.AiEvaluationResult>> aiTasks =
+        new java.util.ArrayList<>();
+
+    String articleText = null;
+    if (questions.stream().anyMatch(q -> q.getQuestionType() != QuestionType.MULTIPLE_CHOICE)) {
+      articleText =
+          attempt.getQuizSet().getContent().getRawText() != null
+              ? attempt.getQuizSet().getContent().getRawText()
+              : attempt.getQuizSet().getContent().getExtractedText();
+    }
 
     for (QuizQuestion question : questions) {
       QuizSubmitRequest.AnswerRequest answerReq = answerMap.get(question.getId());
@@ -145,13 +156,7 @@ public class QuizSolveService {
         }
 
         boolean isCorrect = choice.getIsCorrect();
-        if (isCorrect) {
-          correctCount++;
-        }
-
-        QuizAnswer quizAnswer = QuizAnswer.createForChoice(attempt, question, choice, isCorrect);
-        quizAnswerRepository.save(quizAnswer);
-
+        quizAnswers.add(QuizAnswer.createForChoice(attempt, question, choice, isCorrect));
       } else {
         // 주관식/코드 빈칸 로직
         if (answerReq.getSubmittedAnswerText() == null
@@ -159,20 +164,45 @@ public class QuizSolveService {
           throw new IllegalArgumentException("주관식 또는 코드 빈칸 문제는 텍스트 답안을 제출해야 합니다.");
         }
 
-        // TODO: AI 채점 로직 호출 (현재는 Mocking 처리. 실제로는 Batch AI 채점 연동 필요)
-        boolean isCorrect = evaluateWrittenAnswerMock(question, answerReq.getSubmittedAnswerText());
-        String aiFeedback = isCorrect ? null : "오답입니다. (Mock AI 피드백)";
-
-        if (isCorrect) {
-          correctCount++;
+        if (isStaticMatch(question.getCorrectAnswer(), answerReq.getSubmittedAnswerText())) {
+          // 1차 정적 매칭 통과 -> 즉시 정답 처리 (AI 호출 생략)
+          quizAnswers.add(
+              QuizAnswer.createForWritten(
+                  attempt, question, answerReq.getSubmittedAnswerText(), true, null));
+        } else {
+          // 정적 매칭 실패 -> 비동기 병렬 AI 채점 태스크 등록
+          aiTasks.add(
+              quizAiGradingService.gradeAnswerAsync(
+                  question, answerReq.getSubmittedAnswerText(), articleText));
         }
-
-        QuizAnswer quizAnswer =
-            QuizAnswer.createForWritten(
-                attempt, question, answerReq.getSubmittedAnswerText(), isCorrect, aiFeedback);
-        quizAnswerRepository.save(quizAnswer);
       }
     }
+
+    // 모든 AI 비동기 태스크가 완료될 때까지 대기 (join)
+    if (!aiTasks.isEmpty()) {
+      java.util.concurrent.CompletableFuture.allOf(
+              aiTasks.toArray(new java.util.concurrent.CompletableFuture[0]))
+          .join();
+      for (java.util.concurrent.CompletableFuture<QuizAiGradingService.AiEvaluationResult>
+          taskFuture : aiTasks) {
+        QuizAiGradingService.AiEvaluationResult aiResult = taskFuture.join();
+        quizAnswers.add(
+            QuizAnswer.createForWritten(
+                attempt,
+                aiResult.question(),
+                aiResult.submittedAnswer(),
+                aiResult.isCorrect(),
+                aiResult.aiFeedback()));
+      }
+    }
+
+    int correctCount = 0;
+    for (QuizAnswer ans : quizAnswers) {
+      if (ans.getIsCorrect()) {
+        correctCount++;
+      }
+    }
+    quizAnswerRepository.saveAll(quizAnswers);
 
     attempt.submit();
 
@@ -188,14 +218,12 @@ public class QuizSolveService {
     return QuizSubmitResponse.from(result);
   }
 
-  // AI 채점을 대체하는 임시 메서드. 향후 Claude API 하이브리드 채점 로직으로 대체 예정
-  private boolean evaluateWrittenAnswerMock(QuizQuestion question, String submittedAnswer) {
-    // 임시 채점 로직: 정답(correct_answer)과 공백 무시/대소문자 무시 일치 여부로 채점
-    if (question.getCorrectAnswer() == null) {
+  private boolean isStaticMatch(String correct, String submitted) {
+    if (correct == null || submitted == null) {
       return false;
     }
-    String correct = question.getCorrectAnswer().replaceAll("\\s+", "").toLowerCase();
-    String submitted = submittedAnswer.replaceAll("\\s+", "").toLowerCase();
-    return submitted.contains(correct);
+    String normalizedCorrect = correct.trim().toLowerCase().replaceAll("\\s+", " ");
+    String normalizedSubmitted = submitted.trim().toLowerCase().replaceAll("\\s+", " ");
+    return normalizedCorrect.equals(normalizedSubmitted);
   }
 }
