@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,11 +30,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class OAuthStateServiceTest {
 
   @Mock private OAuthAuthorizationStateRepository stateRepository;
+
+  @Mock private PlatformTransactionManager transactionManager;
 
   private final Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
   private final SecurityProperties properties =
@@ -50,9 +57,17 @@ class OAuthStateServiceTest {
               new SecurityProperties.OAuthProviderSettings("", "", "", "", ""),
               new SecurityProperties.OAuthProviderSettings("", "", "", "", "")));
 
+  private OAuthStateService service() {
+    TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+    lenient()
+        .when(transactionManager.getTransaction(any()))
+        .thenReturn(new SimpleTransactionStatus());
+    return new OAuthStateService(stateRepository, properties, clock, transactionTemplate);
+  }
+
   @Test
   void consumesStateOnceAndRejectsReplay() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
     OAuthStateService.OAuthStart start = service.create(OAuthProvider.GOOGLE, "/dashboard");
     ArgumentCaptor<OAuthAuthorizationState> saved =
         ArgumentCaptor.forClass(OAuthAuthorizationState.class);
@@ -66,13 +81,14 @@ class OAuthStateServiceTest {
     assertThat(consumed.returnTo()).isEqualTo("/dashboard");
     assertThat(consumed.codeVerifier()).isNotBlank();
     verify(stateRepository).delete(saved.getValue());
+    verify(stateRepository, never()).saveAndFlush(any());
     assertThatThrownBy(() -> service.consume(OAuthProvider.GOOGLE, start.state()))
         .isInstanceOf(CustomException.class);
   }
 
   @Test
   void mapsLockAcquisitionFailuresToOAuthFailure() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
     when(stateRepository.findByStateHashAndOauthProvider(any(), any()))
         .thenThrow(new PessimisticLockException());
 
@@ -93,7 +109,7 @@ class OAuthStateServiceTest {
 
   @Test
   void rejectsExpiredState() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
     OAuthAuthorizationState expired =
         OAuthAuthorizationState.create(
             "state-hash",
@@ -112,7 +128,7 @@ class OAuthStateServiceTest {
 
   @Test
   void rejectsStateRequestedForDifferentProvider() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
     OAuthStateService.OAuthStart start = service.create(OAuthProvider.GOOGLE, "/dashboard");
     when(stateRepository.findByStateHashAndOauthProvider(any(), eq(OAuthProvider.KAKAO)))
         .thenReturn(Optional.empty());
@@ -125,7 +141,7 @@ class OAuthStateServiceTest {
 
   @Test
   void rejectsVerifierCiphertextAuthenticatedForDifferentProviderWithoutReturningVerifier() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
     OAuthStateService.OAuthStart start = service.create(OAuthProvider.GOOGLE, "/dashboard");
     ArgumentCaptor<OAuthAuthorizationState> saved =
         ArgumentCaptor.forClass(OAuthAuthorizationState.class);
@@ -139,7 +155,7 @@ class OAuthStateServiceTest {
 
   @Test
   void rejectsTamperedVerifierCiphertext() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
     OAuthStateService.OAuthStart start = service.create(OAuthProvider.GOOGLE, "/dashboard");
     ArgumentCaptor<OAuthAuthorizationState> saved =
         ArgumentCaptor.forClass(OAuthAuthorizationState.class);
@@ -156,7 +172,7 @@ class OAuthStateServiceTest {
 
   @Test
   void rejectsMalformedVerifierCiphertextThatCausesProviderException() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
     OAuthStateService.OAuthStart start = service.create(OAuthProvider.GOOGLE, "/dashboard");
     ArgumentCaptor<OAuthAuthorizationState> saved =
         ArgumentCaptor.forClass(OAuthAuthorizationState.class);
@@ -171,7 +187,7 @@ class OAuthStateServiceTest {
 
   @Test
   void preservesQueryForAllowlistedPathPattern() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
 
     assertThat(service.safeReturnTo("/quizzes/123?from=dashboard"))
         .isEqualTo("/quizzes/123?from=dashboard");
@@ -179,7 +195,7 @@ class OAuthStateServiceTest {
 
   @Test
   void normalizesInvalidOrUnmatchedReturnPathsToRoot() {
-    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService service = service();
 
     assertThat(service.safeReturnTo("https://evil.example")).isEqualTo("/");
     assertThat(service.safeReturnTo("///evil")).isEqualTo("/");
@@ -202,7 +218,13 @@ class OAuthStateServiceTest {
             List.of("/**"),
             properties.oauth());
 
-    assertThatThrownBy(() -> new OAuthStateService(stateRepository, invalidProperties, clock))
+    assertThatThrownBy(
+            () ->
+                new OAuthStateService(
+                    stateRepository,
+                    invalidProperties,
+                    clock,
+                    new TransactionTemplate(transactionManager)))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

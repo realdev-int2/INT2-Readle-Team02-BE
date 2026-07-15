@@ -28,7 +28,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.server.PathContainer;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 
@@ -43,20 +46,29 @@ public class OAuthStateService {
   private final SecurityProperties properties;
   private final Clock clock;
   private final List<PathPattern> allowedReturnPaths;
+  private final TransactionTemplate consumeTransactionTemplate;
 
   @Autowired
   public OAuthStateService(
-      OAuthAuthorizationStateRepository stateRepository, SecurityProperties properties) {
-    this(stateRepository, properties, Clock.systemUTC());
+      OAuthAuthorizationStateRepository stateRepository,
+      SecurityProperties properties,
+      PlatformTransactionManager transactionManager) {
+    this(
+        stateRepository,
+        properties,
+        Clock.systemUTC(),
+        requiresNewTransactionTemplate(transactionManager));
   }
 
   OAuthStateService(
       OAuthAuthorizationStateRepository stateRepository,
       SecurityProperties properties,
-      Clock clock) {
+      Clock clock,
+      TransactionTemplate consumeTransactionTemplate) {
     this.stateRepository = stateRepository;
     this.properties = properties;
     this.clock = clock;
+    this.consumeTransactionTemplate = consumeTransactionTemplate;
     PathPatternParser parser = new PathPatternParser();
     this.allowedReturnPaths =
         properties.allowedReturnPaths().stream()
@@ -85,33 +97,48 @@ public class OAuthStateService {
     return new OAuthStart(state, pkceChallenge(verifier));
   }
 
-  @Transactional(noRollbackFor = CustomException.class)
   public ConsumedOAuthState consume(OAuthProvider provider, String rawState) {
     if (rawState == null || rawState.isBlank()) {
       throw oauthFailure();
     }
-    OAuthAuthorizationState state;
+    ConsumedOAuthState consumed;
     try {
-      state =
-          stateRepository
-              .findByStateHashAndOauthProvider(sha256(rawState), provider)
-              .orElseThrow(this::oauthFailure);
+      consumed =
+          consumeTransactionTemplate.execute(status -> consumeInTransaction(provider, rawState));
     } catch (PessimisticLockException | CannotAcquireLockException exception) {
       throw oauthFailure();
     }
+    if (consumed == null) {
+      throw oauthFailure();
+    }
+    return consumed;
+  }
+
+  private ConsumedOAuthState consumeInTransaction(OAuthProvider provider, String rawState) {
+    OAuthAuthorizationState state =
+        stateRepository
+            .findByStateHashAndOauthProvider(sha256(rawState), provider)
+            .orElseThrow(this::oauthFailure);
     if (!state.isUsableAt(now())) {
       stateRepository.delete(state);
-      throw oauthFailure();
+      return null;
     }
     String verifier;
     try {
       verifier = decrypt(state.getCodeVerifierCiphertext(), provider);
     } catch (CustomException exception) {
       stateRepository.delete(state);
-      throw exception;
+      return null;
     }
     stateRepository.delete(state);
     return new ConsumedOAuthState(state.getReturnTo(), verifier);
+  }
+
+  private static TransactionTemplate requiresNewTransactionTemplate(
+      PlatformTransactionManager transactionManager) {
+    TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+    transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    return transactionTemplate;
   }
 
   public String safeReturnTo(String returnTo) {

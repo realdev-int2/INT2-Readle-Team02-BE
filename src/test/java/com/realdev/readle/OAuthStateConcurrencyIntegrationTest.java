@@ -31,7 +31,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(classes = ReadleApplication.class, properties = "spring.cloud.aws.s3.enabled=false")
@@ -103,9 +102,9 @@ class OAuthStateConcurrencyIntegrationTest {
 
   private ConsumeAttempt consume(String rawState) {
     try {
-      OAuthStateService stateService = new OAuthStateService(stateRepository, securityProperties);
-      new TransactionTemplate(transactionManager)
-          .executeWithoutResult(status -> stateService.consume(OAuthProvider.GOOGLE, rawState));
+      OAuthStateService stateService =
+          new OAuthStateService(stateRepository, securityProperties, transactionManager);
+      stateService.consume(OAuthProvider.GOOGLE, rawState);
       return new ConsumeAttempt(true, null);
     } catch (CustomException exception) {
       return new ConsumeAttempt(false, exception);
