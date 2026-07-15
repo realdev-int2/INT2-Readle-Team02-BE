@@ -74,7 +74,14 @@ public class SecurityConfig {
         .csrf(this::configureCookieCsrf)
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/health", "/actuator/health/**")
+                auth.requestMatchers(
+                        "/health",
+                        "/actuator/health/**",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                        "/v3/api-docs",
+                        "/v3/api-docs/**",
+                        "/v3/api-docs.yaml")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
