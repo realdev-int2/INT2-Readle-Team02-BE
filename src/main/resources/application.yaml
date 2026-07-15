@@ -47,11 +47,11 @@ anthropic:
 
 security:
   jwt-issuer: ${JWT_ISSUER:readle}
-  jwt-secret: ${JWT_SECRET:this-is-a-local-development-secret-key-must-be-at-least-32-bytes-long}
+  jwt-secret: ${JWT_SECRET:}
   jwt-audience: readle-api
   access-token-minutes: 30
   refresh-token-days: 14
-  state-encryption-key: ${OAUTH_STATE_ENCRYPTION_KEY:16-bytes-AES-key}
+  state-encryption-key: ${OAUTH_STATE_ENCRYPTION_KEY:}
   state-minutes: 10
   backend-origin: ${BACKEND_ORIGIN:http://localhost:8080}
   allowed-return-paths: ${OAUTH_ALLOWED_RETURN_PATHS:/}
