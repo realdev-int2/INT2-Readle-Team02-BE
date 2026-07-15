@@ -128,6 +128,21 @@ class OAuthStateServiceTest {
   }
 
   @Test
+  void rejectsMalformedVerifierCiphertextThatCausesProviderException() {
+    OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
+    OAuthStateService.OAuthStart start = service.create(OAuthProvider.GOOGLE, "/dashboard");
+    ArgumentCaptor<OAuthAuthorizationState> saved =
+        ArgumentCaptor.forClass(OAuthAuthorizationState.class);
+    verify(stateRepository).save(saved.capture());
+    ReflectionTestUtils.setField(saved.getValue(), "codeVerifierCiphertext", "AAAAAAAAAAAAAAAAAA");
+    when(stateRepository.findByStateHashAndOauthProvider(any(), any()))
+        .thenReturn(Optional.of(saved.getValue()));
+
+    assertThatThrownBy(() -> service.consume(OAuthProvider.GOOGLE, start.state()))
+        .isInstanceOf(CustomException.class);
+  }
+
+  @Test
   void preservesQueryForAllowlistedPathPattern() {
     OAuthStateService service = new OAuthStateService(stateRepository, properties, clock);
 

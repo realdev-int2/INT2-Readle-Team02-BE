@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
+import java.security.ProviderException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -188,7 +189,7 @@ public class OAuthStateService {
       return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
     } catch (CustomException exception) {
       throw exception;
-    } catch (GeneralSecurityException | IllegalArgumentException exception) {
+    } catch (GeneralSecurityException | IllegalArgumentException | ProviderException exception) {
       throw oauthFailure();
     }
   }
