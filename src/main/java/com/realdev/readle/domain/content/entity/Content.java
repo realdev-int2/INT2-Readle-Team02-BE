@@ -61,23 +61,26 @@ public class Content extends BaseTimeEntity {
       InputType inputType,
       CrawlStatus crawlStatus,
       String originalUrl,
-      String rawText) {
+      String rawText,
+      String extractedText) {
     this.member = member;
     this.title = title;
     this.inputType = inputType;
     this.crawlStatus = crawlStatus;
     this.originalUrl = originalUrl;
     this.rawText = rawText;
+    this.extractedText = extractedText;
   }
 
   public static Content fromText(Member member, String title, String rawText) {
-    return new Content(member, title, InputType.TEXT, CrawlStatus.NOT_APPLICABLE, null, rawText);
+    return new Content(
+        member, title, InputType.TEXT, CrawlStatus.NOT_APPLICABLE, null, rawText, null);
   }
 
-  public static Content fromUrl(Member member, String title, String originalUrl) {
-    // URL 콘텐츠의 크롤링 상태는 생성 시점에는 '해당 없음'으로 두고,
-    // 별도의 크롤링 서비스가 상태를 SUCCESS 또는 FAILED로 변경해야 함.
-    return new Content(member, title, InputType.URL, CrawlStatus.NOT_APPLICABLE, originalUrl, null);
+  public static Content fromUrl(
+      Member member, String title, String originalUrl, String extractedText) {
+    return new Content(
+        member, title, InputType.URL, CrawlStatus.SUCCESS, originalUrl, null, extractedText);
   }
 
   public void updateCrawlResult(String extractedText, CrawlStatus newStatus) {
