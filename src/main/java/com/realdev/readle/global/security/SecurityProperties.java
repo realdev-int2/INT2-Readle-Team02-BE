@@ -1,6 +1,7 @@
 package com.realdev.readle.global.security;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -32,11 +33,26 @@ public record SecurityProperties(
   }
 
   private static void requireAesKey(String value) {
-    int length = value == null ? 0 : value.getBytes(StandardCharsets.UTF_8).length;
+    if (value == null) {
+      throw new IllegalArgumentException(
+          "OAuth state encryption key must be a 16, 24, or 32 byte AES key");
+    }
+    byte[] key;
+    try {
+      key = Base64.getDecoder().decode(value);
+    } catch (IllegalArgumentException exception) {
+      throw new IllegalArgumentException(
+          "OAuth state encryption key must be standard Base64", exception);
+    }
+    int length = key.length;
     if (length != 16 && length != 24 && length != 32) {
       throw new IllegalArgumentException(
           "OAuth state encryption key must be a 16, 24, or 32 byte AES key");
     }
+  }
+
+  public byte[] stateEncryptionKeyBytes() {
+    return Base64.getDecoder().decode(stateEncryptionKey);
   }
 
   private static void requireInRange(int value, int minimum, int maximum, String name) {

@@ -39,7 +39,7 @@ security:
   jwt-audience: readle-api
   access-token-minutes: 30
   refresh-token-days: 14
-  state-encryption-key: 01234567890123456789012345678901
+  state-encryption-key: MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXY= # gitleaks:allow deterministic OAuth state encryption test key
   state-minutes: 10
   backend-origin: http://localhost:8080
   allowed-return-paths: /

@@ -131,7 +131,7 @@ class JwtServiceTest {
         jwtAudience,
         accessTokenMinutes,
         14,
-        "abcdefghijklmnopqrstuvwxyz123456",
+        "MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
         10,
         "http://localhost:8080",
         List.of("/"),

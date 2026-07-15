@@ -206,11 +206,7 @@ public class OAuthStateService {
   }
 
   private SecretKeySpec encryptionKey() {
-    byte[] key = properties.stateEncryptionKey().getBytes(StandardCharsets.UTF_8);
-    if (key.length != 16 && key.length != 24 && key.length != 32) {
-      throw new IllegalStateException("OAuth state encryption key has invalid length");
-    }
-    return new SecretKeySpec(key, "AES");
+    return new SecretKeySpec(properties.stateEncryptionKeyBytes(), "AES");
   }
 
   private LocalDateTime now() {

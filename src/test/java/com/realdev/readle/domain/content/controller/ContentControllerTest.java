@@ -48,7 +48,11 @@ import org.springframework.test.web.servlet.MockMvc;
       "security.jwtAudience=test-audience",
       "security.accessTokenMinutes=30",
       "security.refreshTokenDays=7",
-      "security.stateEncryptionKey=1234567890123456",
+      "security.stateEncryptionKey=MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXY=", // gitleaks:allow
+      // deterministic
+      // OAuth state
+      // encryption test
+      // key
       "security.stateMinutes=5",
       "security.backendOrigin=http://localhost:8080"
     })

@@ -1,5 +1,6 @@
 package com.realdev.readle.global.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
@@ -17,6 +18,23 @@ class SecurityPropertiesTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> properties(validJwtSecret(), null))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void rejectsMalformedStateEncryptionKey() {
+    assertThatThrownBy(() -> properties(validJwtSecret(), "not-base64!"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void acceptsStateEncryptionKeysAtValidDecodedLengthBoundaries() {
+    assertThat(properties(validJwtSecret(), "MDEyMzQ1Njc4OWFiY2RlZg==").stateEncryptionKeyBytes())
+        .hasSize(16);
+    assertThat(
+            properties(validJwtSecret(), "MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1u")
+                .stateEncryptionKeyBytes())
+        .hasSize(24);
+    assertThat(properties(validJwtSecret(), validStateKey()).stateEncryptionKeyBytes()).hasSize(32);
   }
 
   @Test
@@ -76,6 +94,6 @@ class SecurityPropertiesTest {
   }
 
   private String validStateKey() {
-    return "abcdefghijklmnopqrstuvwxyz123456";
+    return "MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXY=";
   }
 }
