@@ -12,9 +12,14 @@ public enum ContentErrorCode implements ErrorCode {
   INVALID_URL(HttpStatus.BAD_REQUEST, "올바르지 않은 URL 형식입니다."),
   CRAWLING_TIMEOUT(HttpStatus.UNPROCESSABLE_ENTITY, "웹 페이지 요청 시간이 초과되었습니다."),
   EXTRACT_FAILED(HttpStatus.UNPROCESSABLE_ENTITY, "콘텐츠 본문 추출에 실패했습니다. 본문 텍스트를 직접 입력해 주세요."),
+  TITLE_REQUIRED(HttpStatus.BAD_REQUEST, "제목은 필수 입력값입니다."),
+  TITLE_TOO_LONG(HttpStatus.BAD_REQUEST, "제목은 최대 255자까지 입력할 수 있습니다."),
   CONTENT_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "텍스트가 15,000자를 초과합니다."),
   URL_REQUIRED(HttpStatus.BAD_REQUEST, "URL 입력 시 url은 필수입니다."),
-  TEXT_REQUIRED(HttpStatus.BAD_REQUEST, "텍스트 입력 시 text는 필수입니다.");
+  TEXT_REQUIRED(HttpStatus.BAD_REQUEST, "텍스트 입력 시 text는 필수입니다."),
+  MISSING_EXTRACTED_TEXT(HttpStatus.BAD_REQUEST, "URL 본문 추출 결과가 누락되었습니다. 먼저 본문 추출을 완료한 후 등록을 요청해 주세요."),
+  UNNECESSARY_TEXT(HttpStatus.BAD_REQUEST, "URL 입력 시 text 필드는 비어 있어야 합니다."),
+  UNNECESSARY_URL_INFO(HttpStatus.BAD_REQUEST, "텍스트 입력 시 url 및 extractedText 필드는 비어 있어야 합니다.");
 
   private final HttpStatus status;
   private final String message;

@@ -100,23 +100,19 @@ class ContentServiceTest {
   }
 
   @Test
-  @DisplayName("inputType=URL이면 텍스트 길이 제한 검사를 수행하지 않는다")
-  void createContent_urlType_skipsTextLengthCheck() {
+  @DisplayName("inputType=URL일 때 text 필드가 주어지면 UNNECESSARY_TEXT 예외가 발생한다")
+  void createContent_urlType_withText_throwsUnnecessaryText() {
     UUID memberUuid = UUID.randomUUID();
-    Member mockMember = mockMember();
-    // URL 타입에 긴 텍스트가 있어도 예외 없이 통과
     ContentCreateRequest request =
         new ContentCreateRequest(
-            InputType.URL, "제목", "https://example.com", "가".repeat(15_001), null);
-    Content savedContent =
-        stubSave(Content.fromUrl(mockMember, "제목", "https://example.com", "가".repeat(15_001)), 1L);
+            InputType.URL, "제목", "https://example.com", "정상적인 추출 본문", "본문 텍스트");
 
-    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.of(mockMember));
-    when(contentRepository.save(any(Content.class))).thenReturn(savedContent);
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.UNNECESSARY_TEXT);
 
-    ContentCreateResponse response = contentService.createContent(request, memberUuid);
-
-    assertThat(response.contentId()).isEqualTo(1L);
+    verify(memberRepository, never()).findByUuid(any());
   }
 
   @Test
@@ -265,6 +261,129 @@ class ContentServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(ContentErrorCode.TEXT_REQUIRED);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("inputType=URL이고 extractedText가 null이면 MISSING_EXTRACTED_TEXT 예외가 발생한다")
+  void createContent_urlType_nullExtractedText_throwsMissingExtractedText() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, "제목", "https://example.com", null, null);
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.MISSING_EXTRACTED_TEXT);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("inputType=URL이고 extractedText가 15,000자를 초과하면 CONTENT_TOO_LARGE 예외가 발생한다")
+  void createContent_urlType_extractedTextTooLarge_throwsContentTooLarge() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(
+            InputType.URL, "제목", "https://example.com", "가".repeat(15_001), null);
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.CONTENT_TOO_LARGE);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("inputType=TEXT일 때 url 필드가 주어지면 UNNECESSARY_URL_INFO 예외가 발생한다")
+  void createContent_textType_withUrl_throwsUnnecessaryUrlInfo() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(
+            InputType.TEXT, "제목", "https://example.com", null, "본문 내용");
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.UNNECESSARY_URL_INFO);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("inputType=TEXT일 때 extractedText 필드가 주어지면 UNNECESSARY_URL_INFO 예외가 발생한다")
+  void createContent_textType_withExtractedText_throwsUnnecessaryUrlInfo() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(
+            InputType.TEXT, "제목", null, "추출된 본문", "본문 내용");
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.UNNECESSARY_URL_INFO);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("inputType=URL일 때 title 필드가 누락되면 TITLE_REQUIRED 예외가 발생한다")
+  void createContent_urlType_nullTitle_throwsTitleRequired() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, null, "https://example.com", "본문", null);
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.TITLE_REQUIRED);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("inputType=URL일 때 title 필드가 255자를 초과하면 TITLE_TOO_LONG 예외가 발생한다")
+  void createContent_urlType_titleTooLong_throwsTitleTooLong() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, "가".repeat(256), "https://example.com", "본문", null);
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.TITLE_TOO_LONG);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("inputType=TEXT일 때 title 필드가 255자를 초과하면 TITLE_TOO_LONG 예외가 발생한다")
+  void createContent_textType_titleTooLong_throwsTitleTooLong() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.TEXT, "가".repeat(256), null, null, "본문");
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.TITLE_TOO_LONG);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
+  @Test
+  @DisplayName("inputType=URL일 때 잘못된 스킴의 URL 형식이면 INVALID_URL 예외가 발생한다")
+  void createContent_urlType_invalidUrlFormat_throwsInvalidUrl() {
+    UUID memberUuid = UUID.randomUUID();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, "제목", "ftp://example.com", "본문", null);
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.INVALID_URL);
 
     verify(memberRepository, never()).findByUuid(any());
   }

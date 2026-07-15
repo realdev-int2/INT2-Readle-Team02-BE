@@ -244,4 +244,124 @@ class ContentControllerTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.error.code").value("MEMBER_NOT_FOUND"));
   }
+
+  @Test
+  @DisplayName("URL 타입 등록 시 추출된 본문이 누락되면 400 MISSING_EXTRACTED_TEXT 에러를 반환한다")
+  void createContent_missingExtractedText() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, "제목", "https://example.com", null, null);
+    when(contentService.createContent(any(ContentCreateRequest.class), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.MISSING_EXTRACTED_TEXT));
+    mockMvc
+        .perform(
+            post("/api/contents")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("MISSING_EXTRACTED_TEXT"))
+        .andExpect(jsonPath("$.error.message").value("URL 본문 추출 결과가 누락되었습니다. 먼저 본문 추출을 완료한 후 등록을 요청해 주세요."));
+  }
+
+  @Test
+  @DisplayName("URL 타입 등록 시 text 필드가 포함되어 있으면 400 UNNECESSARY_TEXT 에러를 반환한다")
+  void createContent_unnecessaryText() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, "제목", "https://example.com", "추출된 본문", "텍스트");
+    when(contentService.createContent(any(ContentCreateRequest.class), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.UNNECESSARY_TEXT));
+    mockMvc
+        .perform(
+            post("/api/contents")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("UNNECESSARY_TEXT"))
+        .andExpect(jsonPath("$.error.message").value("URL 입력 시 text 필드는 비어 있어야 합니다."));
+  }
+
+  @Test
+  @DisplayName("TEXT 타입 등록 시 url 또는 extractedText 필드가 포함되어 있으면 400 UNNECESSARY_URL_INFO 에러를 반환한다")
+  void createContent_unnecessaryUrlInfo() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.TEXT, "제목", "https://example.com", null, "텍스트");
+    when(contentService.createContent(any(ContentCreateRequest.class), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.UNNECESSARY_URL_INFO));
+    mockMvc
+        .perform(
+            post("/api/contents")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("UNNECESSARY_URL_INFO"))
+        .andExpect(jsonPath("$.error.message").value("텍스트 입력 시 url 및 extractedText 필드는 비어 있어야 합니다."));
+  }
+
+  @Test
+  @DisplayName("URL 타입 등록 시 제목이 누락되면 400 TITLE_REQUIRED 에러를 반환한다")
+  void createContent_titleRequired() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, null, "https://example.com", "본문", null);
+    when(contentService.createContent(any(ContentCreateRequest.class), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.TITLE_REQUIRED));
+    mockMvc
+        .perform(
+            post("/api/contents")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("TITLE_REQUIRED"))
+        .andExpect(jsonPath("$.error.message").value("제목은 필수 입력값입니다."));
+  }
+
+  @Test
+  @DisplayName("등록 시 제목이 255자를 초과하면 400 TITLE_TOO_LONG 에러를 반환한다")
+  void createContent_titleTooLong() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.TEXT, "가".repeat(256), null, null, "본문");
+    when(contentService.createContent(any(ContentCreateRequest.class), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.TITLE_TOO_LONG));
+    mockMvc
+        .perform(
+            post("/api/contents")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("TITLE_TOO_LONG"))
+        .andExpect(jsonPath("$.error.message").value("제목은 최대 255자까지 입력할 수 있습니다."));
+  }
+
+  @Test
+  @DisplayName("URL 타입 등록 시 잘못된 형식의 URL이면 400 INVALID_URL 에러를 반환한다")
+  void createContent_invalidUrlFormat() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, "제목", "invalid-url-format", "본문", null);
+    when(contentService.createContent(any(ContentCreateRequest.class), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.INVALID_URL));
+    mockMvc
+        .perform(
+            post("/api/contents")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("INVALID_URL"))
+        .andExpect(jsonPath("$.error.message").value("올바르지 않은 URL 형식입니다."));
+  }
 }
