@@ -45,10 +45,6 @@ public class OAuthProviderClient {
         .toUriString();
   }
 
-  public void requireConfigured(OAuthProvider provider) {
-    requireConfigured(settings(provider));
-  }
-
   public OAuthProfile exchange(
       OAuthProvider provider, String code, String verifier, String redirectUri) {
     if (code == null || code.isBlank()) {
