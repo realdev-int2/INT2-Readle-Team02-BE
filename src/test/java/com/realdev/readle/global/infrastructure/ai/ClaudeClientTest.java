@@ -12,6 +12,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.global.config.ClaudeProperties;
 import com.realdev.readle.global.config.ClaudeTestConfig;
+import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
 import java.io.IOException;
 import java.util.Collections;
@@ -89,7 +90,7 @@ class ClaudeClientTest {
 
   @Test
   @DisplayName(
-      "Claude API 응답의 content 목록이 비어있으면 getGeneratedText 호출 시 IllegalStateException을 던져야 한다")
+      "Claude API 응답의 content 목록이 비어있으면 getGeneratedText 호출 시 CustomException(SERVER_ERROR)을 던져야 한다")
   void getGeneratedTextThrowsExceptionOnEmptyResponse() throws Exception {
     // given
     String systemPrompt = "You are a quiz master";
@@ -112,14 +113,14 @@ class ClaudeClientTest {
 
     // when & then
     assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
-        .isInstanceOf(IllegalStateException.class)
+        .isInstanceOf(CustomException.class)
         .hasMessageContaining("Claude API로부터 비어있는 응답을 받았습니다.");
     server.verify();
   }
 
   @Test
   @DisplayName(
-      "Claude API 응답의 첫 번째 콘텐츠 블록의 text가 비어있으면 getGeneratedText 호출 시 IllegalStateException을 던져야 한다")
+      "Claude API 응답의 첫 번째 콘텐츠 블록의 text가 비어있으면 getGeneratedText 호출 시 CustomException(SERVER_ERROR)을 던져야 한다")
   void getGeneratedTextThrowsExceptionOnBlankTextBlock() throws Exception {
     // given
     String systemPrompt = "You are a quiz master";
@@ -142,7 +143,7 @@ class ClaudeClientTest {
 
     // when & then
     assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
-        .isInstanceOf(IllegalStateException.class)
+        .isInstanceOf(CustomException.class)
         .hasMessageContaining("Claude API 응답에 유효한 텍스트 블록이 없습니다.");
     server.verify();
   }

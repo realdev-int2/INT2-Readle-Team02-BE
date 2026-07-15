@@ -60,8 +60,15 @@ public class QuizAttempt {
     return new QuizAttempt(quizSet, member);
   }
 
-  public void submit() {
+  public void markAsGrading() {
     if (this.status != AttemptStatus.IN_PROGRESS) {
+      throw new IllegalStateException("이미 제출되었거나 채점 중인 풀이 시도입니다.");
+    }
+    this.status = AttemptStatus.GRADING;
+  }
+
+  public void submit() {
+    if (this.status != AttemptStatus.IN_PROGRESS && this.status != AttemptStatus.GRADING) {
       throw new IllegalStateException("이미 제출된 풀이 시도입니다.");
     }
     this.status = AttemptStatus.SUBMITTED;

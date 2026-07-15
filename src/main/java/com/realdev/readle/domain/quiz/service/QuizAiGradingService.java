@@ -40,7 +40,7 @@ public class QuizAiGradingService {
             () -> doGrade(question, submittedAnswer, articleText, retriesLeft < 1),
             gradingExecutor);
 
-    return task.orTimeout(5, TimeUnit.SECONDS)
+    return task.orTimeout(3, TimeUnit.SECONDS)
         .exceptionallyCompose(
             ex -> {
               task.cancel(true);
@@ -80,8 +80,8 @@ public class QuizAiGradingService {
     // 2. 사용자 프롬프트 준비 (본문 격리)
     String userPrompt = "<source_content>\n" + articleText + "\n</source_content>";
 
-    // 3. Claude API 호출
-    String jsonResponse = claudeClient.getGeneratedText(systemPrompt, userPrompt);
+    // 3. Claude API 호출 (채점 전용 3초 타임아웃 클라이언트 사용)
+    String jsonResponse = claudeClient.getGradingGeneratedText(systemPrompt, userPrompt);
 
     // 4. 응답 파싱 및 검증
     ClaudeGradingResponseDto responseDto = parseAndValidate(jsonResponse);

@@ -57,7 +57,7 @@ class QuizAiGradingServiceTest {
   void gradeAnswerAsync_Success() throws Exception {
     // given
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
-    given(claudeClient.getGeneratedText(any(), any()))
+    given(claudeClient.getGradingGeneratedText(any(), any()))
         .willReturn("{\"isCorrect\": true, \"aiFeedback\": null}");
 
     // No need to stub ObjectMapper because it's real
@@ -71,7 +71,7 @@ class QuizAiGradingServiceTest {
     assertThat(result.isCorrect()).isTrue();
     assertThat(result.aiFeedback()).isNull();
     assertThat(result.submittedAnswer()).isEqualTo("한번만 생성됩니다");
-    verify(claudeClient, times(1)).getGeneratedText(any(), any());
+    verify(claudeClient, times(1)).getGradingGeneratedText(any(), any());
   }
 
   @Test
@@ -82,7 +82,7 @@ class QuizAiGradingServiceTest {
 
     // 첫번째 호출은 파싱 실패하게 만들응답
     // 두번째 호출은 정상 응답
-    given(claudeClient.getGeneratedText(any(), any()))
+    given(claudeClient.getGradingGeneratedText(any(), any()))
         .willReturn("invalid_json")
         .willReturn("{\"isCorrect\": false, \"aiFeedback\": \"틀림\"}");
 
@@ -96,8 +96,8 @@ class QuizAiGradingServiceTest {
     // then
     assertThat(result.isCorrect()).isFalse();
     assertThat(result.aiFeedback()).isEqualTo("틀림");
-    // getGeneratedText가 재시도 포함 총 2회 호출되어야 함
-    verify(claudeClient, times(2)).getGeneratedText(any(), any());
+    // getGradingGeneratedText가 재시도 포함 총 2회 호출되어야 함
+    verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
   }
 
   @Test
@@ -107,7 +107,8 @@ class QuizAiGradingServiceTest {
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
 
     // 계속 실패
-    given(claudeClient.getGeneratedText(any(), any())).willThrow(new RuntimeException("API Error"));
+    given(claudeClient.getGradingGeneratedText(any(), any()))
+        .willThrow(new RuntimeException("API Error"));
 
     // when
     CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
@@ -117,7 +118,7 @@ class QuizAiGradingServiceTest {
     // then
     assertThat(result.isCorrect()).isFalse(); // Fallback 처리됨
     assertThat(result.aiFeedback()).contains("연결이 원활하지 않아");
-    verify(claudeClient, times(2)).getGeneratedText(any(), any()); // 최초 + 1회 재시도 = 2번 호출
+    verify(claudeClient, times(2)).getGradingGeneratedText(any(), any()); // 최초 + 1회 재시도 = 2번 호출
   }
 
   @Test
@@ -126,7 +127,8 @@ class QuizAiGradingServiceTest {
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
 
     // 두 번 모두 isCorrect 필드가 누락된 JSON 반환
-    given(claudeClient.getGeneratedText(any(), any())).willReturn("{\"aiFeedback\": \"어쩌구저쩌구\"}");
+    given(claudeClient.getGradingGeneratedText(any(), any()))
+        .willReturn("{\"aiFeedback\": \"어쩌구저쩌구\"}");
 
     // No need to stub ObjectMapper
 
@@ -136,6 +138,29 @@ class QuizAiGradingServiceTest {
 
     assertThat(result.isCorrect()).isFalse(); // Fallback
     assertThat(result.aiFeedback()).contains("연결이 원활하지 않아");
-    verify(claudeClient, times(2)).getGeneratedText(any(), any());
+    verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
+  }
+
+  @Test
+  @DisplayName("AI 응답이 3초를 초과할 경우 타임아웃 발생 및 Fallback 처리")
+  void gradeAnswerAsync_Timeout() throws Exception {
+    given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
+
+    given(claudeClient.getGradingGeneratedText(any(), any()))
+        .willAnswer(
+            invocation -> {
+              Thread.sleep(4000); // 3초 타임아웃 초과 시뮬레이션
+              return "{\"isCorrect\": true, \"aiFeedback\": \"정답\"}";
+            });
+
+    CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
+        quizAiGradingService.gradeAnswerAsync(question, "지연 응답", "본문 텍스트");
+    QuizAiGradingService.AiEvaluationResult result = future.join();
+
+    assertThat(result.isCorrect()).isFalse(); // 타임아웃으로 인한 Fallback
+    assertThat(result.aiFeedback()).contains("연결이 원활하지 않아");
+
+    // 첫 호출에서 타임아웃나면 재시도 1번 더 하므로 2번 호출됨 (재시도도 타임아웃 남)
+    verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
   }
 }

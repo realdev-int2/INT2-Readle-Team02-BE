@@ -32,4 +32,24 @@ public class ClaudeConfig {
         .defaultHeader("content-type", MediaType.APPLICATION_JSON_VALUE)
         .build();
   }
+
+  @Bean
+  public RestClient gradingClaudeRestClient(
+      RestClient.Builder restClientBuilder, ClaudeProperties properties) {
+
+    // 퀴즈 채점 전용: 스레드 고갈 방지를 위해 타이트한 타임아웃(3초) 적용
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+
+    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+    requestFactory.setReadTimeout(Duration.ofSeconds(3));
+
+    return restClientBuilder
+        .clone()
+        .requestFactory(requestFactory)
+        .baseUrl(properties.getBaseUrl())
+        .defaultHeader("x-api-key", properties.getApiKey())
+        .defaultHeader("anthropic-version", properties.getVersion())
+        .defaultHeader("content-type", MediaType.APPLICATION_JSON_VALUE)
+        .build();
+  }
 }

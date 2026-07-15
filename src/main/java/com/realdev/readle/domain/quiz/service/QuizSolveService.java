@@ -29,8 +29,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -45,6 +47,7 @@ public class QuizSolveService {
   private final QuizResultRepository quizResultRepository;
   private final MemberRepository memberRepository;
   private final QuizAiGradingService quizAiGradingService;
+  private final TransactionTemplate transactionTemplate;
 
   @Transactional
   public Long startQuiz(Long quizSetId, String memberUuid) {
@@ -53,13 +56,11 @@ public class QuizSolveService {
             .findById(quizSetId)
             .orElseThrow(() -> new CustomException(QuizErrorCode.QUIZ_NOT_FOUND));
 
-    // 퀴즈 세트 상태 검증: COMPLETED 상태가 아니면 시작 불가
     if (quizSet.getStatus() != com.realdev.readle.domain.quiz.entity.QuizSetStatus.COMPLETED) {
       throw new CustomException(
           GlobalErrorCode.INVALID_INPUT, "아직 생성이 완료되지 않은 퀴즈 세트입니다. 현재 상태: " + quizSet.getStatus());
     }
 
-    // 권한 검증: quizSet의 content 작성자와 memberUuid가 일치하는지 확인
     if (!quizSet.getContent().getMember().getUuid().equals(memberUuid)) {
       throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 퀴즈에 대한 접근 권한이 없습니다.");
     }
@@ -95,23 +96,31 @@ public class QuizSolveService {
 
   public QuizSubmitResponse submitAnswers(
       Long attemptId, String memberUuid, QuizSubmitRequest request) {
-    QuizAttempt attempt =
-        quizAttemptRepository
-            .findById(attemptId)
-            .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
 
-    if (!attempt.getMember().getUuid().equals(memberUuid)) {
-      throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 풀이 정보에 대한 권한이 없습니다.");
-    }
+    // 1. Transaction 1: 비관적 락 획득 및 GRADING 상태 변경 (Race Condition 차단)
+    QuizAttempt lockedAttempt =
+        transactionTemplate.execute(
+            status -> {
+              QuizAttempt attempt =
+                  quizAttemptRepository
+                      .findByIdForUpdate(attemptId)
+                      .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
 
-    if (attempt.getStatus() != com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS) {
-      throw new CustomException(QuizErrorCode.ALREADY_SUBMITTED);
-    }
+              if (!attempt.getMember().getUuid().equals(memberUuid)) {
+                throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 풀이 정보에 대한 권한이 없습니다.");
+              }
+
+              try {
+                attempt.markAsGrading();
+              } catch (IllegalStateException e) {
+                throw new CustomException(QuizErrorCode.ALREADY_SUBMITTED);
+              }
+              return attempt;
+            });
 
     List<QuizQuestion> questions =
-        quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(attempt.getQuizSet());
+        quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(lockedAttempt.getQuizSet());
 
-    // 문제 수 확인
     if (questions.size() != request.getAnswers().size()) {
       throw new CustomException(QuizErrorCode.INVALID_ANSWER_COUNT);
     }
@@ -119,30 +128,36 @@ public class QuizSolveService {
     Map<Long, QuizSubmitRequest.AnswerRequest> answerMap = new HashMap<>();
     for (QuizSubmitRequest.AnswerRequest a : request.getAnswers()) {
       if (answerMap.containsKey(a.getQuestionId())) {
-        throw new IllegalArgumentException("중복된 문제 ID가 존재합니다: " + a.getQuestionId());
+        throw new CustomException(
+            GlobalErrorCode.INVALID_INPUT, "중복된 문제 ID가 존재합니다: " + a.getQuestionId());
       }
       answerMap.put(a.getQuestionId(), a);
+    }
+
+    // EVAL-04 가드레일: 본문 텍스트 확인
+    String articleText = "";
+    if (questions.stream().anyMatch(q -> q.getQuestionType() != QuestionType.MULTIPLE_CHOICE)) {
+      String raw = lockedAttempt.getQuizSet().getContent().getRawText();
+      String extracted = lockedAttempt.getQuizSet().getContent().getExtractedText();
+      articleText = raw != null ? raw : (extracted != null ? extracted : "");
+
+      if (articleText.isBlank()) {
+        throw new CustomException(QuizErrorCode.EMPTY_ARTICLE_TEXT);
+      }
     }
 
     List<QuizAnswer> staticAnswers = new ArrayList<>();
     List<CompletableFuture<QuizAiGradingService.AiEvaluationResult>> aiTasks = new ArrayList<>();
 
-    String articleText = "";
-    if (questions.stream().anyMatch(q -> q.getQuestionType() != QuestionType.MULTIPLE_CHOICE)) {
-      String raw = attempt.getQuizSet().getContent().getRawText();
-      String extracted = attempt.getQuizSet().getContent().getExtractedText();
-      articleText = raw != null ? raw : (extracted != null ? extracted : "");
-    }
-
     for (QuizQuestion question : questions) {
       QuizSubmitRequest.AnswerRequest answerReq = answerMap.get(question.getId());
       if (answerReq == null) {
-        throw new IllegalArgumentException("문제 ID " + question.getId() + "에 대한 답안이 누락되었습니다.");
+        throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
       }
 
       if (question.getQuestionType() == QuestionType.MULTIPLE_CHOICE) {
         if (answerReq.getSubmittedChoiceId() == null) {
-          throw new IllegalArgumentException("객관식 문제는 선택지 ID를 제출해야 합니다.");
+          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
 
         QuizChoice choice =
@@ -152,36 +167,35 @@ public class QuizSolveService {
                     () -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 선택지입니다."));
 
         if (!choice.getQuizQuestion().getId().equals(question.getId())) {
-          throw new IllegalArgumentException("선택한 답안이 해당 문제에 속하지 않습니다.");
+          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
 
-        boolean isCorrect = choice.getIsCorrect();
-        staticAnswers.add(QuizAnswer.createForChoice(attempt, question, choice, isCorrect));
+        staticAnswers.add(
+            QuizAnswer.createForChoice(lockedAttempt, question, choice, choice.getIsCorrect()));
       } else {
-        // 주관식/코드 빈칸 로직
-        if (answerReq.getSubmittedAnswerText() == null
-            || answerReq.getSubmittedAnswerText().trim().isEmpty()) {
-          throw new IllegalArgumentException("주관식 또는 코드 빈칸 문제는 텍스트 답안을 제출해야 합니다.");
+        String answerText = answerReq.getSubmittedAnswerText();
+        if (answerText == null || answerText.trim().isEmpty()) {
+          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
 
-        if (isStaticMatch(question.getCorrectAnswer(), answerReq.getSubmittedAnswerText())) {
-          // 1차 정적 매칭 통과 -> 즉시 정답 처리 (AI 호출 생략)
+        // EVAL-04 가드레일: 주관식/빈칸 답안 검증
+        if (answerText.length() > 300) {
+          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
+        }
+        if (answerText.matches("(?i).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
+          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
+        }
+
+        if (isStaticMatch(question.getCorrectAnswer(), answerText)) {
           staticAnswers.add(
-              QuizAnswer.createForWritten(
-                  attempt, question, answerReq.getSubmittedAnswerText(), true, null));
+              QuizAnswer.createForWritten(lockedAttempt, question, answerText, true, null));
         } else {
-          // 정적 매칭 실패 -> 비동기 병렬 AI 채점 태스크 등록
-          aiTasks.add(
-              quizAiGradingService.gradeAnswerAsync(
-                  question, answerReq.getSubmittedAnswerText(), articleText));
+          aiTasks.add(quizAiGradingService.gradeAnswerAsync(question, answerText, articleText));
         }
       }
     }
 
-    // 1. 정적 채점 결과 먼저 저장 (트랜잭션 분리)
-    quizAnswerRepository.saveAll(staticAnswers);
-
-    // 2. AI 비동기 채점 진행 및 저장
+    // 2. Non-Transactional: 비동기 채점 대기
     List<QuizAnswer> aiAnswers = new ArrayList<>();
     if (!aiTasks.isEmpty()) {
       CompletableFuture.allOf(aiTasks.toArray(new CompletableFuture[0])).join();
@@ -189,34 +203,47 @@ public class QuizSolveService {
         QuizAiGradingService.AiEvaluationResult aiResult = taskFuture.join();
         aiAnswers.add(
             QuizAnswer.createForWritten(
-                attempt,
+                lockedAttempt,
                 aiResult.question(),
                 aiResult.submittedAnswer(),
                 aiResult.isCorrect(),
                 aiResult.aiFeedback()));
       }
-      quizAnswerRepository.saveAll(aiAnswers);
     }
 
-    int correctCount =
-        (int)
-            Stream.concat(staticAnswers.stream(), aiAnswers.stream())
-                .filter(QuizAnswer::getIsCorrect)
-                .count();
+    // 3. Transaction 2: 최종 저장 및 SUBMITTED 처리
+    try {
+      return transactionTemplate.execute(
+          status -> {
+            QuizAttempt activeAttempt = quizAttemptRepository.findById(attemptId).orElseThrow();
 
-    attempt.submit();
-    quizAttemptRepository.save(attempt); // 명시적 저장
+            quizAnswerRepository.saveAll(staticAnswers);
+            quizAnswerRepository.saveAll(aiAnswers);
 
-    int solveDurationSeconds =
-        (int)
-            java.time.Duration.between(attempt.getStartedAt(), attempt.getSubmittedAt())
-                .getSeconds();
+            int correctCount =
+                (int)
+                    Stream.concat(staticAnswers.stream(), aiAnswers.stream())
+                        .filter(QuizAnswer::getIsCorrect)
+                        .count();
 
-    QuizResult result =
-        QuizResult.create(attempt, correctCount, questions.size(), solveDurationSeconds);
-    quizResultRepository.save(result);
+            activeAttempt.submit();
 
-    return QuizSubmitResponse.from(result);
+            int solveDurationSeconds =
+                (int)
+                    java.time.Duration.between(
+                            activeAttempt.getStartedAt(), activeAttempt.getSubmittedAt())
+                        .getSeconds();
+
+            QuizResult result =
+                QuizResult.create(
+                    activeAttempt, correctCount, questions.size(), solveDurationSeconds);
+            quizResultRepository.save(result);
+
+            return QuizSubmitResponse.from(result);
+          });
+    } catch (DataIntegrityViolationException e) {
+      throw new CustomException(QuizErrorCode.ALREADY_SUBMITTED);
+    }
   }
 
   private boolean isStaticMatch(String correct, String submitted) {

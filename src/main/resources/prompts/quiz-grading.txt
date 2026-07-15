@@ -21,5 +21,5 @@ ${userAnswer}
 [Required JSON Schema]
 {
   "isCorrect": true | false,
-  "aiFeedback": "Detailed, friendly developer-centric feedback explaining why the answer is correct or what was missed."
+  "aiFeedback": "If correct, a brief congratulatory or confirming message. If incorrect, a 2-3 sentence feedback explaining EXACTLY why the user's answer is wrong, followed by a suggestion on which specific concept from the source text they should review."
 }
