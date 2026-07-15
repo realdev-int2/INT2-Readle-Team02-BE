@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -30,10 +31,7 @@ public class SecurityConfig {
       throws Exception {
     return configureCommon(http, jwtService, errorResponseWriter)
         .securityMatcher("/api/auth/**")
-        .csrf(
-            csrf ->
-                csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
+        .csrf(this::configureCookieCsrf)
         .authorizeHttpRequests(
             auth ->
                 auth.requestMatchers(
@@ -73,10 +71,7 @@ public class SecurityConfig {
       throws Exception {
     return configureCommon(http, jwtService, errorResponseWriter)
         .securityMatcher("/**")
-        .csrf(
-            csrf ->
-                csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
+        .csrf(this::configureCookieCsrf)
         .authorizeHttpRequests(
             auth ->
                 auth.requestMatchers("/health", "/actuator/health/**")
@@ -106,5 +101,10 @@ public class SecurityConfig {
         .addFilterBefore(
             new JwtAuthenticationFilter(jwtService, errorResponseWriter),
             UsernamePasswordAuthenticationFilter.class);
+  }
+
+  private void configureCookieCsrf(CsrfConfigurer<HttpSecurity> csrf) {
+    csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler());
   }
 }
