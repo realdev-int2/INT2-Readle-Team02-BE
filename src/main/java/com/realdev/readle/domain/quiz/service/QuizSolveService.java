@@ -57,8 +57,7 @@ public class QuizSolveService {
             .orElseThrow(() -> new CustomException(QuizErrorCode.QUIZ_NOT_FOUND));
 
     if (quizSet.getStatus() != com.realdev.readle.domain.quiz.entity.QuizSetStatus.COMPLETED) {
-      throw new CustomException(
-          GlobalErrorCode.INVALID_INPUT, "아직 생성이 완료되지 않은 퀴즈 세트입니다. 현재 상태: " + quizSet.getStatus());
+      throw new CustomException(QuizErrorCode.QUIZ_NOT_COMPLETED);
     }
 
     if (!quizSet.getContent().getMember().getUuid().equals(memberUuid)) {
@@ -113,7 +112,7 @@ public class QuizSolveService {
               try {
                 attempt.markAsGrading();
               } catch (IllegalStateException e) {
-                throw new CustomException(QuizErrorCode.ALREADY_SUBMITTED);
+                throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
               }
               return attempt;
             });
@@ -179,7 +178,7 @@ public class QuizSolveService {
         }
 
         // EVAL-04 가드레일: 주관식/빈칸 답안 검증
-        if (answerText.length() > 300) {
+        if (answerText.length() > 100) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
         if (answerText.matches("(?i).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
@@ -239,10 +238,10 @@ public class QuizSolveService {
                     activeAttempt, correctCount, questions.size(), solveDurationSeconds);
             quizResultRepository.save(result);
 
-            return QuizSubmitResponse.from(result);
+            return QuizSubmitResponse.from(result, staticAnswers, aiAnswers);
           });
     } catch (DataIntegrityViolationException e) {
-      throw new CustomException(QuizErrorCode.ALREADY_SUBMITTED);
+      throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
     }
   }
 

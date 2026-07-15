@@ -206,7 +206,7 @@ class QuizSolveServiceTest {
   }
 
   @Test
-  @DisplayName("이미 제출 완료/진행중인 퀴즈 재제출 시 ALREADY_SUBMITTED 발생")
+  @DisplayName("이미 제출 완료/진행중인 퀴즈 재제출 시 ATTEMPT_ALREADY_SUBMITTED 발생")
   void submitAnswers_AlreadySubmitted() {
     given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
     lenient().doThrow(new IllegalStateException()).when(quizAttempt).markAsGrading();
@@ -216,7 +216,7 @@ class QuizSolveServiceTest {
     assertThatThrownBy(() -> quizSolveService.submitAnswers(200L, "test-uuid", request))
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
-        .isEqualTo(QuizErrorCode.ALREADY_SUBMITTED);
+        .isEqualTo(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
   }
 
   @Test
