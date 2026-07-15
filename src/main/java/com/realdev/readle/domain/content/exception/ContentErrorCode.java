@@ -20,7 +20,9 @@ public enum ContentErrorCode implements ErrorCode {
   MISSING_EXTRACTED_TEXT(
       HttpStatus.BAD_REQUEST, "URL 본문 추출 결과가 누락되었습니다. 먼저 본문 추출을 완료한 후 등록을 요청해 주세요."),
   UNNECESSARY_TEXT(HttpStatus.BAD_REQUEST, "URL 입력 시 text 필드는 비어 있어야 합니다."),
-  UNNECESSARY_URL_INFO(HttpStatus.BAD_REQUEST, "텍스트 입력 시 url 및 extractedText 필드는 비어 있어야 합니다.");
+  UNNECESSARY_URL_INFO(HttpStatus.BAD_REQUEST, "텍스트 입력 시 url 및 extractedText 필드는 비어 있어야 합니다."),
+  CONTENT_VALIDATION_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "검증 대상 콘텐츠의 검증 이력을 찾을 수 없습니다."),
+  INVALID_AI_VALIDATION_RESPONSE(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 응답 스키마가 유효하지 않습니다.");
 
   private final HttpStatus status;
   private final String message;
