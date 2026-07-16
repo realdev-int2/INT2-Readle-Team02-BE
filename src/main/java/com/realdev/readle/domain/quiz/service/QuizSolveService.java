@@ -124,6 +124,18 @@ public class QuizSolveService {
       answerMap.put(a.getQuestionId(), a);
     }
 
+    // 주관식/빈칸용 본문 텍스트 확인 (트랜잭션 시작 전 차단)
+    String articleText = "";
+    if (questions.stream().anyMatch(q -> q.getQuestionType() != QuestionType.MULTIPLE_CHOICE)) {
+      String raw = preAttempt.getQuizSet().getContent().getRawText();
+      String extracted = preAttempt.getQuizSet().getContent().getExtractedText();
+      articleText = raw != null ? raw : (extracted != null ? extracted : "");
+
+      if (articleText.isBlank()) {
+        throw new CustomException(QuizErrorCode.EMPTY_ARTICLE_TEXT);
+      }
+    }
+
     // 선택지 조회 및 주관식 가드레일 사전 검증 수행
     Map<Long, QuizChoice> choiceMap = new HashMap<>();
     for (QuizQuestion question : questions) {
@@ -150,11 +162,11 @@ public class QuizSolveService {
         if (answerText == null || answerText.trim().isEmpty()) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
-        // EVAL-04 가드레일: 주관식/빈칸 답안 검증 (트랜잭션 시작 전 차단)
+        // 주관식/빈칸 답안 검증 (트랜잭션 시작 전 차단)
         if (answerText.length() > 100) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
-        if (answerText.matches("(?i).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
+        if (answerText.matches("(?is).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
       }
@@ -180,18 +192,6 @@ public class QuizSolveService {
               }
               return attempt;
             });
-
-    // EVAL-04 가드레일: 본문 텍스트 확인
-    String articleText = "";
-    if (questions.stream().anyMatch(q -> q.getQuestionType() != QuestionType.MULTIPLE_CHOICE)) {
-      String raw = lockedAttempt.getQuizSet().getContent().getRawText();
-      String extracted = lockedAttempt.getQuizSet().getContent().getExtractedText();
-      articleText = raw != null ? raw : (extracted != null ? extracted : "");
-
-      if (articleText.isBlank()) {
-        throw new CustomException(QuizErrorCode.EMPTY_ARTICLE_TEXT);
-      }
-    }
 
     List<QuizAnswer> staticAnswers = new ArrayList<>();
     List<CompletableFuture<QuizAiGradingService.AiEvaluationResult>> aiTasks = new ArrayList<>();
