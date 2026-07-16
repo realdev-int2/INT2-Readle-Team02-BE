@@ -88,4 +88,11 @@ public class Member extends BaseTimeEntity {
       String profileImageUrl) {
     return new Member(oauthProvider, oauthId, email, nickname, profileImageUrl);
   }
+
+  public void updateLoginProfile(String email, String nickname, String profileImageUrl) {
+    this.email = email;
+    this.nickname = nickname;
+    this.profileImageUrl = profileImageUrl;
+    this.lastLoginAt = LocalDateTime.now();
+  }
 }
