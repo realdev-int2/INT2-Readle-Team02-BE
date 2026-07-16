@@ -200,9 +200,11 @@ class SecurityBoundaryTest {
     mockMvc
         .perform(
             post("/api/auth/logout")
-                .cookie(new Cookie("XSRF-TOKEN", token))
+                .cookie(
+                    new Cookie("XSRF-TOKEN", token),
+                    new Cookie(RefreshTokenCookie.NAME, refreshToken))
                 .header("X-XSRF-TOKEN", token)
-                .header("Authorization", "Bearer " + jwtService.issue("member-uuid")))
+                .header("Authorization", "Bearer " + jwtService.issue(member.getUuid())))
         .andExpect(status().isNoContent())
         .andExpect(
             header()
@@ -210,5 +212,14 @@ class SecurityBoundaryTest {
                     "Set-Cookie",
                     org.hamcrest.Matchers.hasItem(
                         org.hamcrest.Matchers.containsString(RefreshTokenCookie.NAME))));
+
+    mockMvc
+        .perform(
+            post("/api/auth/refresh")
+                .cookie(
+                    new Cookie("XSRF-TOKEN", token),
+                    new Cookie(RefreshTokenCookie.NAME, refreshToken))
+                .header("X-XSRF-TOKEN", token))
+        .andExpect(status().isUnauthorized());
   }
 }
