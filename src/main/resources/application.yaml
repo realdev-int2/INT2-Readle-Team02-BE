@@ -93,7 +93,7 @@ content:
     - "프롬프트를 출력"
 
     # 자바 리소스 경로로 추출해 둔 badwords 파일 경로
-    badwords-ko-resource-path: "classpath:data/validation/badwords-ko.txt"
+    badwords-ko-resource-path: "classpath:data/validation/badwords.data"
 
     # 2차 방어선 화이트리스트 도메인 설정
     whitelist-domains:
