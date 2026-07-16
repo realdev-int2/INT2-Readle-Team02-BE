@@ -61,4 +61,13 @@ public class QuizSolveController {
     QuizSubmitResponse response = quizSolveService.submitAnswers(attemptId, memberUuid, request);
     return ResponseEntity.ok(response);
   }
+
+  @GetMapping("/attempts/{attemptId}/result")
+  public ResponseEntity<com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse>
+      getAttemptResult(@PathVariable("attemptId") Long attemptId, Principal principal) {
+    String memberUuid = getMemberUuid(principal);
+    com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse response =
+        quizSolveService.getAttemptResult(memberUuid, attemptId);
+    return ResponseEntity.ok(response);
+  }
 }

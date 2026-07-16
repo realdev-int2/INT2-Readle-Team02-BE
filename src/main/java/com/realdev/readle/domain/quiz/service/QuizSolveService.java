@@ -3,8 +3,10 @@ package com.realdev.readle.domain.quiz.service;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.repository.MemberRepository;
 import com.realdev.readle.domain.quiz.dto.request.QuizSubmitRequest;
+import com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizDetailResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizSubmitResponse;
+import com.realdev.readle.domain.quiz.entity.AttemptStatus;
 import com.realdev.readle.domain.quiz.entity.QuestionType;
 import com.realdev.readle.domain.quiz.entity.QuizAnswer;
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
@@ -262,6 +264,35 @@ public class QuizSolveService {
     } catch (DataIntegrityViolationException e) {
       throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
     }
+  }
+
+  @Transactional(readOnly = true)
+  public QuizAttemptResultResponse getAttemptResult(String memberUuid, Long attemptId) {
+    QuizAttempt quizAttempt =
+        quizAttemptRepository
+            .findById(attemptId)
+            .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
+
+    if (!quizAttempt.getMember().getOauthId().equals(memberUuid)) {
+      throw new CustomException(QuizErrorCode.FORBIDDEN_ACCESS);
+    }
+
+    if (quizAttempt.getStatus() != AttemptStatus.SUBMITTED) {
+      throw new CustomException(QuizErrorCode.ATTEMPT_NOT_SUBMITTED);
+    }
+
+    QuizResult quizResult =
+        quizResultRepository
+            .findByQuizAttemptId(attemptId)
+            .orElseThrow(
+                () ->
+                    new CustomException(
+                        GlobalErrorCode.SERVER_ERROR, "해당 시도의 채점 결과 데이터가 존재하지 않습니다."));
+
+    List<QuizAnswer> quizAnswers =
+        quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(attemptId);
+
+    return QuizAttemptResultResponse.from(quizResult, quizAnswers);
   }
 
   private boolean isStaticMatch(String correct, String submitted) {

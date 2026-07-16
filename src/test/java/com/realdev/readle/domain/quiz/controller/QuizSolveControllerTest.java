@@ -4,17 +4,20 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.realdev.readle.domain.member.entity.Member;
+import com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse;
 import com.realdev.readle.domain.quiz.entity.AttemptStatus;
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import com.realdev.readle.domain.quiz.entity.QuizSet;
 import com.realdev.readle.domain.quiz.service.QuizSolveService;
 import com.realdev.readle.global.security.JwtService;
 import com.realdev.readle.global.security.SecurityConfig;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -86,5 +89,41 @@ class QuizSolveControllerTest {
         .andExpect(jsonPath("$.quizId").value(201))
         .andExpect(jsonPath("$.status").value("in_progress"))
         .andExpect(jsonPath("$.startedAt").value("2026-07-10T08:30:00"));
+  }
+
+  @Test
+  @DisplayName("GET /api/quizzes/attempts/{attemptId}/result - 학습 이력 상세 조회 성공 시 200 OK와 DTO를 반환한다")
+  void getAttemptResult_Success() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth =
+        new UsernamePasswordAuthenticationToken(memberUuid.toString(), null, List.of());
+
+    QuizAttemptResultResponse.QuestionResult qResult =
+        QuizAttemptResultResponse.QuestionResult.builder()
+            .questionId(10L)
+            .submittedAnswer("test answer")
+            .isCorrect(true)
+            .aiFeedback("good")
+            .build();
+
+    QuizAttemptResultResponse mockResponse =
+        QuizAttemptResultResponse.builder()
+            .accuracyRate(new BigDecimal("100.00"))
+            .correctCount(1)
+            .totalCount(1)
+            .solveDurationSeconds(60)
+            .completedAt(LocalDateTime.of(2026, 7, 10, 8, 31, 0))
+            .results(List.of(qResult))
+            .build();
+
+    when(quizSolveService.getAttemptResult(anyString(), anyLong())).thenReturn(mockResponse);
+
+    mockMvc
+        .perform(get("/api/quizzes/attempts/601/result").with(authentication(auth)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.accuracyRate").value(100.0))
+        .andExpect(jsonPath("$.correctCount").value(1))
+        .andExpect(jsonPath("$.results[0].questionId").value(10))
+        .andExpect(jsonPath("$.results[0].submittedAnswer").value("test answer"));
   }
 }

@@ -13,9 +13,11 @@ import static org.mockito.Mockito.verify;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.repository.MemberRepository;
 import com.realdev.readle.domain.quiz.dto.request.QuizSubmitRequest;
+import com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizSubmitResponse;
 import com.realdev.readle.domain.quiz.entity.AttemptStatus;
 import com.realdev.readle.domain.quiz.entity.QuestionType;
+import com.realdev.readle.domain.quiz.entity.QuizAnswer;
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import com.realdev.readle.domain.quiz.entity.QuizChoice;
 import com.realdev.readle.domain.quiz.entity.QuizQuestion;
@@ -403,5 +405,63 @@ class QuizSolveServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(GlobalErrorCode.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("getAttemptResult 성공 - 제출 완료된 퀴즈 결과를 조회한다")
+  void getAttemptResult_Success() {
+    given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
+    given(member.getOauthId()).willReturn("test-uuid");
+    given(quizAttempt.getStatus()).willReturn(AttemptStatus.SUBMITTED);
+
+    QuizResult mockResult = mock(QuizResult.class);
+    given(mockResult.getAccuracyRate()).willReturn(new java.math.BigDecimal("100.00"));
+    given(mockResult.getCorrectCount()).willReturn(2);
+    given(mockResult.getTotalCount()).willReturn(2);
+    given(mockResult.getSolveDurationSeconds()).willReturn(30);
+    given(mockResult.getCompletedAt()).willReturn(java.time.LocalDateTime.now());
+
+    given(quizResultRepository.findByQuizAttemptId(100L)).willReturn(Optional.of(mockResult));
+
+    QuizAnswer mockAnswer = mock(QuizAnswer.class);
+    given(mockAnswer.getQuizQuestion()).willReturn(question1);
+    given(mockAnswer.getSubmittedAnswerText()).willReturn("test");
+    given(mockAnswer.getIsCorrect()).willReturn(true);
+    given(mockAnswer.getAiFeedback()).willReturn("good");
+
+    given(quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(100L))
+        .willReturn(List.of(mockAnswer));
+
+    QuizAttemptResultResponse response = quizSolveService.getAttemptResult("test-uuid", 100L);
+
+    assertThat(response).isNotNull();
+    assertThat(response.getAccuracyRate()).isEqualTo(new java.math.BigDecimal("100.00"));
+    assertThat(response.getResults()).hasSize(1);
+    assertThat(response.getResults().get(0).getSubmittedAnswer()).isEqualTo("test");
+  }
+
+  @Test
+  @DisplayName("getAttemptResult 실패 - 타인의 이력 조회 시 FORBIDDEN_ACCESS 발생")
+  void getAttemptResult_Forbidden() {
+    given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
+    given(member.getOauthId()).willReturn("another-uuid");
+
+    assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.FORBIDDEN_ACCESS);
+  }
+
+  @Test
+  @DisplayName("getAttemptResult 실패 - 미제출 상태에서 조회 시 ATTEMPT_NOT_SUBMITTED 발생")
+  void getAttemptResult_NotSubmitted() {
+    given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
+    given(member.getOauthId()).willReturn("test-uuid");
+    given(quizAttempt.getStatus()).willReturn(AttemptStatus.IN_PROGRESS);
+
+    assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.ATTEMPT_NOT_SUBMITTED);
   }
 }
