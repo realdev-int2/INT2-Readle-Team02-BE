@@ -43,8 +43,10 @@ public class QuizDetailResponse {
         .quizSetId(attempt.getQuizSet().getId())
         .status(
             attempt.getStatus() == com.realdev.readle.domain.quiz.entity.AttemptStatus.GRADING
-                ? com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS.name()
-                : attempt.getStatus().name())
+                ? com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS
+                    .name()
+                    .toLowerCase()
+                : attempt.getStatus().name().toLowerCase())
         .questions(
             questions.stream()
                 .map(

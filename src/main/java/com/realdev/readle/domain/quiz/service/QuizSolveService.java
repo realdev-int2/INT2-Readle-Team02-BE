@@ -50,7 +50,7 @@ public class QuizSolveService {
   private final TransactionTemplate transactionTemplate;
 
   @Transactional
-  public Long startQuiz(Long quizSetId, String memberUuid) {
+  public QuizAttempt startQuiz(Long quizSetId, String memberUuid) {
     QuizSet quizSet =
         quizSetRepository
             .findById(quizSetId)
@@ -70,9 +70,7 @@ public class QuizSolveService {
             .orElseThrow(() -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 사용자입니다."));
 
     QuizAttempt attempt = QuizAttempt.createInProgress(quizSet, member);
-    quizAttemptRepository.save(attempt);
-
-    return attempt.getId();
+    return quizAttemptRepository.save(attempt);
   }
 
   @Transactional(readOnly = true)
