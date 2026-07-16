@@ -22,6 +22,9 @@ LocalStack은 시작 시 `S3_BUCKET` 버킷과 CORS를 생성한다.
 Compose가 실행된 뒤 호스트에서 백엔드를 실행한다. `.env.example`의 `SPRING_DATASOURCE_URL`은 호스트의 MySQL 포트(`localhost:3306`)를 사용한다.
 
 ```bash
+set -a
+source .env
+set +a
 SPRING_PROFILES_ACTIVE=local ./gradlew bootRun --no-daemon
 ```
 
