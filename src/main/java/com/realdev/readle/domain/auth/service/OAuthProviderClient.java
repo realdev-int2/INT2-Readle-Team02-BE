@@ -6,8 +6,10 @@ import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
 import java.util.Map;
-import org.springframework.core.ParameterizedTypeReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -18,11 +20,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Component
 public class OAuthProviderClient {
 
-  private final RestClient restClient;
-  private final SecurityProperties properties;
-
+  private static final Logger log = LoggerFactory.getLogger(OAuthProviderClient.class);
   private static final ParameterizedTypeReference<Map<String, Object>> JSON_OBJECT =
       new ParameterizedTypeReference<>() {};
+
+  private final RestClient restClient;
+  private final SecurityProperties properties;
 
   public OAuthProviderClient(
       @Qualifier("oauthRestClient") RestClient restClient, SecurityProperties properties) {
@@ -32,31 +35,39 @@ public class OAuthProviderClient {
 
   public String authorizationUrl(
       OAuthProvider provider, String state, String codeChallenge, String redirectUri) {
-    SecurityProperties.OAuthProviderSettings settings = settings(provider);
-    requireConfigured(settings);
-    return UriComponentsBuilder.fromUriString(settings.authorizationUrl())
-        .queryParam("response_type", "code")
-        .queryParam("client_id", settings.clientId())
-        .queryParam("redirect_uri", redirectUri)
-        .queryParam("state", state)
-        .queryParam("code_challenge", codeChallenge)
-        .queryParam("code_challenge_method", "S256")
-        .queryParam(
-            "scope",
-            provider == OAuthProvider.GOOGLE
-                ? "openid profile email"
-                : "profile_nickname account_email")
-        .encode()
-        .build()
-        .toUriString();
+    try {
+      SecurityProperties.OAuthProviderSettings settings = settings(provider);
+      requireConfigured(settings);
+      return UriComponentsBuilder.fromUriString(settings.authorizationUrl())
+          .queryParam("response_type", "code")
+          .queryParam("client_id", settings.clientId())
+          .queryParam("redirect_uri", redirectUri)
+          .queryParam("state", state)
+          .queryParam("code_challenge", codeChallenge)
+          .queryParam("code_challenge_method", "S256")
+          .queryParam(
+              "scope",
+              provider == OAuthProvider.GOOGLE
+                  ? "openid profile email"
+                  : "profile_nickname account_email")
+          .encode()
+          .build()
+          .toUriString();
+    } catch (CustomException exception) {
+      log.warn("OAuth provider={} reason=invalid_provider_response", provider);
+      throw exception;
+    } catch (RuntimeException exception) {
+      log.warn("OAuth provider={} exception={}", provider, exception.getClass().getSimpleName());
+      throw failure();
+    }
   }
 
   public OAuthProfile exchange(
       OAuthProvider provider, String code, String verifier, String redirectUri) {
-    if (code == null || code.isBlank()) {
-      throw failure();
-    }
     try {
+      if (code == null || code.isBlank()) {
+        throw failure();
+      }
       SecurityProperties.OAuthProviderSettings settings = settings(provider);
       requireConfigured(settings);
       MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
@@ -87,8 +98,10 @@ public class OAuthProviderClient {
               .body(JSON_OBJECT);
       return profile(provider, userInfo);
     } catch (CustomException exception) {
+      log.warn("OAuth provider={} reason=invalid_provider_response", provider);
       throw exception;
     } catch (RuntimeException exception) {
+      log.warn("OAuth provider={} exception={}", provider, exception.getClass().getSimpleName());
       throw failure();
     }
   }
