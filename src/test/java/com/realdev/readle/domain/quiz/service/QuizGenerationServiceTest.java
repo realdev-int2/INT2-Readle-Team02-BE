@@ -43,6 +43,7 @@ class QuizGenerationServiceTest {
   @Mock private ClaudeClient claudeClient;
   @Mock private PromptLoader promptLoader;
   @Mock private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+  @Mock private com.realdev.readle.domain.tag.service.TagService tagService;
 
   private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -61,6 +62,7 @@ class QuizGenerationServiceTest {
             claudeClient,
             promptLoader,
             objectMapper,
+            tagService,
             transactionTemplate);
 
     member = org.mockito.Mockito.mock(Member.class);
@@ -129,6 +131,8 @@ class QuizGenerationServiceTest {
 
     org.mockito.Mockito.verify(quizQuestionRepository, org.mockito.Mockito.times(1)).save(any());
     org.mockito.Mockito.verify(quizChoiceRepository, org.mockito.Mockito.times(2)).save(any());
+    org.mockito.Mockito.verify(tagService, org.mockito.Mockito.times(1))
+        .saveContentTags(any(), any());
   }
 
   @Test

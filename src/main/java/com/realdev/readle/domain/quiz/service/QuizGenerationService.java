@@ -16,6 +16,7 @@ import com.realdev.readle.domain.quiz.exception.QuizErrorCode;
 import com.realdev.readle.domain.quiz.repository.QuizChoiceRepository;
 import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
+import com.realdev.readle.domain.tag.service.TagService;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
@@ -38,6 +39,7 @@ public class QuizGenerationService {
   private final ClaudeClient claudeClient;
   private final PromptLoader promptLoader;
   private final ObjectMapper objectMapper;
+  private final TagService tagService;
 
   private final TransactionTemplate transactionTemplate;
 
@@ -188,6 +190,8 @@ public class QuizGenerationService {
                 }
               }
             }
+
+            tagService.saveContentTags(activeQuizSet.getContent(), parsedResponse.getTags());
 
             activeQuizSet.complete(orderNo - 1);
             return QuizCreateResponse.from(activeQuizSet);

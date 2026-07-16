@@ -100,6 +100,8 @@ class QuizConcurrencyTest {
     quizQuestionRepository.deleteAllInBatch();
     quizSetRepository.deleteAllInBatch();
     contentValidationRepository.deleteAllInBatch();
+    jdbcTemplate.execute("DELETE FROM content_tag");
+    jdbcTemplate.execute("DELETE FROM tag");
     jdbcTemplate.execute("DELETE FROM content");
     jdbcTemplate.execute("DELETE FROM member");
   }
