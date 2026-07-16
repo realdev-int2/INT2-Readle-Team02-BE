@@ -48,7 +48,9 @@ public record ClaudeValidationResponse(
             ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE,
             "유효하지 않은 rejectReasonCode입니다. 값: " + rejectReasonCode);
       }
-      if (evidenceSnippets == null || evidenceSnippets.isEmpty()) {
+      if (evidenceSnippets == null
+          || evidenceSnippets.isEmpty()
+          || evidenceSnippets.stream().allMatch(String::isBlank)) {
         throw new CustomException(
             ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE,
             "REJECTED 상태 시 evidenceSnippets는 필수입니다.");

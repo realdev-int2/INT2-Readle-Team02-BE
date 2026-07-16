@@ -35,7 +35,7 @@ public class AiValidationService {
   private final ClaudeClient claudeClient;
   private final ObjectMapper objectMapper;
 
-  @Qualifier("validationExecutor") private final Executor validationExecutor;
+  @Qualifier("claudeCallExecutor") private final Executor claudeCallExecutor;
 
   public void runAiValidation(Content content) {
     Long validationId = txHelper.createPendingValidation(content);
@@ -103,7 +103,8 @@ public class AiValidationService {
               logTokenUsage(validationId, response);
               return extractText(response);
             },
-            validationExecutor);
+            claudeCallExecutor);
+
     try {
       return future.get(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     } catch (java.util.concurrent.TimeoutException e) {
