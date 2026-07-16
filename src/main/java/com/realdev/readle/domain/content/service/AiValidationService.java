@@ -107,6 +107,11 @@ public class AiValidationService {
 
     try {
       return future.get(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      future.cancel(true);
+      Thread.currentThread().interrupt();
+      throw new CustomException(
+          GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 인터럽트가 발생했습니다.", e);
     } catch (java.util.concurrent.TimeoutException e) {
       future.cancel(true);
       throw new TimeoutRuntimeException(e);
@@ -120,6 +125,7 @@ public class AiValidationService {
       throw new CustomException(
           GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", cause);
     }
+
   }
 
   private void logTokenUsage(Long validationId, ClaudeResponse response) {
