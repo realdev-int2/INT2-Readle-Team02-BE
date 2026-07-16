@@ -6,6 +6,7 @@ import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
 import java.util.Map;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -18,6 +19,9 @@ public class OAuthProviderClient {
 
   private final RestClient restClient;
   private final SecurityProperties properties;
+
+  private static final ParameterizedTypeReference<Map<String, Object>> JSON_OBJECT =
+      new ParameterizedTypeReference<>() {};
 
   public OAuthProviderClient(RestClient.Builder restClientBuilder, SecurityProperties properties) {
     this.restClient = restClientBuilder.build();
@@ -67,7 +71,7 @@ public class OAuthProviderClient {
               .contentType(MediaType.APPLICATION_FORM_URLENCODED)
               .body(form)
               .retrieve()
-              .body(Map.class);
+              .body(JSON_OBJECT);
       String accessToken = value(token, "access_token");
       if (accessToken == null || accessToken.isBlank()) {
         throw failure();
@@ -78,7 +82,7 @@ public class OAuthProviderClient {
               .uri(settings.userInfoUrl())
               .header("Authorization", "Bearer " + accessToken)
               .retrieve()
-              .body(Map.class);
+              .body(JSON_OBJECT);
       return profile(provider, userInfo);
     } catch (CustomException exception) {
       throw exception;
