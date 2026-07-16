@@ -1,11 +1,15 @@
 package com.realdev.readle.domain.auth.controller;
 
+import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.realdev.readle.domain.auth.RefreshTokenCookie;
@@ -98,11 +102,30 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE,
-                    org.hamcrest.Matchers.hasItems(
-                        containsString(RefreshTokenCookie.NAME),
-                        containsString(STATE_COOKIE + "=;"))));
+                    hasItem(
+                        allOf(
+                            containsString(RefreshTokenCookie.NAME),
+                            containsString("HttpOnly"),
+                            containsString("Secure"),
+                            containsString("Path=/"),
+                            containsString("SameSite=Lax")))))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
 
     verify(authService).callback("google", "authorization-code", "expected-state");
+  }
+
+  @Test
+  void refreshReturnsAccessToken() throws Exception {
+    when(refreshTokenService.refresh("refresh-token")).thenReturn("access-token");
+
+    mockMvc
+        .perform(
+            post("/api/auth/refresh").cookie(new Cookie(RefreshTokenCookie.NAME, "refresh-token")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.accessToken").value("access-token"));
   }
 
   @Test
