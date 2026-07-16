@@ -2,6 +2,7 @@ package com.realdev.readle.domain.quiz.dto.response;
 
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,7 +23,7 @@ public class QuizAttemptStartResponse {
     return QuizAttemptStartResponse.builder()
         .attemptId(attempt.getId())
         .quizId(attempt.getQuizSet().getId())
-        .status(attempt.getStatus().name().toLowerCase())
+        .status(attempt.getStatus().name().toLowerCase(Locale.ROOT))
         .startedAt(attempt.getStartedAt())
         .build();
   }

@@ -85,6 +85,7 @@ class QuizSolveServiceTest {
     lenient().when(quizAttempt.getQuizSet()).thenReturn(quizSet);
     lenient().when(quizAttempt.getMember()).thenReturn(member);
     lenient().when(quizAttempt.getStatus()).thenReturn(AttemptStatus.IN_PROGRESS);
+    lenient().when(quizAttemptRepository.findById(200L)).thenReturn(Optional.of(quizAttempt));
     lenient()
         .when(quizAttempt.getStartedAt())
         .thenReturn(java.time.LocalDateTime.now().minusMinutes(5));
@@ -197,7 +198,6 @@ class QuizSolveServiceTest {
   @Test
   @DisplayName("권한 없는 사용자 제출 시 FORBIDDEN 발생")
   void submitAnswers_Forbidden() {
-    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
     QuizSubmitRequest request = new QuizSubmitRequest();
 
     assertThatThrownBy(() -> quizSolveService.submitAnswers(200L, "wrong-uuid", request))
@@ -209,8 +209,7 @@ class QuizSolveServiceTest {
   @Test
   @DisplayName("이미 제출 완료/진행중인 퀴즈 재제출 시 ATTEMPT_ALREADY_SUBMITTED 발생")
   void submitAnswers_AlreadySubmitted() {
-    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
-    lenient().doThrow(new IllegalStateException()).when(quizAttempt).markAsGrading();
+    given(quizAttempt.getStatus()).willReturn(AttemptStatus.SUBMITTED);
 
     QuizSubmitRequest request = new QuizSubmitRequest();
 
@@ -223,7 +222,6 @@ class QuizSolveServiceTest {
   @Test
   @DisplayName("100자 초과 또는 악의적 패턴 답안 제출 시 INVALID_ANSWER_FORMAT 방어 (EVAL-04)")
   void submitAnswers_Guardrail() {
-    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
     given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
         .willReturn(List.of(question1, question2));
     given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
@@ -243,12 +241,15 @@ class QuizSolveServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.INVALID_ANSWER_FORMAT);
+
+    assertThat(quizAttempt.getStatus()).isEqualTo(AttemptStatus.IN_PROGRESS);
+    verify(quizAttempt, times(0)).markAsGrading();
+    verify(quizAttemptRepository, times(0)).findByIdForUpdate(any());
   }
 
   @Test
   @DisplayName("100자를 초과하는 주관식 답안 제출 시 즉시 INVALID_ANSWER_FORMAT 예외가 발생한다")
   void submitAnswers_Guardrail_Length() {
-    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
     given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
         .willReturn(List.of(question1, question2));
     given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
@@ -268,16 +269,33 @@ class QuizSolveServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.INVALID_ANSWER_FORMAT);
+
+    assertThat(quizAttempt.getStatus()).isEqualTo(AttemptStatus.IN_PROGRESS);
+    verify(quizAttempt, times(0)).markAsGrading();
+    verify(quizAttemptRepository, times(0)).findByIdForUpdate(any());
   }
 
   @Test
   @DisplayName("비관적 락 동시성 테스트 시뮬레이션 (Race Condition 방어)")
   void submitAnswers_Concurrency() {
+    given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
+        .willReturn(List.of(question1, question2));
+    given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
+
     // 락을 획득하려 할 때 예외가 발생함을 가정 (다른 스레드가 이미 점유 중이거나 타임아웃)
     given(quizAttemptRepository.findByIdForUpdate(200L))
         .willThrow(new org.springframework.dao.CannotAcquireLockException("Lock timeout"));
 
     QuizSubmitRequest request = new QuizSubmitRequest();
+    QuizSubmitRequest.AnswerRequest ans1 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans1, "questionId", 10L);
+    ReflectionTestUtils.setField(ans1, "submittedChoiceId", 50L);
+
+    QuizSubmitRequest.AnswerRequest ans2 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans2, "questionId", 11L);
+    ReflectionTestUtils.setField(ans2, "submittedAnswerText", "스프링 프레임워크");
+
+    ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
 
     assertThatThrownBy(() -> quizSolveService.submitAnswers(200L, "test-uuid", request))
         .isInstanceOf(org.springframework.dao.CannotAcquireLockException.class);
@@ -286,7 +304,6 @@ class QuizSolveServiceTest {
   @Test
   @DisplayName("트랜잭션 중간 실패 시 롤백 테스트 (DB 반영 전 예외 발생)")
   void submitAnswers_TransactionRollback() {
-    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
     given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
         .willReturn(List.of(question1, question2));
     given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
