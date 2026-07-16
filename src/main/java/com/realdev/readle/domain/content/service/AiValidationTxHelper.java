@@ -43,7 +43,7 @@ public class AiValidationTxHelper {
 
     if (status == ValidationStatus.REJECTED) {
       RejectReasonCode reasonCode = RejectReasonCode.valueOf(response.rejectReasonCode());
-      String snippetsJson = serializeSnippets(response.evidenceSnippets());
+      String snippetsJson = serializeSnippets(validationId, response.evidenceSnippets());
       validation.markRejected(score, reasonCode, snippetsJson);
     } else {
       validation.markPassed(score);
@@ -66,7 +66,7 @@ public class AiValidationTxHelper {
                     "존재하지 않는 검증 대상입니다. ID: " + validationId));
   }
 
-  private String serializeSnippets(List<String> snippets) {
+  private String serializeSnippets(Long validationId, List<String> snippets) {
     if (snippets == null || snippets.isEmpty()) {
       return null;
     }
@@ -75,7 +75,7 @@ public class AiValidationTxHelper {
     } catch (Exception e) {
       // evidence_snippets는 DB 스키마상 유효한 JSON 배열이어야 하므로,
       // 직렬화 실패 시 잘못된 형식(toString())을 저장하지 않고 null로 남긴 뒤 로그로 추적
-      log.error("[AI_VALIDATION] evidenceSnippets 직렬화 실패. validationId={}", snippets, e);
+      log.error("[AI_VALIDATION] evidenceSnippets 직렬화 실패. validationId={}", validationId, e);
       return null;
     }
   }
