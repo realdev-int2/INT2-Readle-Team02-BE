@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.entity.OAuthProvider;
 import com.realdev.readle.domain.member.repository.MemberRepository;
-import com.realdev.readle.domain.member.service.OAuthMemberService;
 import com.realdev.readle.domain.member.service.OAuthProfile;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
@@ -18,7 +17,6 @@ import com.realdev.readle.global.security.SecurityProperties;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -29,9 +27,8 @@ class AuthServiceTest {
 
   @Mock private OAuthStateService stateService;
   @Mock private OAuthProviderClient providerClient;
-  @Mock private OAuthMemberService memberService;
   @Mock private MemberRepository memberRepository;
-  @Mock private RefreshTokenService refreshTokenService;
+  @Mock private OAuthLoginService loginService;
   @Mock private SecurityProperties properties;
 
   @InjectMocks private AuthService authService;
@@ -63,11 +60,10 @@ class AuthServiceTest {
   }
 
   @Test
-  void completesCallbackWithNullEmailProfileBeforeIssuingRefreshToken() {
+  void completesCallbackWithProfileThroughOAuthLoginService() {
     OAuthStateService.ConsumedOAuthState consumed =
         new OAuthStateService.ConsumedOAuthState("/library", "code-verifier");
     OAuthProfile profile = new OAuthProfile(OAuthProvider.GOOGLE, "subject", null, "Readler", null);
-    Member member = Member.create(OAuthProvider.GOOGLE, "subject", null, "Readler", null);
     when(properties.backendOrigin()).thenReturn("https://api.readle.test");
     when(stateService.consume(OAuthProvider.GOOGLE, "state")).thenReturn(consumed);
     when(providerClient.exchange(
@@ -76,14 +72,12 @@ class AuthServiceTest {
             "code-verifier",
             "https://api.readle.test/api/auth/google/callback"))
         .thenReturn(profile);
-    when(memberService.upsert(profile)).thenReturn(member);
-    when(refreshTokenService.issue(member)).thenReturn("refresh-token");
+    when(loginService.login(profile)).thenReturn("refresh-token");
 
     AuthService.CallbackResult result =
         authService.callback("google", "authorization-code", "state");
 
-    ArgumentCaptor<OAuthProfile> upsertedProfile = ArgumentCaptor.forClass(OAuthProfile.class);
-    InOrder ordered = inOrder(stateService, providerClient, memberService, refreshTokenService);
+    InOrder ordered = inOrder(stateService, providerClient, loginService);
     ordered.verify(stateService).consume(OAuthProvider.GOOGLE, "state");
     ordered
         .verify(providerClient)
@@ -92,9 +86,7 @@ class AuthServiceTest {
             "authorization-code",
             "code-verifier",
             "https://api.readle.test/api/auth/google/callback");
-    ordered.verify(memberService).upsert(upsertedProfile.capture());
-    ordered.verify(refreshTokenService).issue(member);
-    assertThat(upsertedProfile.getValue().email()).isNull();
+    ordered.verify(loginService).login(profile);
     assertThat(result.returnTo()).isEqualTo("/library");
     assertThat(result.refreshToken()).isEqualTo("refresh-token");
   }
@@ -106,8 +98,7 @@ class AuthServiceTest {
         .extracting("errorCode")
         .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
 
-    verifyNoInteractions(
-        stateService, providerClient, memberService, refreshTokenService, properties);
+    verifyNoInteractions(stateService, providerClient, loginService, properties);
   }
 
   @Test
@@ -127,15 +118,15 @@ class AuthServiceTest {
     assertThatThrownBy(() -> authService.callback("google", "authorization-code", "state"))
         .isSameAs(exchangeFailure);
 
-    verifyNoInteractions(memberService, refreshTokenService);
+    verifyNoInteractions(loginService);
   }
 
   @Test
-  void avoidsIssuingRefreshTokenWhenMemberUpsertFailsAfterStateConsumptionAndExchange() {
+  void avoidsLoginFinalizationWhenMemberUpsertFailsAfterStateConsumptionAndExchange() {
     OAuthStateService.ConsumedOAuthState consumed =
         new OAuthStateService.ConsumedOAuthState("/library", "code-verifier");
     OAuthProfile profile = new OAuthProfile(OAuthProvider.GOOGLE, "subject", null, "Readler", null);
-    RuntimeException upsertFailure = new RuntimeException("member upsert failed");
+    RuntimeException finalizeFailure = new RuntimeException("member upsert failed");
     when(properties.backendOrigin()).thenReturn("https://api.readle.test");
     when(stateService.consume(OAuthProvider.GOOGLE, "state")).thenReturn(consumed);
     when(providerClient.exchange(
@@ -144,12 +135,21 @@ class AuthServiceTest {
             "code-verifier",
             "https://api.readle.test/api/auth/google/callback"))
         .thenReturn(profile);
-    when(memberService.upsert(profile)).thenThrow(upsertFailure);
+    when(loginService.login(profile)).thenThrow(finalizeFailure);
 
     assertThatThrownBy(() -> authService.callback("google", "authorization-code", "state"))
-        .isSameAs(upsertFailure);
+        .isSameAs(finalizeFailure);
 
-    verifyNoInteractions(refreshTokenService);
+    InOrder ordered = inOrder(stateService, providerClient, loginService);
+    ordered.verify(stateService).consume(OAuthProvider.GOOGLE, "state");
+    ordered
+        .verify(providerClient)
+        .exchange(
+            OAuthProvider.GOOGLE,
+            "authorization-code",
+            "code-verifier",
+            "https://api.readle.test/api/auth/google/callback");
+    ordered.verify(loginService).login(profile);
   }
 
   @Test

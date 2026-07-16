@@ -3,35 +3,32 @@ package com.realdev.readle.domain.auth.service;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.entity.OAuthProvider;
 import com.realdev.readle.domain.member.repository.MemberRepository;
-import com.realdev.readle.domain.member.service.OAuthMemberService;
 import com.realdev.readle.domain.member.service.OAuthProfile;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
 
   private final OAuthStateService stateService;
   private final OAuthProviderClient providerClient;
-  private final OAuthMemberService memberService;
+  private final OAuthLoginService loginService;
   private final MemberRepository memberRepository;
-  private final RefreshTokenService refreshTokenService;
   private final SecurityProperties properties;
 
   public AuthService(
       OAuthStateService stateService,
       OAuthProviderClient providerClient,
-      OAuthMemberService memberService,
       MemberRepository memberRepository,
-      RefreshTokenService refreshTokenService,
+      OAuthLoginService loginService,
       SecurityProperties properties) {
     this.stateService = stateService;
     this.providerClient = providerClient;
-    this.memberService = memberService;
     this.memberRepository = memberRepository;
-    this.refreshTokenService = refreshTokenService;
+    this.loginService = loginService;
     this.properties = properties;
   }
 
@@ -50,10 +47,11 @@ public class AuthService {
     OAuthStateService.ConsumedOAuthState consumed = stateService.consume(provider, state);
     OAuthProfile profile =
         providerClient.exchange(provider, code, consumed.codeVerifier(), callbackUri(provider));
-    Member member = memberService.upsert(profile);
-    return new CallbackResult(consumed.returnTo(), refreshTokenService.issue(member));
+    String refreshToken = loginService.login(profile);
+    return new CallbackResult(consumed.returnTo(), refreshToken);
   }
 
+  @Transactional(readOnly = true)
   public Member currentMember(String uuid) {
     return memberRepository
         .findByUuid(uuid)
