@@ -8,6 +8,8 @@ import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Auth", description = "OAuth2/JWT 인증 API")
 public class AuthController {
 
   private final AuthService authService;
@@ -43,6 +46,7 @@ public class AuthController {
     this.properties = properties;
   }
 
+  @Operation(summary = "OAuth 로그인 시작", description = "OAuth 제공자로 리디렉션하고 OAuth 상태 쿠키를 설정합니다.")
   @GetMapping("/auth/{provider}/start")
   public ResponseEntity<Void> start(
       @PathVariable String provider, @RequestParam(required = false) String returnTo) {
@@ -55,6 +59,9 @@ public class AuthController {
         .build();
   }
 
+  @Operation(
+      summary = "OAuth 로그인 콜백",
+      description = "인증 코드를 처리하고 리프레시 토큰 쿠키를 설정한 뒤 반환 경로로 리디렉션합니다.")
   @GetMapping("/auth/{provider}/callback")
   public ResponseEntity<Void> callback(
       @PathVariable String provider,
@@ -73,12 +80,14 @@ public class AuthController {
         .build();
   }
 
+  @Operation(summary = "Access Token 갱신", description = "리프레시 토큰 쿠키로 액세스 토큰을 발급합니다.")
   @PostMapping("/auth/refresh")
   public ApiResponse<Map<String, String>> refresh(
       @CookieValue(value = RefreshTokenCookie.NAME, required = false) String refreshToken) {
     return new ApiResponse<>(Map.of("accessToken", refreshTokenService.refresh(refreshToken)));
   }
 
+  @Operation(summary = "로그아웃", description = "현재 리프레시 토큰을 폐기하고 쿠키를 삭제합니다.")
   @PostMapping("/auth/logout")
   public ResponseEntity<Void> logout(
       Authentication authentication,
@@ -93,6 +102,7 @@ public class AuthController {
         .build();
   }
 
+  @Operation(summary = "세션 상태 조회", description = "현재 액세스 토큰과 리프레시 토큰의 인증 상태를 조회합니다.")
   @GetMapping("/auth/session")
   public ApiResponse<SessionResponse> session(
       Authentication authentication,
@@ -108,6 +118,7 @@ public class AuthController {
     return new ApiResponse<>(new SessionResponse(authenticated, authenticated ? uuid : null));
   }
 
+  @Operation(summary = "현재 사용자 조회", description = "인증된 회원의 기본 정보를 조회합니다.")
   @GetMapping("/users/me")
   public ApiResponse<CurrentUserResponse> currentUser(Authentication authentication) {
     String uuid = String.valueOf(authentication.getPrincipal());
