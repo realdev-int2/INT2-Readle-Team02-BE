@@ -8,7 +8,6 @@ import com.realdev.readle.domain.content.service.ContentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,7 +40,8 @@ public class ContentController {
       description = "URL 추출 결과 또는 텍스트를 DB에 저장하고 검증 대기(pending) 응답을 반환합니다.")
   @PostMapping
   public ResponseEntity<ContentCreateResponse> create(
-      @AuthenticationPrincipal UUID memberUuid, @Valid @RequestBody ContentCreateRequest request) {
+      @AuthenticationPrincipal String memberUuid,
+      @Valid @RequestBody ContentCreateRequest request) {
     ContentCreateResponse response = contentService.createContent(request, memberUuid);
     return ResponseEntity.status(HttpStatus.CREATED).body(response);
   }

@@ -58,10 +58,10 @@ class ContentServiceTest {
   @Test
   @DisplayName("UUID에 해당하는 회원이 없으면 MEMBER_NOT_FOUND 예외가 발생한다")
   void createContent_memberNotFound_throwsMemberNotFound() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문");
 
-    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.empty());
+    when(memberRepository.findByUuid(memberUuid)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
         .isInstanceOf(CustomException.class)
@@ -72,7 +72,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("텍스트가 15,000자를 초과하면 DB 조회 없이 CONTENT_TOO_LARGE 예외가 발생한다")
   void createContent_textTooLarge_throwsBeforeDbQuery() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "제목", null, null, "가".repeat(15_001));
 
@@ -87,13 +87,13 @@ class ContentServiceTest {
   @Test
   @DisplayName("텍스트가 정확히 15,000자이면 예외 없이 정상 저장된다")
   void createContent_textExactly15000_success() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Member mockMember = mockMember();
     String text = "가".repeat(15_000);
     ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, text);
     Content savedContent = stubSave(Content.fromText(mockMember, "제목", text), 1L);
 
-    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.of(mockMember));
+    when(memberRepository.findByUuid(memberUuid)).thenReturn(Optional.of(mockMember));
     when(contentRepository.save(any(Content.class))).thenReturn(savedContent);
 
     ContentCreateResponse response = contentService.createContent(request, memberUuid);
@@ -104,7 +104,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=URL일 때 text 필드가 주어지면 UNNECESSARY_TEXT 예외가 발생한다")
   void createContent_urlType_withText_throwsUnnecessaryText() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(
             InputType.URL, "제목", "https://example.com", "정상적인 추출 본문", "본문 텍스트");
@@ -120,7 +120,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=TEXT이고 title이 null이면 text 앞 30자가 제목으로 저장된다")
   void createContent_textType_nullTitle_useFirst30Chars() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Member mockMember = mockMember();
     String text = "가".repeat(50);
     ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, null, null, null, text);
@@ -136,7 +136,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=TEXT이고 title이 공백이면 text 앞 30자가 제목으로 저장된다")
   void createContent_textType_blankTitle_useFirst30Chars() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Member mockMember = mockMember();
     String text = "나".repeat(50);
     ContentCreateRequest request =
@@ -153,7 +153,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=TEXT이고 text가 30자 미만이면 text 전체가 제목으로 저장된다")
   void createContent_textType_blankTitle_textShorterThan30Chars() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Member mockMember = mockMember();
     String text = "짧은 본문";
     ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "", null, null, text);
@@ -169,7 +169,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=TEXT이고 title이 주어지면 제공된 title이 그대로 저장된다")
   void createContent_textType_titleProvided_usesProvidedTitle() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Member mockMember = mockMember();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "직접 입력한 제목", null, null, "본문 내용");
@@ -185,7 +185,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=TEXT이면 crawlStatus=NOT_APPLICABLE, rawText가 저장되고 originalUrl은 null이다")
   void createContent_textType_mapsCorrectly() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Member mockMember = mockMember();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문 내용");
@@ -205,7 +205,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=URL이면 crawlStatus=SUCCESS, originalUrl과 extractedText가 저장된다")
   void createContent_urlType_mapsCorrectly() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Member mockMember = mockMember();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "https://example.com", "추출된 본문", null);
@@ -225,12 +225,12 @@ class ContentServiceTest {
   @Test
   @DisplayName("정상 저장 후 contentId와 validationStatus=PENDING이 반환된다")
   void createContent_returnsPendingStatus() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Member mockMember = mockMember();
     ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문");
     Content savedContent = stubSave(Content.fromText(mockMember, "제목", "본문"), 42L);
 
-    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.of(mockMember));
+    when(memberRepository.findByUuid(memberUuid)).thenReturn(Optional.of(mockMember));
     when(contentRepository.save(any(Content.class))).thenReturn(savedContent);
 
     ContentCreateResponse response = contentService.createContent(request, memberUuid);
@@ -241,10 +241,11 @@ class ContentServiceTest {
   }
 
   @Test
-  @DisplayName("inputType=URL이고 url이 null이면 400 INVALID_INPUT 예외가 발생한다")
-  void createContent_urlType_nullUrl_throwsInvalidInput() {
-    UUID memberUuid = UUID.randomUUID();
-    ContentCreateRequest request = new ContentCreateRequest(InputType.URL, "제목", null, null, null);
+  @DisplayName("inputType=URL이고 url이 null이면 URL_REQUIRED 예외가 발생한다")
+  void createContent_urlType_nullUrl_throwsUrlRequired() {
+    String memberUuid = UUID.randomUUID().toString();
+    ContentCreateRequest request =
+        new ContentCreateRequest(InputType.URL, "제목", null, "추출된 본문", null);
 
     assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
         .isInstanceOf(CustomException.class)
@@ -255,9 +256,9 @@ class ContentServiceTest {
   }
 
   @Test
-  @DisplayName("inputType=TEXT이고 text가 null이면 400 INVALID_INPUT 예외가 발생한다")
-  void createContent_textType_nullText_throwsInvalidInput() {
-    UUID memberUuid = UUID.randomUUID();
+  @DisplayName("inputType=TEXT이고 text가 null이면 TEXT_REQUIRED 예외가 발생한다")
+  void createContent_textType_nullText_throwsTextRequired() {
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, null);
 
     assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
@@ -271,7 +272,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=URL이고 extractedText가 null이면 MISSING_EXTRACTED_TEXT 예외가 발생한다")
   void createContent_urlType_nullExtractedText_throwsMissingExtractedText() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "https://example.com", null, null);
 
@@ -286,7 +287,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=URL이고 extractedText가 15,000자를 초과하면 CONTENT_TOO_LARGE 예외가 발생한다")
   void createContent_urlType_extractedTextTooLarge_throwsContentTooLarge() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(
             InputType.URL, "제목", "https://example.com", "가".repeat(15_001), null);
@@ -302,7 +303,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=TEXT일 때 url 필드가 주어지면 UNNECESSARY_URL_INFO 예외가 발생한다")
   void createContent_textType_withUrl_throwsUnnecessaryUrlInfo() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "제목", "https://example.com", null, "본문 내용");
 
@@ -317,7 +318,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=TEXT일 때 extractedText 필드가 주어지면 UNNECESSARY_URL_INFO 예외가 발생한다")
   void createContent_textType_withExtractedText_throwsUnnecessaryUrlInfo() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "제목", null, "추출된 본문", "본문 내용");
 
@@ -332,7 +333,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=URL일 때 title 필드가 누락되면 TITLE_REQUIRED 예외가 발생한다")
   void createContent_urlType_nullTitle_throwsTitleRequired() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, null, "https://example.com", "본문", null);
 
@@ -347,7 +348,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=URL일 때 title 필드가 255자를 초과하면 TITLE_TOO_LONG 예외가 발생한다")
   void createContent_urlType_titleTooLong_throwsTitleTooLong() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "가".repeat(256), "https://example.com", "본문", null);
 
@@ -362,7 +363,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=TEXT일 때 title 필드가 255자를 초과하면 TITLE_TOO_LONG 예외가 발생한다")
   void createContent_textType_titleTooLong_throwsTitleTooLong() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "가".repeat(256), null, null, "본문");
 
@@ -377,7 +378,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=URL일 때 잘못된 스킴의 URL 형식이면 INVALID_URL 예외가 발생한다")
   void createContent_urlType_invalidUrlFormat_throwsInvalidUrl() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "ftp://example.com", "본문", null);
 
@@ -392,7 +393,7 @@ class ContentServiceTest {
   @Test
   @DisplayName("inputType=URL일 때 호스트가 누락된 URL 형식이면 INVALID_URL 예외가 발생한다")
   void createContent_urlType_missingHost_throwsInvalidUrl() {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "https:example.com", "본문", null);
 
@@ -415,8 +416,8 @@ class ContentServiceTest {
     return content;
   }
 
-  private void setupMemberAndCaptureContent(UUID memberUuid, Member mockMember) {
-    when(memberRepository.findByUuid(memberUuid.toString())).thenReturn(Optional.of(mockMember));
+  private void setupMemberAndCaptureContent(String memberUuid, Member mockMember) {
+    when(memberRepository.findByUuid(memberUuid)).thenReturn(Optional.of(mockMember));
     when(contentRepository.save(contentCaptor.capture()))
         .thenAnswer(invocation -> invocation.getArgument(0));
   }
