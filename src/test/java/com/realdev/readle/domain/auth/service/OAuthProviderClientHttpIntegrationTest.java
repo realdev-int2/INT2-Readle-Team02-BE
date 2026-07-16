@@ -7,6 +7,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -14,6 +15,7 @@ import com.realdev.readle.domain.member.entity.OAuthProvider;
 import com.realdev.readle.domain.member.service.OAuthProfile;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
+import java.io.IOException;
 import java.util.List;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
@@ -213,6 +215,22 @@ class OAuthProviderClientHttpIntegrationTest {
         .expect(requestTo(GOOGLE_TOKEN_URL))
         .andExpect(method(HttpMethod.POST))
         .andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+
+    assertOAuthFailure(
+        () ->
+            client.exchange(
+                OAuthProvider.GOOGLE,
+                "code",
+                "verifier",
+                "https://readle.test/api/auth/google/callback"));
+  }
+
+  @Test
+  void mapsTokenTransportFailureToOnlyOAuthFailure() {
+    server
+        .expect(requestTo(GOOGLE_TOKEN_URL))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withException(new IOException("transport failure")));
 
     assertOAuthFailure(
         () ->

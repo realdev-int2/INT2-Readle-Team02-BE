@@ -39,23 +39,9 @@ class OAuthProviderClientTest {
 
   @Test
   void mapsMissingGoogleConfigurationToOAuthFailure() {
-    SecurityProperties configured = properties();
-    SecurityProperties missingConfiguration =
-        new SecurityProperties(
-            configured.jwtIssuer(),
-            configured.jwtSecret(),
-            configured.jwtAudience(),
-            configured.accessTokenMinutes(),
-            configured.refreshTokenDays(),
-            configured.stateEncryptionKey(),
-            configured.stateMinutes(),
-            configured.backendOrigin(),
-            configured.allowedReturnPaths(),
-            new SecurityProperties.OAuthProviders(
-                new SecurityProperties.OAuthProviderSettings("", "", "", "", ""),
-                configured.oauth().kakao()));
     OAuthProviderClient unconfiguredClient =
-        new OAuthProviderClient(RestClient.builder(), missingConfiguration);
+        new OAuthProviderClient(
+            RestClient.builder().build(), propertiesWithMissingGoogleConfiguration());
 
     assertThatThrownBy(
             () ->
@@ -63,6 +49,24 @@ class OAuthProviderClientTest {
                     OAuthProvider.GOOGLE,
                     "code",
                     "verifier",
+                    "https://readle.test/api/auth/google/callback"))
+        .isInstanceOf(com.realdev.readle.global.exception.CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
+  }
+
+  @Test
+  void mapsMissingGoogleConfigurationToOAuthFailureWhenBuildingAuthorizationUrl() {
+    OAuthProviderClient unconfiguredClient =
+        new OAuthProviderClient(
+            RestClient.builder().build(), propertiesWithMissingGoogleConfiguration());
+
+    assertThatThrownBy(
+            () ->
+                unconfiguredClient.authorizationUrl(
+                    OAuthProvider.GOOGLE,
+                    "state",
+                    "code-challenge",
                     "https://readle.test/api/auth/google/callback"))
         .isInstanceOf(com.realdev.readle.global.exception.CustomException.class)
         .extracting("errorCode")
@@ -137,5 +141,22 @@ class OAuthProviderClientTest {
                 "https://kauth.kakao.test/oauth/authorize",
                 "https://kauth.kakao.test/oauth/token",
                 "https://kapi.kakao.test/v2/user/me")));
+  }
+
+  private SecurityProperties propertiesWithMissingGoogleConfiguration() {
+    SecurityProperties configured = properties();
+    return new SecurityProperties(
+        configured.jwtIssuer(),
+        configured.jwtSecret(),
+        configured.jwtAudience(),
+        configured.accessTokenMinutes(),
+        configured.refreshTokenDays(),
+        configured.stateEncryptionKey(),
+        configured.stateMinutes(),
+        configured.backendOrigin(),
+        configured.allowedReturnPaths(),
+        new SecurityProperties.OAuthProviders(
+            new SecurityProperties.OAuthProviderSettings("", "", "", "", ""),
+            configured.oauth().kakao()));
   }
 }
