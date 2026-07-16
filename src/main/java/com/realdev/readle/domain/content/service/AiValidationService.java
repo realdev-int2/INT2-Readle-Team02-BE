@@ -61,8 +61,13 @@ public class AiValidationService {
         String rawText = callClaudeWithTimeout(systemPrompt, userPrompt, validationId);
         String cleaned = stripMarkdownFence(rawText);
 
-        ClaudeValidationResponse response =
-            objectMapper.readValue(cleaned, ClaudeValidationResponse.class);
+        ClaudeValidationResponse response;
+        try {
+          response = objectMapper.readValue(cleaned, ClaudeValidationResponse.class);
+        } catch (JsonProcessingException e) {
+          throw new CustomException(
+              ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE, "JSON 파싱에 실패했습니다.", e);
+        }
         response.validateSchema();
 
         txHelper.updateValidationSuccess(validationId, response);
@@ -111,19 +116,33 @@ public class AiValidationService {
       future.cancel(true);
       Thread.currentThread().interrupt();
       throw new CustomException(
-          GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 인터럽트가 발생했습니다.", e);
+          ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude 호출 중 인터럽트가 발생했습니다.", e);
     } catch (java.util.concurrent.TimeoutException e) {
       future.cancel(true);
-      throw new TimeoutRuntimeException(e);
-    } catch (Exception e) {
-      // future.get()의 InterruptedException/ExecutionException 등은 원인을 그대로 전달해
-      // determineErrorCode에서 실제 원인 타입으로 분기할 수 있게 한다.
-      Throwable cause = e.getCause() != null ? e.getCause() : e;
-      if (cause instanceof RuntimeException re) {
-        throw re;
+      throw new CustomException(
+          ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 호출 시간이 초과되었습니다.", e);
+    } catch (java.util.concurrent.ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof ResourceAccessException rae) {
+        if (rae.getCause() instanceof java.net.SocketTimeoutException) {
+          throw new CustomException(
+              ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 소켓 연결 시간이 초과되었습니다.", rae);
+        }
+        throw new CustomException(
+            ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude API 네트워크 오류가 발생했습니다.", rae);
+      }
+      if (cause instanceof RestClientResponseException rcre) {
+        throw new CustomException(
+            ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude API HTTP 오류가 발생했습니다.", rcre);
+      }
+      if (cause instanceof CustomException ce) {
+        throw ce;
       }
       throw new CustomException(
           GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", cause);
+    } catch (Exception e) {
+      throw new CustomException(
+          GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", e);
     }
 
   }
@@ -181,32 +200,18 @@ public class AiValidationService {
   }
 
   private ErrorCode determineErrorCode(Throwable t) {
-    if (t instanceof TimeoutRuntimeException) {
-      return ErrorCode.TIMEOUT;
-    }
-    if (t instanceof ResourceAccessException rae) {
-      return rae.getCause() instanceof SocketTimeoutException
-          ? ErrorCode.TIMEOUT
-          : ErrorCode.AI_SERVICE_ERROR;
-    }
-    if (t instanceof RestClientResponseException) {
-      return ErrorCode.AI_SERVICE_ERROR;
-    }
-    if (t instanceof IllegalStateException) {
-      // Claude 응답 구조 자체가 깨짐 (비어있는 응답, 텍스트 블록 없음, 원시 응답 파싱 실패)
-      return ErrorCode.AI_SERVICE_ERROR;
-    }
-    if (t instanceof JsonProcessingException || t instanceof CustomException) {
-      // Claude 응답은 받았으나 우리 검증 스키마(JSON 구조/필드/값 범위)를 위반
-      return ErrorCode.SCHEMA_INVALID;
+    if (t instanceof CustomException ce) {
+      if (ce.getErrorCode() == ContentErrorCode.AI_VALIDATION_TIMEOUT) {
+        return ErrorCode.TIMEOUT;
+      }
+      if (ce.getErrorCode() == ContentErrorCode.AI_VALIDATION_SERVICE_ERROR) {
+        return ErrorCode.AI_SERVICE_ERROR;
+      }
+      if (ce.getErrorCode() == ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE) {
+        return ErrorCode.SCHEMA_INVALID;
+      }
     }
     return ErrorCode.UNKNOWN_ERROR;
-  }
-
-  private static class TimeoutRuntimeException extends RuntimeException {
-    TimeoutRuntimeException(TimeoutException cause) {
-      super(cause);
-    }
   }
 
   private String getSystemPrompt() {

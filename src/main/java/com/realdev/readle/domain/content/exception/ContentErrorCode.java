@@ -22,7 +22,10 @@ public enum ContentErrorCode implements ErrorCode {
   UNNECESSARY_TEXT(HttpStatus.BAD_REQUEST, "URL 입력 시 text 필드는 비어 있어야 합니다."),
   UNNECESSARY_URL_INFO(HttpStatus.BAD_REQUEST, "텍스트 입력 시 url 및 extractedText 필드는 비어 있어야 합니다."),
   CONTENT_VALIDATION_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "검증 대상 콘텐츠의 검증 이력을 찾을 수 없습니다."),
-  INVALID_AI_VALIDATION_RESPONSE(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 응답 스키마가 유효하지 않습니다.");
+  INVALID_AI_VALIDATION_RESPONSE(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 응답 스키마가 유효하지 않습니다."),
+  AI_VALIDATION_TIMEOUT(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 요청 시간이 초과되었습니다."),
+  AI_VALIDATION_SERVICE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 서비스 연동 중 오류가 발생했습니다.");
+
 
   private final HttpStatus status;
   private final String message;
