@@ -14,7 +14,9 @@ import com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse;
 import com.realdev.readle.domain.quiz.entity.AttemptStatus;
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import com.realdev.readle.domain.quiz.entity.QuizSet;
+import com.realdev.readle.domain.quiz.exception.QuizErrorCode;
 import com.realdev.readle.domain.quiz.service.QuizSolveService;
+import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.security.JwtService;
 import com.realdev.readle.global.security.SecurityConfig;
 import java.math.BigDecimal;
@@ -125,5 +127,47 @@ class QuizSolveControllerTest {
         .andExpect(jsonPath("$.correctCount").value(1))
         .andExpect(jsonPath("$.results[0].questionId").value(10))
         .andExpect(jsonPath("$.results[0].submittedAnswer").value("test answer"));
+  }
+
+  @Test
+  @DisplayName("GET /api/quizzes/attempts/{attemptId}/result - 존재하지 않는 시도면 404 NOT_FOUND를 반환한다")
+  void getAttemptResult_NotFound() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid.toString(), null, List.of());
+
+    when(quizSolveService.getAttemptResult(anyString(), anyLong()))
+        .thenThrow(new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
+
+    mockMvc
+        .perform(get("/api/quizzes/attempts/601/result").with(authentication(auth)))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  @DisplayName("GET /api/quizzes/attempts/{attemptId}/result - 타인의 시도를 조회하면 403 FORBIDDEN을 반환한다")
+  void getAttemptResult_Forbidden() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid.toString(), null, List.of());
+
+    when(quizSolveService.getAttemptResult(anyString(), anyLong()))
+        .thenThrow(new CustomException(QuizErrorCode.FORBIDDEN_ACCESS));
+
+    mockMvc
+        .perform(get("/api/quizzes/attempts/601/result").with(authentication(auth)))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("GET /api/quizzes/attempts/{attemptId}/result - 미제출 상태에서 조회 시 400 BAD_REQUEST를 반환한다")
+  void getAttemptResult_NotSubmitted() throws Exception {
+    UUID memberUuid = UUID.randomUUID();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid.toString(), null, List.of());
+
+    when(quizSolveService.getAttemptResult(anyString(), anyLong()))
+        .thenThrow(new CustomException(QuizErrorCode.ATTEMPT_NOT_SUBMITTED));
+
+    mockMvc
+        .perform(get("/api/quizzes/attempts/601/result").with(authentication(auth)))
+        .andExpect(status().isBadRequest());
   }
 }

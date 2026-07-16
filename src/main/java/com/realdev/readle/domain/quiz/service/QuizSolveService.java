@@ -273,7 +273,7 @@ public class QuizSolveService {
             .findById(attemptId)
             .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
 
-    if (!quizAttempt.getMember().getOauthId().equals(memberUuid)) {
+    if (!quizAttempt.getMember().getUuid().equals(memberUuid)) {
       throw new CustomException(QuizErrorCode.FORBIDDEN_ACCESS);
     }
 

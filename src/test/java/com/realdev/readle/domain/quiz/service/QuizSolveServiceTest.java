@@ -411,7 +411,7 @@ class QuizSolveServiceTest {
   @DisplayName("getAttemptResult 성공 - 제출 완료된 퀴즈 결과를 조회한다")
   void getAttemptResult_Success() {
     given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
-    given(member.getOauthId()).willReturn("test-uuid");
+    given(member.getUuid()).willReturn("test-uuid");
     given(quizAttempt.getStatus()).willReturn(AttemptStatus.SUBMITTED);
 
     QuizResult mockResult = mock(QuizResult.class);
@@ -444,7 +444,7 @@ class QuizSolveServiceTest {
   @DisplayName("getAttemptResult 실패 - 타인의 이력 조회 시 FORBIDDEN_ACCESS 발생")
   void getAttemptResult_Forbidden() {
     given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
-    given(member.getOauthId()).willReturn("another-uuid");
+    given(member.getUuid()).willReturn("another-uuid");
 
     assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 100L))
         .isInstanceOf(CustomException.class)
@@ -456,12 +456,23 @@ class QuizSolveServiceTest {
   @DisplayName("getAttemptResult 실패 - 미제출 상태에서 조회 시 ATTEMPT_NOT_SUBMITTED 발생")
   void getAttemptResult_NotSubmitted() {
     given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
-    given(member.getOauthId()).willReturn("test-uuid");
+    given(member.getUuid()).willReturn("test-uuid");
     given(quizAttempt.getStatus()).willReturn(AttemptStatus.IN_PROGRESS);
 
     assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 100L))
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.ATTEMPT_NOT_SUBMITTED);
+  }
+
+  @Test
+  @DisplayName("getAttemptResult 실패 - 시도 ID가 존재하지 않으면 ATTEMPT_NOT_FOUND 발생")
+  void getAttemptResult_NotFound() {
+    given(quizAttemptRepository.findById(100L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.ATTEMPT_NOT_FOUND);
   }
 }
