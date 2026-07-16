@@ -4,6 +4,7 @@ import com.realdev.readle.domain.quiz.dto.request.QuizSubmitRequest;
 import com.realdev.readle.domain.quiz.dto.response.QuizAttemptStartResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizDetailResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizSubmitResponse;
+import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import com.realdev.readle.domain.quiz.service.QuizSolveService;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
@@ -39,8 +40,8 @@ public class QuizSolveController {
   public ResponseEntity<QuizAttemptStartResponse> startQuiz(
       @PathVariable("quizSetId") Long quizSetId, Principal principal) {
     String memberUuid = getMemberUuid(principal);
-    Long attemptId = quizSolveService.startQuiz(quizSetId, memberUuid);
-    return ResponseEntity.ok(QuizAttemptStartResponse.of(attemptId));
+    QuizAttempt attempt = quizSolveService.startQuiz(quizSetId, memberUuid);
+    return ResponseEntity.ok(QuizAttemptStartResponse.of(attempt));
   }
 
   @GetMapping("/attempts/{attemptId}")

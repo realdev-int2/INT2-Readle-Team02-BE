@@ -5,6 +5,7 @@ import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import com.realdev.readle.domain.quiz.entity.QuizChoice;
 import com.realdev.readle.domain.quiz.entity.QuizQuestion;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Getter;
@@ -43,8 +44,10 @@ public class QuizDetailResponse {
         .quizSetId(attempt.getQuizSet().getId())
         .status(
             attempt.getStatus() == com.realdev.readle.domain.quiz.entity.AttemptStatus.GRADING
-                ? com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS.name()
-                : attempt.getStatus().name())
+                ? com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS
+                    .name()
+                    .toLowerCase(Locale.ROOT)
+                : attempt.getStatus().name().toLowerCase(Locale.ROOT))
         .questions(
             questions.stream()
                 .map(
