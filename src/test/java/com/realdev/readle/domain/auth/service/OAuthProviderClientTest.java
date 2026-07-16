@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.realdev.readle.domain.member.entity.OAuthProvider;
+import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
 import java.nio.charset.StandardCharsets;
@@ -69,6 +70,17 @@ class OAuthProviderClientTest {
                     "code-challenge",
                     "https://readle.test/api/auth/google/callback"))
         .isInstanceOf(com.realdev.readle.global.exception.CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
+  }
+
+  @Test
+  void mapsMissingGoogleConfigurationToOAuthFailureWhenCheckingConfiguration() {
+    OAuthProviderClient unconfiguredClient =
+        new OAuthProviderClient(RestClient.builder().build(), propertiesWithNullOAuth());
+
+    assertThatThrownBy(() -> unconfiguredClient.requireConfigured(OAuthProvider.GOOGLE))
+        .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
   }
@@ -158,5 +170,19 @@ class OAuthProviderClientTest {
         new SecurityProperties.OAuthProviders(
             new SecurityProperties.OAuthProviderSettings("", "", "", "", ""),
             configured.oauth().kakao()));
+  }
+
+  private SecurityProperties propertiesWithNullOAuth() {
+    return new SecurityProperties(
+        "issuer",
+        "01234567890123456789012345678901",
+        "readle-api",
+        30,
+        14,
+        "MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+        10,
+        "https://readle.test",
+        List.of("/", "/dashboard"),
+        null);
   }
 }
