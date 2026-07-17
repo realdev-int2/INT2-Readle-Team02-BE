@@ -68,3 +68,46 @@ security:
       authorization-url: https://kauth.kakao.com/oauth/authorize
       token-url: https://kauth.kakao.com/oauth/token
       user-info-url: https://kapi.kakao.com/v2/user/me
+
+content:
+  validation:
+    # 1차 방어선 가드레일 설정
+    min-length: 300
+    max-attempts: 2
+    retry-delay-ms: 1000
+    call-timeout-seconds: 5
+    prompt-injection-keywords:
+    # 지침 무시형 (영어 정형 템플릿 - 실제 유포되는 탈옥 프롬프트에 흔함, 오탐 위험 낮음)
+    - "ignore all previous instructions"
+    - "ignore the above instructions"
+    - "disregard all previous"
+
+    # 결과 조작형 (이 서비스를 표적으로 한 자연스러운 시도 - 세희님 제안)
+    - "무조건 통과"
+    - "무조건 적합"
+    - "무조건 PASSED"
+    - "반드시 통과"
+    - "검증 점수 100"
+    - "validation_score"
+    - "validationScore"
+
+    # 시스템 프롬프트 유출 시도 (자연스러운 호기심성 시도 - "숨겨진 뭔가 보여줘")
+    - "탈옥 프롬프트"
+    - "프롬프트를 출력"
+
+    # 자바 리소스 경로로 추출해 둔 badwords 파일 경로
+    badwords-ko-resource-path: "classpath:data/validation/badwords.data"
+
+    # 2차 방어선 화이트리스트 도메인 설정
+    whitelist-domains:
+      # 국내 기업 기술 블로그
+      - techblog.woowahan.com   # 우아한형제들
+      - toss.tech                # 토스
+      - engineering.linecorp.com # 라인
+      - d2.naver.com             # 네이버 D2
+      - tech.kakao.com           # 카카오
+      - oliveyoung.tech          # 올리브영
+
+      # 공식 문서/레퍼런스
+      - developer.mozilla.org
+      - docs.spring.io

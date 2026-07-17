@@ -19,6 +19,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ public class ContentService {
   private final WebCrawler webCrawler;
   private final ContentRepository contentRepository;
   private final MemberRepository memberRepository;
+  private final ApplicationEventPublisher eventPublisher;
 
   public ContentExtractResponse extract(ContentExtractRequest request) {
     WebCrawler.CrawledDocument crawledDocument = webCrawler.crawl(request.url());
@@ -52,6 +54,8 @@ public class ContentService {
     // 2. 저장
     Content content = buildContent(request, member);
     Content saved = contentRepository.save(content);
+
+    eventPublisher.publishEvent(new ContentCreatedEvent(saved.getId(), memberUuid));
 
     return new ContentCreateResponse(saved.getId(), ValidationStatus.PENDING);
   }

@@ -43,3 +43,17 @@ security:
   state-minutes: 10
   backend-origin: http://localhost:8080
   allowed-return-paths: /
+
+content:
+  validation:
+    min-length: 300
+
+    max-attempts: 2
+    retry-delay-ms: 1000
+    call-timeout-seconds: 5
+    prompt-injection-keywords:
+      - "ignore all previous instructions"
+      - "무조건 통과"
+    badwords-ko-resource-path: "classpath:data/validation/badwords.data"
+    whitelist-domains:
+      - "example.com"

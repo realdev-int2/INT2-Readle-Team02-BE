@@ -30,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +39,7 @@ class ContentServiceTest {
   @Mock private WebCrawler webCrawler;
   @Mock private ContentRepository contentRepository;
   @Mock private MemberRepository memberRepository;
+  @Mock private ApplicationEventPublisher eventPublisher;
   @InjectMocks private ContentService contentService;
 
   @Test
@@ -235,6 +237,7 @@ class ContentServiceTest {
 
     assertThat(response.contentId()).isEqualTo(42L);
     assertThat(response.validationStatus()).isEqualTo(ValidationStatus.PENDING);
+    verify(eventPublisher).publishEvent(new ContentCreatedEvent(42L, memberUuid));
   }
 
   @Test
