@@ -1,6 +1,8 @@
 package com.realdev.readle.domain.quiz.entity;
 
 import com.realdev.readle.domain.member.entity.Member;
+import com.realdev.readle.domain.quiz.exception.QuizErrorCode;
+import com.realdev.readle.global.exception.CustomException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -62,14 +64,14 @@ public class QuizAttempt {
 
   public void markAsGrading() {
     if (this.status != AttemptStatus.IN_PROGRESS) {
-      throw new IllegalStateException("이미 제출되었거나 채점 중인 풀이 시도입니다.");
+      throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
     }
     this.status = AttemptStatus.GRADING;
   }
 
   public void submit() {
     if (this.status != AttemptStatus.IN_PROGRESS && this.status != AttemptStatus.GRADING) {
-      throw new IllegalStateException("이미 제출된 풀이 시도입니다.");
+      throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
     }
     this.status = AttemptStatus.SUBMITTED;
     this.submittedAt = LocalDateTime.now();

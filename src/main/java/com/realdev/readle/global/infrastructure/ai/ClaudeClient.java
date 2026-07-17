@@ -41,19 +41,15 @@ public class ClaudeClient {
   }
 
   // 기본 모델(properties.getModel())을 사용하는 기본 버전
-  public ClaudeResponse generateMessage(String systemPrompt, String userPrompt) {
-    return generateMessage(properties.getModel(), systemPrompt, userPrompt);
+  private ClaudeResponse generateMessage(String systemPrompt, String userPrompt) {
+    return generateMessageInternal(
+        claudeRestClient, properties.getModel(), systemPrompt, userPrompt);
   }
 
-  // 외부 주입된 가변 모델명을 사용하며 일시적 에러(429/5xx/네트워크 끊김)에 대해서만 1회 재시도하는 오버로딩 버전
-  public ClaudeResponse generateMessage(String model, String systemPrompt, String userPrompt) {
-    return generateMessageInternal(claudeRestClient, model, systemPrompt, userPrompt);
-  }
-
-  // 채점 전용 (3초 타임아웃 클라이언트 사용)
-  public ClaudeResponse generateGradingMessage(
-      String model, String systemPrompt, String userPrompt) {
-    return generateMessageInternal(gradingClaudeRestClient, model, systemPrompt, userPrompt);
+  // 채점 전용 (3초 타임아웃 클라이언트 사용, 자체 재시도 없음)
+  private ClaudeResponse generateGradingMessage(String systemPrompt, String userPrompt) {
+    return executeGenerateMessage(
+        gradingClaudeRestClient, properties.getModel(), systemPrompt, userPrompt);
   }
 
   // 콘텐츠 검증 전용 (readTimeout 4초 클라이언트 사용)
@@ -135,19 +131,13 @@ public class ClaudeClient {
 
   // 기본 모델(properties.getModel())을 사용하는 기본 버전
   public String getGeneratedText(String systemPrompt, String userPrompt) {
-    return getGeneratedText(properties.getModel(), systemPrompt, userPrompt);
-  }
-
-  // 외부 주입된 가변 모델명을 사용하는 오버로딩 버전
-  public String getGeneratedText(String model, String systemPrompt, String userPrompt) {
-    ClaudeResponse response = generateMessage(model, systemPrompt, userPrompt);
+    ClaudeResponse response = generateMessage(systemPrompt, userPrompt);
     return extractTextFromResponse(response);
   }
 
   // 채점 전용 오버로딩 (3초 타임아웃)
   public String getGradingGeneratedText(String systemPrompt, String userPrompt) {
-    ClaudeResponse response =
-        generateGradingMessage(properties.getModel(), systemPrompt, userPrompt);
+    ClaudeResponse response = generateGradingMessage(systemPrompt, userPrompt);
     return extractTextFromResponse(response);
   }
 
@@ -161,8 +151,8 @@ public class ClaudeClient {
         response.getContent().stream()
             .filter(block -> "text".equals(block.getType()))
             .map(ClaudeResponse.Content::getText)
-            .findFirst()
-            .orElse(null);
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.joining("\n"));
 
     if (generatedText == null || generatedText.isBlank()) {
       throw new CustomException(GlobalErrorCode.SERVER_ERROR, "Claude API 응답에 유효한 텍스트 블록이 없습니다.");

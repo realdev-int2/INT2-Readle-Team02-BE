@@ -194,7 +194,7 @@ class QuizGenerationServiceTest {
     assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
-        .isEqualTo(QuizErrorCode.QUIZ_GENERATION_FAILED);
+        .isEqualTo(QuizErrorCode.EMPTY_SOURCE_TEXT_FOR_QUIZ);
 
     // 예외 보상 상태 전이 검증 (FAILED 상태 전이 확인)
     assertThat(expectedQuizSet.getStatus())
@@ -392,5 +392,66 @@ class QuizGenerationServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.QUIZ_GENERATION_FAILED);
+  }
+
+  @Test
+  @DisplayName("코드 없는 본문에 AI가 CODE_BLANK만 반환하면 생성된 문제 0개로 실패 처리")
+  void createQuizSet_ThrowsWhenGeneratedQuestionCountIsZero() {
+    // given
+    given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
+    given(contentValidationRepository.findByIdWithContent(100L))
+        .willReturn(Optional.of(validation));
+
+    // 코드가 없는 본문으로 설정 (hasCode = false)
+    org.mockito.BDDMockito.lenient()
+        .when(content.getRawText())
+        .thenReturn("이것은 코드가 전혀 없는 순수 텍스트 본문입니다.");
+
+    given(transactionTemplate.execute(any()))
+        .willAnswer(
+            invocation -> {
+              org.springframework.transaction.support.TransactionCallback callback =
+                  invocation.getArgument(0);
+              return callback.doInTransaction(null);
+            });
+
+    QuizSet expectedQuizSet = QuizSet.create(content, validation, false);
+    ReflectionTestUtils.setField(expectedQuizSet, "id", 200L);
+    given(quizSetRepository.saveAndFlush(any(QuizSet.class))).willReturn(expectedQuizSet);
+    given(quizSetRepository.findById(200L)).willReturn(Optional.of(expectedQuizSet));
+    given(promptLoader.loadPrompt(anyString(), any())).willReturn("system prompt");
+
+    // AI가 CODE_BLANK 하나만 반환하도록 설정
+    String claudeJsonResponse =
+        """
+            {
+              "tags": ["Test"],
+              "quizzes": [
+                {
+                  "id": 1,
+                  "type": "code_blank",
+                  "question": "Q?",
+                  "options": null,
+                  "code_snippet": "test",
+                  "answer": "answer"
+                }
+              ]
+            }
+            """;
+    given(claudeClient.getGeneratedText(anyString(), anyString())).willReturn(claudeJsonResponse);
+
+    // when & then
+    assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.QUIZ_GENERATION_FAILED);
+
+    // 실패 상태 전이 확인
+    assertThat(expectedQuizSet.getStatus())
+        .isEqualTo(com.realdev.readle.domain.quiz.entity.QuizSetStatus.FAILED);
+
+    // 태그 저장이 수행되지 않았음을 확인
+    org.mockito.Mockito.verify(tagService, org.mockito.Mockito.never())
+        .saveContentTags(any(), any());
   }
 }

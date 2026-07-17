@@ -1,5 +1,7 @@
 package com.realdev.readle.domain.quiz.entity;
 
+import com.realdev.readle.global.exception.CustomException;
+import com.realdev.readle.global.exception.GlobalErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -69,16 +71,16 @@ public class QuizResult {
       Integer totalCount,
       Integer solveDurationSeconds) {
     if (totalCount == null || totalCount <= 0) {
-      throw new IllegalArgumentException("전체 문항 수는 0보다 커야 합니다.");
+      throw new CustomException(GlobalErrorCode.INVALID_INPUT, "전체 문항 수는 0보다 커야 합니다.");
     }
     if (correctCount == null || correctCount < 0) {
-      throw new IllegalArgumentException("맞은 문항 수는 0보다 크거나 같아야 합니다.");
+      throw new CustomException(GlobalErrorCode.INVALID_INPUT, "맞은 문항 수는 0보다 크거나 같아야 합니다.");
     }
     if (correctCount > totalCount) {
-      throw new IllegalArgumentException("맞은 문항 수는 전체 문항 수보다 클 수 없습니다.");
+      throw new CustomException(GlobalErrorCode.INVALID_INPUT, "맞은 문항 수는 전체 문항 수보다 클 수 없습니다.");
     }
     if (solveDurationSeconds == null || solveDurationSeconds < 0) {
-      throw new IllegalArgumentException("풀이 소요 시간은 0보다 크거나 같아야 합니다.");
+      throw new CustomException(GlobalErrorCode.INVALID_INPUT, "풀이 소요 시간은 0보다 크거나 같아야 합니다.");
     }
 
     BigDecimal accuracyRate =
