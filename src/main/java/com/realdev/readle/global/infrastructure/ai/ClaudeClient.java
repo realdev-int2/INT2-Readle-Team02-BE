@@ -47,10 +47,10 @@ public class ClaudeClient {
     return generateMessageInternal(claudeRestClient, model, systemPrompt, userPrompt);
   }
 
-  // 채점 전용 (3초 타임아웃 클라이언트 사용)
+  // 채점 전용 (3초 타임아웃 클라이언트 사용, 자체 재시도 없음)
   public ClaudeResponse generateGradingMessage(
       String model, String systemPrompt, String userPrompt) {
-    return generateMessageInternal(gradingClaudeRestClient, model, systemPrompt, userPrompt);
+    return executeGenerateMessage(gradingClaudeRestClient, model, systemPrompt, userPrompt);
   }
 
   private ClaudeResponse generateMessageInternal(

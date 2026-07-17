@@ -2,6 +2,8 @@ package com.realdev.readle.domain.quiz.entity;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import com.realdev.readle.global.exception.CustomException;
+import com.realdev.readle.global.exception.GlobalErrorCode;
 
 public enum QuestionType {
   MULTIPLE_CHOICE("multiple_choice"),
@@ -26,6 +28,6 @@ public enum QuestionType {
         return type;
       }
     }
-    throw new IllegalArgumentException("알 수 없는 문제 타입입니다: " + value);
+    throw new CustomException(GlobalErrorCode.INVALID_INPUT, "알 수 없는 문제 타입입니다: " + value);
   }
 }
