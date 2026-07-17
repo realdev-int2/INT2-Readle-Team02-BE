@@ -434,6 +434,20 @@ class ContentServiceTest {
     verify(memberRepository, never()).findByUuid(any());
   }
 
+  @Test
+  @DisplayName("inputType이 null이면 INVALID_INPUT_TYPE 예외가 발생한다")
+  void createContent_nullInputType_throwsInvalidInputType() {
+    String memberUuid = UUID.randomUUID().toString();
+    ContentCreateRequest request = new ContentCreateRequest(null, "제목", null, null, null);
+
+    assertThatThrownBy(() -> contentService.createContent(request, memberUuid))
+            .isInstanceOf(CustomException.class)
+            .extracting("errorCode")
+            .isEqualTo(ContentErrorCode.INVALID_INPUT_TYPE);
+
+    verify(memberRepository, never()).findByUuid(any());
+  }
+
   private final ArgumentCaptor<Content> contentCaptor = ArgumentCaptor.forClass(Content.class);
 
   private Member mockMember() {
