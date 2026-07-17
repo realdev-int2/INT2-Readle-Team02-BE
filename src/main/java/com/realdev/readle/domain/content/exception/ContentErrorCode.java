@@ -24,7 +24,8 @@ public enum ContentErrorCode implements ErrorCode {
   CONTENT_VALIDATION_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "검증 대상 콘텐츠의 검증 이력을 찾을 수 없습니다."),
   INVALID_AI_VALIDATION_RESPONSE(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 응답 스키마가 유효하지 않습니다."),
   AI_VALIDATION_TIMEOUT(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 요청 시간이 초과되었습니다."),
-  AI_VALIDATION_SERVICE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 서비스 연동 중 오류가 발생했습니다.");
+  AI_VALIDATION_SERVICE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "AI 검증 서비스 연동 중 오류가 발생했습니다."),
+  INVALID_INPUT_TYPE(HttpStatus.BAD_REQUEST, "지원하지 않는 콘텐츠 입력 타입입니다.");
 
   private final HttpStatus status;
   private final String message;

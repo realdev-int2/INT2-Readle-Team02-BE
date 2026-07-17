@@ -68,7 +68,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("정상적인 URL 요청 시 본문과 제목을 추출하여 200 OK를 반환한다")
   void extractSuccess() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentExtractRequest request = new ContentExtractRequest("https://example.com");
     ContentExtractResponse response = new ContentExtractResponse("추출된 제목", "추출된 마크다운 본문");
@@ -89,7 +89,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("요청 DTO의 URL이 빈 값일 경우 400 INVALID_INPUT 에러를 반환한다")
   void extractValidationFailure() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentExtractRequest request = new ContentExtractRequest("   ");
 
@@ -107,7 +107,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("잘못된 스킴의 URL이 전송되면 400 INVALID_URL 에러를 반환한다")
   void extractInvalidUrl() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentExtractRequest request = new ContentExtractRequest("invalid-url-scheme");
 
@@ -128,7 +128,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("크롤링 타임아웃 발생 시 422 CRAWLING_TIMEOUT 에러를 반환한다")
   void extractTimeout() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentExtractRequest request = new ContentExtractRequest("https://timeout-url.com");
 
@@ -149,7 +149,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("크롤링 연결 실패 또는 본문 정제 실패 시 422 EXTRACT_FAILED 에러를 반환한다")
   void extractFailed() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentExtractRequest request = new ContentExtractRequest("https://blocked-url.com");
 
@@ -170,7 +170,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("inputType=TEXT로 인증된 요청 시 201 Created와 contentId, PENDING 상태를 반환한다")
   void createContent_textType_success() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문 내용입니다.");
@@ -202,7 +202,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("inputType=URL로 인증된 요청 시 201 Created와 contentId, PENDING 상태를 반환한다")
   void createContent_urlType_success() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "https://example.com", "추출된 본문", null);
@@ -250,7 +250,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("inputType이 null이면 400 INVALID_INPUT 에러를 반환한다")
   void createContent_nullInputType() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     // inputType 필드를 JSON에서 누락
     String requestJson = "{\"title\":\"제목\",\"text\":\"본문\"}";
@@ -267,7 +267,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("텍스트가 15,000자를 초과하면 413 CONTENT_TOO_LARGE 에러를 반환한다")
   void createContent_contentTooLarge() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "제목", null, null, "가".repeat(15_001));
@@ -287,7 +287,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("UUID에 해당하는 회원이 없으면 404 MEMBER_NOT_FOUND 에러를 반환한다")
   void createContent_memberNotFound() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request = new ContentCreateRequest(InputType.TEXT, "제목", null, null, "본문");
     when(contentService.createContent(any(ContentCreateRequest.class), eq(memberUuid)))
@@ -305,7 +305,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("URL 타입 등록 시 추출된 본문이 누락되면 400 MISSING_EXTRACTED_TEXT 에러를 반환한다")
   void createContent_missingExtractedText() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "https://example.com", null, null);
@@ -327,7 +327,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("URL 타입 등록 시 text 필드가 포함되어 있으면 400 UNNECESSARY_TEXT 에러를 반환한다")
   void createContent_unnecessaryText() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "https://example.com", "추출된 본문", "텍스트");
@@ -347,7 +347,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("TEXT 타입 등록 시 url 또는 extractedText 필드가 포함되어 있으면 400 UNNECESSARY_URL_INFO 에러를 반환한다")
   void createContent_unnecessaryUrlInfo() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "제목", "https://example.com", null, "텍스트");
@@ -368,7 +368,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("URL 타입 등록 시 제목이 누락되면 400 TITLE_REQUIRED 에러를 반환한다")
   void createContent_titleRequired() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, null, "https://example.com", "본문", null);
@@ -388,7 +388,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("등록 시 제목이 255자를 초과하면 400 TITLE_TOO_LONG 에러를 반환한다")
   void createContent_titleTooLong() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.TEXT, "가".repeat(256), null, null, "본문");
@@ -408,7 +408,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("URL 타입 등록 시 잘못된 형식의 URL이면 400 INVALID_URL 에러를 반환한다")
   void createContent_invalidUrlFormat() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "invalid-url-format", "본문", null);
@@ -428,7 +428,7 @@ class ContentControllerTest {
   @Test
   @DisplayName("URL 타입 등록 시 호스트가 없는 URL 형식이면 400 INVALID_URL 에러를 반환한다")
   void createContent_missingHostUrl() throws Exception {
-    UUID memberUuid = UUID.randomUUID();
+    String memberUuid = UUID.randomUUID().toString();
     Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
     ContentCreateRequest request =
         new ContentCreateRequest(InputType.URL, "제목", "https:example.com", "본문", null);
