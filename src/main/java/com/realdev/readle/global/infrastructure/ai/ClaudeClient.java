@@ -57,9 +57,9 @@ public class ClaudeClient {
   }
 
   // 콘텐츠 검증 전용 (readTimeout 4초 클라이언트 사용)
+  // 재시도는 AiValidationService가 전담하므로 클라이언트 내부 재시도를 거치지 않는다.
   public ClaudeResponse generateValidationMessage(String systemPrompt, String userPrompt) {
-    return generateMessageInternal(
-        validationClaudeRestClient, properties.getModel(), systemPrompt, userPrompt);
+    return executeGenerateMessage(validationClaudeRestClient, properties.getModel(), systemPrompt, userPrompt);
   }
 
   private ClaudeResponse generateMessageInternal(
