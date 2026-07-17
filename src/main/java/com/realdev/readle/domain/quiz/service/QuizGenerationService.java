@@ -18,7 +18,6 @@ import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
 import com.realdev.readle.domain.tag.service.TagService;
 import com.realdev.readle.global.exception.CustomException;
-import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import java.util.Map;
@@ -101,7 +100,8 @@ public class QuizGenerationService {
               : validation.getContent().getExtractedText();
 
       if (articleText == null || articleText.isBlank()) {
-        throw new CustomException(GlobalErrorCode.INVALID_INPUT, "퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
+        throw new CustomException(
+            QuizErrorCode.EMPTY_SOURCE_TEXT_FOR_QUIZ, "퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
       }
 
       // 방어: </source_content> 인젝션 치환 (대소문자·공백 무관하게 처리)

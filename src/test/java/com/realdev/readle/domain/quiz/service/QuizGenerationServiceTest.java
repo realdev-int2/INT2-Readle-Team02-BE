@@ -19,7 +19,6 @@ import com.realdev.readle.domain.quiz.repository.QuizChoiceRepository;
 import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
 import com.realdev.readle.global.exception.CustomException;
-import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import java.util.Optional;
@@ -195,7 +194,7 @@ class QuizGenerationServiceTest {
     assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
-        .isEqualTo(GlobalErrorCode.INVALID_INPUT);
+        .isEqualTo(QuizErrorCode.EMPTY_SOURCE_TEXT_FOR_QUIZ);
 
     // 예외 보상 상태 전이 검증 (FAILED 상태 전이 확인)
     assertThat(expectedQuizSet.getStatus())

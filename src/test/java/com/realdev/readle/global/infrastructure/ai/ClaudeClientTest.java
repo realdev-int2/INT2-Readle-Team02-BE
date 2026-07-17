@@ -169,11 +169,11 @@ class ClaudeClientTest {
         .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON));
 
     // when
-    ClaudeResponse response = claudeClient.generateMessage(systemPrompt, userPrompt);
+    String response = claudeClient.getGeneratedText(systemPrompt, userPrompt);
 
     // then
     assertThat(response).isNotNull();
-    assertThat(response.getContent().get(0).getText()).isEqualTo("Generated Quiz JSON text");
+    assertThat(response).isEqualTo("Generated Quiz JSON text");
     server.verify();
   }
 
@@ -202,11 +202,11 @@ class ClaudeClientTest {
         .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON));
 
     // when
-    ClaudeResponse response = claudeClient.generateMessage(systemPrompt, userPrompt);
+    String response = claudeClient.getGeneratedText(systemPrompt, userPrompt);
 
     // then
     assertThat(response).isNotNull();
-    assertThat(response.getContent().get(0).getText()).isEqualTo("Generated Quiz JSON text");
+    assertThat(response).isEqualTo("Generated Quiz JSON text");
     server.verify();
   }
 
@@ -230,7 +230,7 @@ class ClaudeClientTest {
         .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
     // when & then
-    assertThatThrownBy(() -> claudeClient.generateMessage(systemPrompt, userPrompt))
+    assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
         .isInstanceOf(RestClientException.class);
     server.verify();
   }
@@ -249,7 +249,7 @@ class ClaudeClientTest {
         .andRespond(withStatus(HttpStatus.BAD_REQUEST));
 
     // when & then
-    assertThatThrownBy(() -> claudeClient.generateMessage(systemPrompt, userPrompt))
+    assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
         .isInstanceOf(HttpClientErrorException.class);
     server.verify();
   }
@@ -275,11 +275,11 @@ class ClaudeClientTest {
         .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON));
 
     // when
-    ClaudeResponse response = claudeClient.generateMessage(systemPrompt, userPrompt);
+    String response = claudeClient.getGeneratedText(systemPrompt, userPrompt);
 
     // then
     assertThat(response).isNotNull();
-    assertThat(response.getContent().get(0).getText()).isEqualTo("Generated Quiz JSON text");
+    assertThat(response).isEqualTo("Generated Quiz JSON text");
     server.verify();
   }
 
@@ -311,7 +311,7 @@ class ClaudeClientTest {
             });
 
     // when & then
-    assertThatThrownBy(() -> claudeClient.generateMessage(systemPrompt, userPrompt))
+    assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
         .isInstanceOf(ResourceAccessException.class);
     server.verify();
   }
