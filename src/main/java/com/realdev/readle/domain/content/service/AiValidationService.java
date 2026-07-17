@@ -12,8 +12,10 @@ import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -34,7 +36,7 @@ public class AiValidationService {
   @Qualifier("claudeCallExecutor") private final Executor claudeCallExecutor;
 
   public void runAiValidation(Content content) {
-    Long validationId = txHelper.createPendingValidation(content);
+    Long validationId = txHelper.createPendingValidation(content.getId());
     log.info("[AI_VALIDATION] PENDING Row 생성 완료. Validation ID: {}", validationId);
 
     executeClaudeValidationWithRetry(content, validationId);
@@ -100,7 +102,8 @@ public class AiValidationService {
     CompletableFuture<String> future =
         CompletableFuture.supplyAsync(
             () -> {
-              ClaudeResponse response = claudeClient.generateMessage(systemPrompt, userPrompt);
+              ClaudeResponse response =
+                  claudeClient.generateValidationMessage(systemPrompt, userPrompt);
               logTokenUsage(validationId, response);
               return extractText(response);
             },
@@ -113,32 +116,37 @@ public class AiValidationService {
       Thread.currentThread().interrupt();
       throw new CustomException(
           ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude 호출 중 인터럽트가 발생했습니다.", e);
-    } catch (java.util.concurrent.TimeoutException e) {
+    } catch (TimeoutException e) {
       future.cancel(true);
       throw new CustomException(
           ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 호출 시간이 초과되었습니다.", e);
-    } catch (java.util.concurrent.ExecutionException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof ResourceAccessException rae) {
-        if (rae.getCause() instanceof java.net.SocketTimeoutException) {
-          throw new CustomException(
-              ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 소켓 연결 시간이 초과되었습니다.", rae);
-        }
-        throw new CustomException(
-            ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude API 네트워크 오류가 발생했습니다.", rae);
-      }
-      if (cause instanceof RestClientResponseException rcre) {
-        throw new CustomException(
-            ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude API HTTP 오류가 발생했습니다.", rcre);
-      }
-      if (cause instanceof CustomException ce) {
-        throw ce;
-      }
+    } catch (ExecutionException e) {
+      Throwable cause = getThrowable(e);
       throw new CustomException(
           GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", cause);
     } catch (Exception e) {
       throw new CustomException(GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", e);
     }
+  }
+
+  private static Throwable getThrowable(ExecutionException e) {
+    Throwable cause = e.getCause();
+    if (cause instanceof ResourceAccessException rae) {
+      if (rae.getCause() instanceof java.net.SocketTimeoutException) {
+        throw new CustomException(
+            ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 소켓 연결 시간이 초과되었습니다.", rae);
+      }
+      throw new CustomException(
+          ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude API 네트워크 오류가 발생했습니다.", rae);
+    }
+    if (cause instanceof RestClientResponseException rcre) {
+      throw new CustomException(
+          ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude API HTTP 오류가 발생했습니다.", rcre);
+    }
+    if (cause instanceof CustomException ce) {
+      throw ce;
+    }
+    return cause;
   }
 
   private void logTokenUsage(Long validationId, ClaudeResponse response) {

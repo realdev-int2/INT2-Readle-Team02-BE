@@ -52,4 +52,26 @@ public class ClaudeConfig {
         .defaultHeader("content-type", MediaType.APPLICATION_JSON_VALUE)
         .build();
   }
+
+  @Bean
+  public RestClient validationClaudeRestClient(
+      RestClient.Builder restClientBuilder, ClaudeProperties properties) {
+
+    // 콘텐츠 검증 전용: 애플리케이션 레벨 타임아웃(5초, ContentValidationProperties.callTimeoutSeconds)보다
+    // HTTP readTimeout을 짧게 잡아, HTTP 클라이언트가 먼저 실패하도록 하여
+    // CompletableFuture.get() 타임아웃 시 스레드가 계속 점유되는 상황을 방지한다.
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+
+    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+    requestFactory.setReadTimeout(Duration.ofSeconds(4));
+
+    return restClientBuilder
+        .clone()
+        .requestFactory(requestFactory)
+        .baseUrl(properties.getBaseUrl())
+        .defaultHeader("x-api-key", properties.getApiKey())
+        .defaultHeader("anthropic-version", properties.getVersion())
+        .defaultHeader("content-type", MediaType.APPLICATION_JSON_VALUE)
+        .build();
+  }
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.domain.content.dto.response.ClaudeValidationResponse;
 import com.realdev.readle.domain.content.entity.*;
 import com.realdev.readle.domain.content.exception.ContentErrorCode;
+import com.realdev.readle.domain.content.repository.ContentRepository;
 import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.global.exception.CustomException;
 import java.math.BigDecimal;
@@ -19,11 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AiValidationTxHelper {
 
+  private final ContentRepository contentRepository;
   private final ContentValidationRepository contentValidationRepository;
   private final ObjectMapper objectMapper;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public Long createPendingValidation(Content content) {
+  public Long createPendingValidation(Long contentId) {
+    Content content = contentRepository.getReferenceById(contentId);
+
     ContentValidation pending =
         ContentValidation.builder()
             .content(content)

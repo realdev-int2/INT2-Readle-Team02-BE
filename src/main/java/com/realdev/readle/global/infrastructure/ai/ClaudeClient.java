@@ -23,16 +23,19 @@ public class ClaudeClient {
 
   private final RestClient claudeRestClient;
   private final RestClient gradingClaudeRestClient;
-  private final ClaudeProperties properties;
+  private final RestClient validationClaudeRestClient;
   private final ObjectMapper objectMapper;
+  private final ClaudeProperties properties;
 
   public ClaudeClient(
       RestClient claudeRestClient,
       RestClient gradingClaudeRestClient,
+      RestClient validationClaudeRestClient,
       ClaudeProperties properties,
       ObjectMapper objectMapper) {
     this.claudeRestClient = claudeRestClient;
     this.gradingClaudeRestClient = gradingClaudeRestClient;
+    this.validationClaudeRestClient = validationClaudeRestClient;
     this.properties = properties;
     this.objectMapper = objectMapper;
   }
@@ -51,6 +54,12 @@ public class ClaudeClient {
   public ClaudeResponse generateGradingMessage(
       String model, String systemPrompt, String userPrompt) {
     return generateMessageInternal(gradingClaudeRestClient, model, systemPrompt, userPrompt);
+  }
+
+  // 콘텐츠 검증 전용 (readTimeout 4초 클라이언트 사용)
+  public ClaudeResponse generateValidationMessage(String systemPrompt, String userPrompt) {
+    return generateMessageInternal(
+        validationClaudeRestClient, properties.getModel(), systemPrompt, userPrompt);
   }
 
   private ClaudeResponse generateMessageInternal(
