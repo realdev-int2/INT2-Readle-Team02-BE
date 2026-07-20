@@ -66,8 +66,8 @@ public class QuizGenerationService {
                   quizSetRepository.findBySourceValidationId(sourceValidationId).orElse(null);
               if (existing != null) {
                 if (existing.getStatus() == QuizSetStatus.FAILED) {
-                  quizSetRepository.delete(existing);
-                  quizSetRepository.flush();
+                  existing.retry();
+                  return quizSetRepository.saveAndFlush(existing);
                 } else {
                   throw new CustomException(
                       QuizErrorCode.QUIZ_GENERATION_FAILED,

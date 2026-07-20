@@ -96,6 +96,16 @@ public class QuizSet extends BaseCreatedAtEntity {
     this.completedAt = LocalDateTime.now();
   }
 
+  public void retry() {
+    if (this.status != QuizSetStatus.FAILED) {
+      throw new CustomException(
+          GlobalErrorCode.INVALID_INPUT, "실패한 퀴즈 세트만 재시도할 수 있습니다. 현재 상태: " + this.status);
+    }
+    this.status = QuizSetStatus.GENERATING;
+    this.completedAt = null;
+    this.questionCount = null;
+  }
+
   private void validateIntegration(Content content, ContentValidation sourceValidation) {
     if (content == null || sourceValidation == null) {
       throw new CustomException(
