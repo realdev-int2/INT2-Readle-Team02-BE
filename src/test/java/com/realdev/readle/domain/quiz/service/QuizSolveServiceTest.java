@@ -30,6 +30,7 @@ import com.realdev.readle.domain.quiz.repository.QuizChoiceRepository;
 import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizResultRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
+import com.realdev.readle.domain.tag.repository.ContentTagRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import java.util.List;
@@ -56,6 +57,7 @@ class QuizSolveServiceTest {
   @Mock private QuizAnswerRepository quizAnswerRepository;
   @Mock private QuizResultRepository quizResultRepository;
   @Mock private MemberRepository memberRepository;
+  @Mock private ContentTagRepository contentTagRepository;
   @Mock private QuizAiGradingService quizAiGradingService;
   @Mock private TransactionTemplate transactionTemplate;
 
@@ -414,6 +416,21 @@ class QuizSolveServiceTest {
     given(member.getUuid()).willReturn("test-uuid");
     given(quizAttempt.getStatus()).willReturn(AttemptStatus.SUBMITTED);
 
+    given(quizAttempt.getQuizSet()).willReturn(quizSet);
+    com.realdev.readle.domain.content.entity.Content mockContent =
+        mock(com.realdev.readle.domain.content.entity.Content.class);
+    given(quizSet.getContent()).willReturn(mockContent);
+    given(mockContent.getTitle()).willReturn("Spring @Transactional 심층 이해");
+    given(mockContent.getId()).willReturn(50L);
+
+    com.realdev.readle.domain.tag.entity.ContentTag mockContentTag =
+        mock(com.realdev.readle.domain.tag.entity.ContentTag.class);
+    com.realdev.readle.domain.tag.entity.Tag mockTag =
+        mock(com.realdev.readle.domain.tag.entity.Tag.class);
+    given(mockContentTag.getTag()).willReturn(mockTag);
+    given(mockTag.getName()).willReturn("spring");
+    given(contentTagRepository.findByContentIdWithTag(50L)).willReturn(List.of(mockContentTag));
+
     QuizResult mockResult = mock(QuizResult.class);
     given(mockResult.getAccuracyRate()).willReturn(new java.math.BigDecimal("100.00"));
     given(mockResult.getCorrectCount()).willReturn(2);
@@ -435,6 +452,8 @@ class QuizSolveServiceTest {
     QuizAttemptResultResponse response = quizSolveService.getAttemptResult("test-uuid", 100L);
 
     assertThat(response).isNotNull();
+    assertThat(response.getTitle()).isEqualTo("Spring @Transactional 심층 이해");
+    assertThat(response.getTags()).containsExactly("spring");
     assertThat(response.getAccuracyRate()).isEqualTo(new java.math.BigDecimal("100.00"));
     assertThat(response.getResults()).hasSize(1);
     assertThat(response.getResults().get(0).getSubmittedAnswer()).isEqualTo("test");

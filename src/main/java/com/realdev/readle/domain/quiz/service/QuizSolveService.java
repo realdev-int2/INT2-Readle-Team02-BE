@@ -21,6 +21,7 @@ import com.realdev.readle.domain.quiz.repository.QuizChoiceRepository;
 import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizResultRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
+import com.realdev.readle.domain.tag.repository.ContentTagRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ public class QuizSolveService {
   private final QuizAnswerRepository quizAnswerRepository;
   private final QuizResultRepository quizResultRepository;
   private final MemberRepository memberRepository;
+  private final ContentTagRepository contentTagRepository;
   private final QuizAiGradingService quizAiGradingService;
   private final TransactionTemplate transactionTemplate;
 
@@ -292,7 +294,14 @@ public class QuizSolveService {
     List<QuizAnswer> quizAnswers =
         quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(attemptId);
 
-    return QuizAttemptResultResponse.from(quizResult, quizAnswers);
+    String title = quizAttempt.getQuizSet().getContent().getTitle();
+    Long contentId = quizAttempt.getQuizSet().getContent().getId();
+    List<String> tags =
+        contentTagRepository.findByContentIdWithTag(contentId).stream()
+            .map(ct -> ct.getTag().getName())
+            .toList();
+
+    return QuizAttemptResultResponse.from(quizResult, quizAnswers, title, tags);
   }
 
   private boolean isStaticMatch(String correct, String submitted) {
