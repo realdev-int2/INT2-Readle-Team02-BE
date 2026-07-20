@@ -2,7 +2,15 @@ package com.realdev.readle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.DriverManager;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -45,6 +53,68 @@ class SchemaValidationTest {
       assertThat(returnTo.getInt("COLUMN_SIZE")).isEqualTo(2048);
       assertThat(email.next()).isTrue();
       assertThat(email.getInt("NULLABLE")).isEqualTo(java.sql.DatabaseMetaData.columnNullable);
+    }
+  }
+
+  @Test
+  @DisplayName("V2 migrates V1 member rows without changing member columns")
+  void v2PreservesV1MemberSchemaAndData() throws Exception {
+    var url =
+        "jdbc:h2:mem:schema-validation-" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1";
+    flyway(url, "1").migrate();
+    var v1MemberColumns = memberColumnNames(url);
+    insertMember(url, "null-email", null);
+    insertMember(url, "present-email", "present@example.com");
+
+    flyway(url, "2").migrate();
+
+    assertThat(memberColumnNames(url)).isEqualTo(v1MemberColumns);
+    assertThat(memberEmails(url)).containsExactly(null, "present@example.com");
+  }
+
+  private Flyway flyway(String url, String target) {
+    return Flyway.configure()
+        .dataSource(url, "sa", "")
+        .target(MigrationVersion.fromVersion(target))
+        .load();
+  }
+
+  private Set<String> memberColumnNames(String url) throws Exception {
+    try (var connection = DriverManager.getConnection(url, "sa", "");
+        var columns = connection.getMetaData().getColumns(null, null, "MEMBER", null)) {
+      var names = new LinkedHashSet<String>();
+      while (columns.next()) {
+        names.add(columns.getString("COLUMN_NAME"));
+      }
+      return names;
+    }
+  }
+
+  private void insertMember(String url, String oauthId, String email) throws Exception {
+    var sql =
+        """
+        INSERT INTO member (uuid, oauth_provider, oauth_id, email, nickname, created_at, updated_at)
+        VALUES (?, 'GOOGLE', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """;
+    try (var connection = DriverManager.getConnection(url, "sa", "");
+        var statement = connection.prepareStatement(sql)) {
+      statement.setString(1, UUID.randomUUID().toString());
+      statement.setString(2, oauthId);
+      statement.setString(3, email);
+      statement.setString(4, oauthId);
+      statement.executeUpdate();
+    }
+  }
+
+  private List<String> memberEmails(String url) throws Exception {
+    try (var connection = DriverManager.getConnection(url, "sa", "");
+        var statement = connection.prepareStatement("SELECT email FROM member ORDER BY oauth_id");
+        var rows = statement.executeQuery()) {
+      var emails = new ArrayList<String>();
+      while (rows.next()) {
+        emails.add(rows.getString("email"));
+      }
+      return emails;
     }
   }
 }
