@@ -136,6 +136,68 @@ class QuizGenerationServiceTest {
   }
 
   @Test
+  @DisplayName("기존에 FAILED 상태인 퀴즈 세트가 있으면 retry()를 호출하여 로우를 재활용한다")
+  void createQuizSet_ReusesFailedQuizSet() {
+    // given
+    given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
+    given(contentValidationRepository.findByIdWithContent(100L))
+        .willReturn(Optional.of(validation));
+
+    // 기존 FAILED 상태의 QuizSet 모킹
+    QuizSet existingQuizSet = org.mockito.Mockito.spy(QuizSet.create(content, validation, false));
+    existingQuizSet.fail(); // FAILED 상태로 만듦
+    ReflectionTestUtils.setField(existingQuizSet, "id", 300L);
+
+    given(transactionTemplate.execute(any()))
+        .willAnswer(
+            invocation -> {
+              org.springframework.transaction.support.TransactionCallback callback =
+                  invocation.getArgument(0);
+              return callback.doInTransaction(null);
+            });
+
+    // 기존 QuizSet 반환하도록 모킹
+    given(quizSetRepository.findBySourceValidationId(100L))
+        .willReturn(Optional.of(existingQuizSet));
+    given(quizSetRepository.saveAndFlush(existingQuizSet)).willReturn(existingQuizSet);
+    given(quizSetRepository.findById(300L)).willReturn(Optional.of(existingQuizSet));
+
+    given(promptLoader.loadPrompt(anyString(), any())).willReturn("system prompt");
+
+    String claudeJsonResponse =
+        """
+            {
+              "tags": ["Test"],
+              "quizzes": [
+                {
+                  "id": 1,
+                  "type": "multiple_choice",
+                  "question": "Test Q?",
+                  "options": ["A", "B"],
+                  "code_snippet": null,
+                  "answer": "0"
+                }
+              ]
+            }
+            """;
+    given(claudeClient.getGeneratedText(anyString(), anyString())).willReturn(claudeJsonResponse);
+
+    // when
+    QuizCreateResponse response = quizGenerationService.createQuizSet(100L);
+
+    // then
+    assertThat(response).isNotNull();
+    assertThat(response.getQuizId()).isEqualTo(300L); // 기존 ID 재활용 검증
+    assertThat(response.getStatus()).isEqualTo("completed");
+
+    // retry()가 불려서 GENERATING을 거쳤는지 검증
+    org.mockito.Mockito.verify(existingQuizSet, org.mockito.Mockito.times(1)).retry();
+
+    // delete는 절대 호출되지 않아야 함
+    org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.never()).delete(any());
+  }
+
+  @Test
   @DisplayName("PENDING 상태의 검증본은 퀴즈 생성 불가 예외 발생")
   void createQuizSet_ThrowsWhenPending() {
     // given
