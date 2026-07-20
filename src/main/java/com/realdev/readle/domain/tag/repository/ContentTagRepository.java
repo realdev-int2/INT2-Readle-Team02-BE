@@ -1,6 +1,7 @@
 package com.realdev.readle.domain.tag.repository;
 
 import com.realdev.readle.domain.tag.entity.ContentTag;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -12,4 +13,9 @@ public interface ContentTagRepository extends JpaRepository<ContentTag, Long> {
 
   @Query("SELECT ct FROM ContentTag ct JOIN FETCH ct.tag WHERE ct.content.id = :contentId")
   List<ContentTag> findByContentIdWithTag(@Param("contentId") Long contentId);
+
+  @Query(
+      "SELECT ct FROM ContentTag ct JOIN FETCH ct.tag "
+          + "WHERE ct.content.id IN :contentIds ORDER BY ct.content.id, ct.tag.name")
+  List<ContentTag> findByContentIdInWithTag(@Param("contentIds") Collection<Long> contentIds);
 }
