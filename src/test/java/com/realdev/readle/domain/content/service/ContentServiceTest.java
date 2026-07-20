@@ -11,8 +11,12 @@ import com.realdev.readle.domain.content.dto.request.ContentCreateRequest;
 import com.realdev.readle.domain.content.dto.response.ContentCreateResponse;
 import com.realdev.readle.domain.content.dto.response.ContentValidationResponse;
 import com.realdev.readle.domain.content.entity.Content;
+import com.realdev.readle.domain.content.entity.ContentValidation;
 import com.realdev.readle.domain.content.entity.CrawlStatus;
+import com.realdev.readle.domain.content.entity.ErrorCode;
 import com.realdev.readle.domain.content.entity.InputType;
+import com.realdev.readle.domain.content.entity.RejectReasonCode;
+import com.realdev.readle.domain.content.entity.ValidationMethod;
 import com.realdev.readle.domain.content.entity.ValidationStatus;
 import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.domain.content.repository.ContentRepository;
@@ -20,13 +24,8 @@ import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.exception.MemberErrorCode;
 import com.realdev.readle.domain.member.repository.MemberRepository;
-import com.realdev.readle.domain.content.entity.ContentValidation;
-import com.realdev.readle.domain.content.entity.ErrorCode;
-import com.realdev.readle.domain.content.entity.RejectReasonCode;
-import com.realdev.readle.domain.content.entity.ValidationMethod;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
-
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -476,6 +475,25 @@ class ContentServiceTest {
     return contentCaptor.getValue();
   }
 
+  private Content mockOwnedContent(String memberUuid) {
+    Member owner = org.mockito.Mockito.mock(Member.class);
+    when(owner.getUuid()).thenReturn(memberUuid);
+    Content content = org.mockito.Mockito.mock(Content.class);
+    when(content.getMember()).thenReturn(owner);
+    return content;
+  }
+
+  @Test
+  @DisplayName("memberUuid가 null이면 DB 조회 없이 UNAUTHORIZED 예외가 발생한다")
+  void getValidationResult_nullMemberUuid_throwsUnauthorized() {
+    assertThatThrownBy(() -> contentService.getValidationResult(1L, null))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(GlobalErrorCode.UNAUTHORIZED);
+
+    verify(contentRepository, never()).findById(any());
+  }
+
   @Test
   @DisplayName("존재하지 않는 콘텐츠 조회 시 CONTENT_NOT_FOUND 예외가 발생한다")
   void getValidationResult_contentNotFound() {
@@ -493,10 +511,7 @@ class ContentServiceTest {
   void getValidationResult_forbidden() {
     String requesterUuid = UUID.randomUUID().toString();
     String ownerUuid = UUID.randomUUID().toString();
-    Member owner = org.mockito.Mockito.mock(Member.class);
-    when(owner.getUuid()).thenReturn(ownerUuid);
-    Content content = org.mockito.Mockito.mock(Content.class);
-    when(content.getMember()).thenReturn(owner);
+    Content content = mockOwnedContent(ownerUuid);
 
     when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
 
@@ -510,10 +525,7 @@ class ContentServiceTest {
   @DisplayName("검증 이력이 없는 경우 CONTENT_VALIDATION_NOT_FOUND 예외가 발생한다")
   void getValidationResult_validationNotFound() {
     String memberUuid = UUID.randomUUID().toString();
-    Member owner = org.mockito.Mockito.mock(Member.class);
-    when(owner.getUuid()).thenReturn(memberUuid);
-    Content content = org.mockito.Mockito.mock(Content.class);
-    when(content.getMember()).thenReturn(owner);
+    Content content = mockOwnedContent(memberUuid);
 
     when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
@@ -529,16 +541,14 @@ class ContentServiceTest {
   @DisplayName("PENDING 상태인 경우 validatedAt은 null로 반환된다")
   void getValidationResult_pendingState() {
     String memberUuid = UUID.randomUUID().toString();
-    Member owner = org.mockito.Mockito.mock(Member.class);
-    when(owner.getUuid()).thenReturn(memberUuid);
-    Content content = org.mockito.Mockito.mock(Content.class);
-    when(content.getMember()).thenReturn(owner);
+    Content content = mockOwnedContent(memberUuid);
 
-    ContentValidation validation = ContentValidation.builder()
-        .status(ValidationStatus.PENDING)
-        .validationMethod(ValidationMethod.AI)
-        .validatedAt(LocalDateTime.now()) // 강제로 세팅해도 null이어야 함
-        .build();
+    ContentValidation validation =
+        ContentValidation.builder()
+            .status(ValidationStatus.PENDING)
+            .validationMethod(ValidationMethod.AI)
+            .validatedAt(LocalDateTime.now()) // 강제로 세팅해도 null이어야 함
+            .build();
 
     when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
@@ -552,20 +562,44 @@ class ContentServiceTest {
   }
 
   @Test
+  @DisplayName("PASSED 상태인 경우 validatedAt이 정상적으로 반환된다")
+  void getValidationResult_passedState() {
+    String memberUuid = UUID.randomUUID().toString();
+    Content content = mockOwnedContent(memberUuid);
+
+    LocalDateTime validatedAt = LocalDateTime.of(2026, 7, 20, 10, 0);
+    ContentValidation validation =
+        ContentValidation.builder()
+            .status(ValidationStatus.PASSED)
+            .validationMethod(ValidationMethod.AI)
+            .validationScore(new java.math.BigDecimal("95.5"))
+            .validatedAt(validatedAt)
+            .build();
+
+    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
+        .thenReturn(Optional.of(validation));
+
+    ContentValidationResponse response = contentService.getValidationResult(1L, memberUuid);
+
+    assertThat(response.status()).isEqualTo(ValidationStatus.PASSED);
+    assertThat(response.validatedAt()).isEqualTo(validatedAt);
+    assertThat(response.bypassAvailable()).isFalse();
+  }
+
+  @Test
   @DisplayName("REJECTED + AI 방식인 경우 bypassAvailable은 true를 반환한다")
   void getValidationResult_rejectedAiState() {
     String memberUuid = UUID.randomUUID().toString();
-    Member owner = org.mockito.Mockito.mock(Member.class);
-    when(owner.getUuid()).thenReturn(memberUuid);
-    Content content = org.mockito.Mockito.mock(Content.class);
-    when(content.getMember()).thenReturn(owner);
+    Content content = mockOwnedContent(memberUuid);
 
-    ContentValidation validation = ContentValidation.builder()
-        .status(ValidationStatus.REJECTED)
-        .validationMethod(ValidationMethod.AI)
-        .rejectReasonCode(RejectReasonCode.CONTENT_TOO_SHORT)
-        .validatedAt(LocalDateTime.now())
-        .build();
+    ContentValidation validation =
+        ContentValidation.builder()
+            .status(ValidationStatus.REJECTED)
+            .validationMethod(ValidationMethod.AI)
+            .rejectReasonCode(RejectReasonCode.CONTENT_TOO_SHORT)
+            .validatedAt(LocalDateTime.now())
+            .build();
 
     when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
@@ -580,20 +614,18 @@ class ContentServiceTest {
   }
 
   @Test
-  @DisplayName("REJECTED + STATIC_GUARDRAIL 방식인 경우 bypassAvailable은 false를 반환한다")
+  @DisplayName("REJECTED + STATIC_GUARDRAIL 방식인 경우 bypassAvailable은 false를 반환하고 에러 메시지를 매핑한다")
   void getValidationResult_rejectedNonAiState() {
     String memberUuid = UUID.randomUUID().toString();
-    Member owner = org.mockito.Mockito.mock(Member.class);
-    when(owner.getUuid()).thenReturn(memberUuid);
-    Content content = org.mockito.Mockito.mock(Content.class);
-    when(content.getMember()).thenReturn(owner);
+    Content content = mockOwnedContent(memberUuid);
 
-    ContentValidation validation = ContentValidation.builder()
-        .status(ValidationStatus.REJECTED)
-        .validationMethod(ValidationMethod.STATIC_GUARDRAIL)
-        .rejectReasonCode(RejectReasonCode.BAD_WORD)
-        .validatedAt(LocalDateTime.now())
-        .build();
+    ContentValidation validation =
+        ContentValidation.builder()
+            .status(ValidationStatus.REJECTED)
+            .validationMethod(ValidationMethod.STATIC_GUARDRAIL)
+            .rejectReasonCode(RejectReasonCode.BAD_WORD)
+            .validatedAt(LocalDateTime.now())
+            .build();
 
     when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
@@ -603,23 +635,24 @@ class ContentServiceTest {
 
     assertThat(response.status()).isEqualTo(ValidationStatus.REJECTED);
     assertThat(response.bypassAvailable()).isFalse();
+    assertThat(response.errorCode()).isEqualTo("BAD_WORD");
+    assertThat(response.message())
+        .isEqualTo("비속어 또는 서비스 정책상 부적절한 표현이 포함되어 있습니다. 내용을 수정한 후 다시 등록해 주세요.");
   }
 
   @Test
   @DisplayName("FAILED 상태인 경우 errorCode와 message가 정확히 매핑된다")
   void getValidationResult_failedState() {
     String memberUuid = UUID.randomUUID().toString();
-    Member owner = org.mockito.Mockito.mock(Member.class);
-    when(owner.getUuid()).thenReturn(memberUuid);
-    Content content = org.mockito.Mockito.mock(Content.class);
-    when(content.getMember()).thenReturn(owner);
+    Content content = mockOwnedContent(memberUuid);
 
-    ContentValidation validation = ContentValidation.builder()
-        .status(ValidationStatus.FAILED)
-        .validationMethod(ValidationMethod.AI)
-        .errorCode(ErrorCode.AI_SERVICE_ERROR)
-        .validatedAt(LocalDateTime.now())
-        .build();
+    ContentValidation validation =
+        ContentValidation.builder()
+            .status(ValidationStatus.FAILED)
+            .validationMethod(ValidationMethod.AI)
+            .errorCode(ErrorCode.AI_SERVICE_ERROR)
+            .validatedAt(LocalDateTime.now())
+            .build();
 
     when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
