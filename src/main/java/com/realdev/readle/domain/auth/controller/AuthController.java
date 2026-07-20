@@ -92,11 +92,7 @@ public class AuthController {
   public ResponseEntity<Void> logout(
       Authentication authentication,
       @CookieValue(value = RefreshTokenCookie.NAME, required = false) String refreshToken) {
-    String memberUuid =
-        authentication == null || authentication.getPrincipal() == null
-            ? null
-            : String.valueOf(authentication.getPrincipal());
-    refreshTokenService.revoke(refreshToken, memberUuid);
+    refreshTokenService.revoke(refreshToken, memberUuidOrNull(authentication));
     return ResponseEntity.noContent()
         .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.delete().toString())
         .build();
@@ -113,7 +109,7 @@ public class AuthController {
         authentication != null
             && authentication.isAuthenticated()
             && !(authentication instanceof AnonymousAuthenticationToken);
-    String uuid = authenticated ? String.valueOf(authentication.getPrincipal()) : null;
+    String uuid = authenticated ? memberUuidOrNull(authentication) : null;
     authenticated = authenticated && refreshTokenService.isActiveForMember(refreshToken, uuid);
     return new ApiResponse<>(new SessionResponse(authenticated, authenticated ? uuid : null));
   }
@@ -121,7 +117,7 @@ public class AuthController {
   @Operation(summary = "현재 사용자 조회", description = "인증된 회원의 기본 정보를 조회합니다.")
   @GetMapping("/users/me")
   public ApiResponse<CurrentUserResponse> currentUser(Authentication authentication) {
-    String uuid = String.valueOf(authentication.getPrincipal());
+    String uuid = requiredMemberUuid(authentication);
     Member member = authService.currentMember(uuid);
     return new ApiResponse<>(
         new CurrentUserResponse(
@@ -142,5 +138,21 @@ public class AuthController {
             browserState.getBytes(StandardCharsets.UTF_8))) {
       throw new CustomException(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
     }
+  }
+
+  private String memberUuidOrNull(Authentication authentication) {
+    if (authentication == null || authentication instanceof AnonymousAuthenticationToken) {
+      return null;
+    }
+    Object principal = authentication.getPrincipal();
+    return principal == null ? null : String.valueOf(principal);
+  }
+
+  private String requiredMemberUuid(Authentication authentication) {
+    String memberUuid = memberUuidOrNull(authentication);
+    if (memberUuid == null) {
+      throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
+    }
+    return memberUuid;
   }
 }
