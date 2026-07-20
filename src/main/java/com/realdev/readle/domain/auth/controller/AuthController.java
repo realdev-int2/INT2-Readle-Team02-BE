@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 @Tag(name = "Auth", description = "OAuth2/JWT 인증 API")
+@Slf4j
 public class AuthController {
 
   private static final String LOGIN_PATH = "/login";
@@ -83,6 +85,10 @@ public class AuthController {
             "access_denied".equals(error) ? OAUTH_CANCELLED : OAUTH_FAILED,
             authService.callbackFailure(provider, state));
       } catch (RuntimeException exception) {
+        log.warn(
+            "OAuth callback provider={} exception={}",
+            provider,
+            exception.getClass().getSimpleName());
         return callbackFailure(OAUTH_FAILED, null);
       }
     }
@@ -99,6 +105,10 @@ public class AuthController {
     } catch (AuthService.CallbackExchangeFailure exception) {
       return callbackFailure(OAUTH_FAILED, exception.returnTo());
     } catch (RuntimeException exception) {
+      log.warn(
+          "OAuth callback provider={} exception={}",
+          provider,
+          exception.getClass().getSimpleName());
       return callbackFailure(OAUTH_FAILED, null);
     }
   }
