@@ -47,8 +47,11 @@ public class DashboardQueryRepository {
             .fetchOne();
 
     Long completedQuizCount = aggregate != null ? aggregate.get(0, Long.class) : null;
-    Integer correctCount = aggregate != null ? aggregate.get(1, Integer.class) : null;
-    Integer totalQuestionCount = aggregate != null ? aggregate.get(2, Integer.class) : null;
+    Number correctCountSum = aggregate != null ? aggregate.get(1, Number.class) : null;
+    Number totalQuestionCountSum = aggregate != null ? aggregate.get(2, Number.class) : null;
+    Integer correctCount = correctCountSum != null ? correctCountSum.intValue() : null;
+    Integer totalQuestionCount =
+        totalQuestionCountSum != null ? totalQuestionCountSum.intValue() : null;
     LocalDateTime lastCompletedAt =
         aggregate != null ? aggregate.get(3, LocalDateTime.class) : null;
 
@@ -103,8 +106,10 @@ public class DashboardQueryRepository {
       Long tagId = tuple.get(0, Long.class);
       String tagName = tuple.get(1, String.class);
       Long count = tuple.get(2, Long.class);
-      Integer correctCount = tuple.get(3, Integer.class);
-      Integer totalCount = tuple.get(4, Integer.class);
+      Number correctCountSum = tuple.get(3, Number.class);
+      Number totalCountSum = tuple.get(4, Number.class);
+      Integer correctCount = correctCountSum != null ? correctCountSum.intValue() : null;
+      Integer totalCount = totalCountSum != null ? totalCountSum.intValue() : null;
 
       summaries.add(
           DashboardResponse.TagSummary.builder()
