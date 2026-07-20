@@ -263,6 +263,10 @@ class QuizGenerationServiceTest {
     assertThat(existingQuizSet.getStatus())
         .isEqualTo(com.realdev.readle.domain.quiz.entity.QuizSetStatus.FAILED);
 
+    // 실패 후 복구 시 save가 호출되었는지 검증
+    org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.times(1))
+        .save(existingQuizSet);
+
     // delete는 호출되지 않아야 함
     org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.never()).delete(any());
   }
