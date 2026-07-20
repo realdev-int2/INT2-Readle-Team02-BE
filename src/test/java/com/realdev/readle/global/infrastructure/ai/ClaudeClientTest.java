@@ -13,7 +13,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.global.config.ClaudeProperties;
 import com.realdev.readle.global.config.ClaudeTestConfig;
 import com.realdev.readle.global.exception.CustomException;
-import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -169,11 +168,11 @@ class ClaudeClientTest {
         .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON));
 
     // when
-    ClaudeResponse response = claudeClient.generateMessage(systemPrompt, userPrompt);
+    String response = claudeClient.getGeneratedText(systemPrompt, userPrompt);
 
     // then
     assertThat(response).isNotNull();
-    assertThat(response.getContent().get(0).getText()).isEqualTo("Generated Quiz JSON text");
+    assertThat(response).isEqualTo("Generated Quiz JSON text");
     server.verify();
   }
 
@@ -202,11 +201,11 @@ class ClaudeClientTest {
         .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON));
 
     // when
-    ClaudeResponse response = claudeClient.generateMessage(systemPrompt, userPrompt);
+    String response = claudeClient.getGeneratedText(systemPrompt, userPrompt);
 
     // then
     assertThat(response).isNotNull();
-    assertThat(response.getContent().get(0).getText()).isEqualTo("Generated Quiz JSON text");
+    assertThat(response).isEqualTo("Generated Quiz JSON text");
     server.verify();
   }
 
@@ -230,7 +229,7 @@ class ClaudeClientTest {
         .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
     // when & then
-    assertThatThrownBy(() -> claudeClient.generateMessage(systemPrompt, userPrompt))
+    assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
         .isInstanceOf(RestClientException.class);
     server.verify();
   }
@@ -249,7 +248,7 @@ class ClaudeClientTest {
         .andRespond(withStatus(HttpStatus.BAD_REQUEST));
 
     // when & then
-    assertThatThrownBy(() -> claudeClient.generateMessage(systemPrompt, userPrompt))
+    assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
         .isInstanceOf(HttpClientErrorException.class);
     server.verify();
   }
@@ -275,11 +274,11 @@ class ClaudeClientTest {
         .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON));
 
     // when
-    ClaudeResponse response = claudeClient.generateMessage(systemPrompt, userPrompt);
+    String response = claudeClient.getGeneratedText(systemPrompt, userPrompt);
 
     // then
     assertThat(response).isNotNull();
-    assertThat(response.getContent().get(0).getText()).isEqualTo("Generated Quiz JSON text");
+    assertThat(response).isEqualTo("Generated Quiz JSON text");
     server.verify();
   }
 
@@ -311,8 +310,53 @@ class ClaudeClientTest {
             });
 
     // when & then
-    assertThatThrownBy(() -> claudeClient.generateMessage(systemPrompt, userPrompt))
+    assertThatThrownBy(() -> claudeClient.getGeneratedText(systemPrompt, userPrompt))
         .isInstanceOf(ResourceAccessException.class);
+    server.verify();
+  }
+
+  @Test
+  @DisplayName("채점 전용 클라이언트(getGradingGeneratedText) 호출 시 5xx 에러가 발생하면 재시도하지 않고 즉시 예외를 전파해야 한다")
+  void getGradingGeneratedTextDoesNotRetryOnApiException() {
+    // given
+    String systemPrompt = "You are a grading master";
+    String userPrompt = "Grade this";
+
+    // 1차 시도: 500 에러 모킹 (단 1회만 설정)
+    server
+        .expect(requestTo("https://api.anthropic.com/v1/messages"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+    // when & then
+    assertThatThrownBy(() -> claudeClient.getGradingGeneratedText(systemPrompt, userPrompt))
+        .isInstanceOf(RestClientException.class);
+
+    // server.verify()는 모킹된 1회의 요청만 수행되었는지 검증한다 (재시도 발생 시 모킹 부족으로 실패함)
+    server.verify();
+  }
+
+  @Test
+  @DisplayName("채점 전용 클라이언트(getGradingGeneratedText) 호출 시 네트워크 장애가 발생하면 재시도하지 않고 즉시 예외를 전파해야 한다")
+  void getGradingGeneratedTextDoesNotRetryOnResourceAccessException() {
+    // given
+    String systemPrompt = "You are a grading master";
+    String userPrompt = "Grade this";
+
+    // 1차 시도: I/O 연결 장애 모킹 (단 1회만 설정)
+    server
+        .expect(requestTo("https://api.anthropic.com/v1/messages"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(
+            request -> {
+              throw new ResourceAccessException(
+                  "Connection refused", new IOException("Connection refused"));
+            });
+
+    // when & then
+    assertThatThrownBy(() -> claudeClient.getGradingGeneratedText(systemPrompt, userPrompt))
+        .isInstanceOf(ResourceAccessException.class);
+
     server.verify();
   }
 }

@@ -16,6 +16,7 @@ import com.realdev.readle.domain.quiz.exception.QuizErrorCode;
 import com.realdev.readle.domain.quiz.repository.QuizChoiceRepository;
 import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
+import com.realdev.readle.domain.tag.service.TagService;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
@@ -38,6 +39,7 @@ public class QuizGenerationService {
   private final ClaudeClient claudeClient;
   private final PromptLoader promptLoader;
   private final ObjectMapper objectMapper;
+  private final TagService tagService;
 
   private final TransactionTemplate transactionTemplate;
 
@@ -45,7 +47,10 @@ public class QuizGenerationService {
     ContentValidation validation =
         contentValidationRepository
             .findByIdWithContent(sourceValidationId)
-            .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 검증 ID입니다."));
+            .orElseThrow(
+                () ->
+                    new CustomException(
+                        QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
 
     // Validation 상태 분기: PASSED만 허용하는 allow-list로 변경
     if (validation.getStatus() != ValidationStatus.PASSED) {
@@ -74,7 +79,10 @@ public class QuizGenerationService {
               ContentValidation managedValidation =
                   contentValidationRepository
                       .findByIdWithContent(sourceValidationId)
-                      .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 검증 ID입니다."));
+                      .orElseThrow(
+                          () ->
+                              new CustomException(
+                                  QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
 
               QuizSet newQuizSet;
               try {
@@ -98,7 +106,8 @@ public class QuizGenerationService {
               : validation.getContent().getExtractedText();
 
       if (articleText == null || articleText.isBlank()) {
-        throw new IllegalArgumentException("퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
+        throw new CustomException(
+            QuizErrorCode.EMPTY_SOURCE_TEXT_FOR_QUIZ, "퀴즈를 생성할 본문 텍스트가 존재하지 않습니다.");
       }
 
       // 방어: </source_content> 인젝션 치환 (대소문자·공백 무관하게 처리)
@@ -189,7 +198,14 @@ public class QuizGenerationService {
               }
             }
 
-            activeQuizSet.complete(orderNo - 1);
+            int generatedQuestionCount = orderNo - 1;
+            if (generatedQuestionCount < 1) {
+              throw new CustomException(
+                  QuizErrorCode.QUIZ_GENERATION_FAILED, "AI가 생성한 퀴즈 문항이 없습니다.");
+            }
+            activeQuizSet.complete(generatedQuestionCount);
+            tagService.saveContentTags(activeQuizSet.getContent(), parsedResponse.getTags());
+
             return QuizCreateResponse.from(activeQuizSet);
           });
 

@@ -17,8 +17,8 @@ import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.util.crawler.WebCrawler;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +32,7 @@ public class ContentService {
   private final WebCrawler webCrawler;
   private final ContentRepository contentRepository;
   private final MemberRepository memberRepository;
+  private final ApplicationEventPublisher eventPublisher;
 
   public ContentExtractResponse extract(ContentExtractRequest request) {
     WebCrawler.CrawledDocument crawledDocument = webCrawler.crawl(request.url());
@@ -39,73 +40,77 @@ public class ContentService {
   }
 
   @Transactional
-  public ContentCreateResponse createContent(ContentCreateRequest request, UUID memberUuid) {
+  public ContentCreateResponse createContent(ContentCreateRequest request, String memberUuid) {
     validateAuthentication(memberUuid);
     validateCreateRequest(request);
 
     // 1. 회원 조회
     Member member =
         memberRepository
-            .findByUuid(memberUuid.toString())
+            .findByUuid(memberUuid)
             .orElseThrow(() -> new CustomException(MemberErrorCode.MEMBER_NOT_FOUND));
 
     // 2. 저장
     Content content = buildContent(request, member);
     Content saved = contentRepository.save(content);
 
+    eventPublisher.publishEvent(new ContentCreatedEvent(saved.getId(), memberUuid));
+
     return new ContentCreateResponse(saved.getId(), ValidationStatus.PENDING);
   }
 
-  private void validateAuthentication(UUID memberUuid) {
+  private void validateAuthentication(String memberUuid) {
     if (memberUuid == null) {
       throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
     }
   }
 
   private void validateCreateRequest(ContentCreateRequest request) {
-    if (request.inputType() == InputType.URL) {
-      validateUrlType(request);
-    } else if (request.inputType() == InputType.TEXT) {
-      validateTextType(request);
-    }
+    validateFieldsByInputType(request);
+    validateContentLength(request);
+  }
 
-    // 공통 텍스트 길이 검증 (Fast Fail)
+  private void validateFieldsByInputType(ContentCreateRequest request) {
+    if (request.inputType() == InputType.URL) {
+      if (request.title() == null || request.title().isBlank()) {
+        throw new CustomException(ContentErrorCode.TITLE_REQUIRED);
+      }
+      if (request.title().length() > 255) {
+        throw new CustomException(ContentErrorCode.TITLE_TOO_LONG);
+      }
+      if (request.url() == null || request.url().isBlank()) {
+        throw new CustomException(ContentErrorCode.URL_REQUIRED);
+      }
+      validateUrlFormat(request.url());
+      if (request.text() != null && !request.text().isBlank()) {
+        throw new CustomException(ContentErrorCode.UNNECESSARY_TEXT);
+      }
+    } else if (request.inputType() == InputType.TEXT) {
+      if (request.title() != null && !request.title().isBlank() && request.title().length() > 255) {
+        throw new CustomException(ContentErrorCode.TITLE_TOO_LONG);
+      }
+      if ((request.url() != null && !request.url().isBlank())
+          || (request.extractedText() != null && !request.extractedText().isBlank())) {
+        throw new CustomException(ContentErrorCode.UNNECESSARY_URL_INFO);
+      }
+    } else {
+      throw new CustomException(ContentErrorCode.INVALID_INPUT_TYPE);
+    }
+  }
+
+  private void validateContentLength(ContentCreateRequest request) {
     String contentText =
         (request.inputType() == InputType.TEXT) ? request.text() : request.extractedText();
+
+    if (contentText == null || contentText.isBlank()) {
+      throw new CustomException(
+          request.inputType() == InputType.URL
+              ? ContentErrorCode.MISSING_EXTRACTED_TEXT
+              : ContentErrorCode.TEXT_REQUIRED);
+    }
+
     if (contentText.length() > MAX_TEXT_LENGTH) {
       throw new CustomException(ContentErrorCode.CONTENT_TOO_LARGE);
-    }
-  }
-
-  private void validateUrlType(ContentCreateRequest request) {
-    if (request.title() == null || request.title().isBlank()) {
-      throw new CustomException(ContentErrorCode.TITLE_REQUIRED);
-    }
-    if (request.title().length() > 255) {
-      throw new CustomException(ContentErrorCode.TITLE_TOO_LONG);
-    }
-    if (request.url() == null || request.url().isBlank()) {
-      throw new CustomException(ContentErrorCode.URL_REQUIRED);
-    }
-    validateUrlFormat(request.url());
-    if (request.extractedText() == null || request.extractedText().isBlank()) {
-      throw new CustomException(ContentErrorCode.MISSING_EXTRACTED_TEXT);
-    }
-    if (request.text() != null && !request.text().isBlank()) {
-      throw new CustomException(ContentErrorCode.UNNECESSARY_TEXT);
-    }
-  }
-
-  private void validateTextType(ContentCreateRequest request) {
-    if (request.title() != null && !request.title().isBlank() && request.title().length() > 255) {
-      throw new CustomException(ContentErrorCode.TITLE_TOO_LONG);
-    }
-    if (request.text() == null || request.text().isBlank()) {
-      throw new CustomException(ContentErrorCode.TEXT_REQUIRED);
-    }
-    if ((request.url() != null && !request.url().isBlank())
-        || (request.extractedText() != null && !request.extractedText().isBlank())) {
-      throw new CustomException(ContentErrorCode.UNNECESSARY_URL_INFO);
     }
   }
 
@@ -136,9 +141,6 @@ public class ContentService {
   private String resolveTitle(String title, String text) {
     if (title != null && !title.isBlank()) {
       return title;
-    }
-    if (text == null || text.isBlank()) {
-      return "";
     }
     return text.substring(0, Math.min(TITLE_FALLBACK_LENGTH, text.length()));
   }

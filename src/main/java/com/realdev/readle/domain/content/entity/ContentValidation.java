@@ -16,6 +16,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -62,4 +63,45 @@ public class ContentValidation extends BaseCreatedAtEntity {
 
   @Column(name = "validated_at")
   private LocalDateTime validatedAt;
+
+  public void markPassed(BigDecimal validationScore) {
+    this.status = ValidationStatus.PASSED;
+    this.validationScore = validationScore;
+    this.validatedAt = LocalDateTime.now();
+  }
+
+  public void markRejected(
+      BigDecimal validationScore, RejectReasonCode rejectReasonCode, String evidenceSnippets) {
+    this.status = ValidationStatus.REJECTED;
+    this.validationScore = validationScore;
+    this.rejectReasonCode = rejectReasonCode;
+    this.evidenceSnippets = evidenceSnippets;
+    this.validatedAt = LocalDateTime.now();
+  }
+
+  public void markFailed(ErrorCode errorCode) {
+    this.status = ValidationStatus.FAILED;
+    this.errorCode = errorCode;
+    this.validatedAt = LocalDateTime.now();
+  }
+
+  @Builder
+  private ContentValidation(
+      Content content,
+      ValidationMethod validationMethod,
+      ValidationStatus status,
+      BigDecimal validationScore,
+      RejectReasonCode rejectReasonCode,
+      String evidenceSnippets,
+      ErrorCode errorCode,
+      LocalDateTime validatedAt) {
+    this.content = content;
+    this.validationMethod = validationMethod;
+    this.status = status;
+    this.validationScore = validationScore;
+    this.rejectReasonCode = rejectReasonCode;
+    this.evidenceSnippets = evidenceSnippets;
+    this.errorCode = errorCode;
+    this.validatedAt = validatedAt;
+  }
 }

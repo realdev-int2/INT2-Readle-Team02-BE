@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,9 +70,7 @@ public class RefreshTokenService {
     if (rawToken == null || rawToken.isBlank() || memberUuid == null || memberUuid.isBlank()) {
       return false;
     }
-    return refreshTokenRepository
-        .findByTokenHash(hash(rawToken))
-        .filter(token -> token.getRevokedAt() == null && token.getExpiresAt().isAfter(now()))
+    return findActiveToken(rawToken)
         .map(MemberRefreshToken::getMember)
         .map(Member::getUuid)
         .filter(memberUuid::equals)
@@ -79,13 +78,12 @@ public class RefreshTokenService {
   }
 
   @Transactional
-  public void revoke(String rawToken) {
-    if (rawToken == null || rawToken.isBlank()) {
+  public void revoke(String rawToken, String memberUuid) {
+    if (rawToken == null || rawToken.isBlank() || memberUuid == null || memberUuid.isBlank()) {
       return;
     }
-    refreshTokenRepository
-        .findByTokenHash(hash(rawToken))
-        .filter(token -> token.getRevokedAt() == null && token.getExpiresAt().isAfter(now()))
+    findActiveToken(rawToken)
+        .filter(token -> memberUuid.equals(token.getMember().getUuid()))
         .ifPresent(MemberRefreshToken::revoke);
   }
 
@@ -93,14 +91,13 @@ public class RefreshTokenService {
     if (rawToken == null || rawToken.isBlank()) {
       throw invalidRefreshToken();
     }
-    MemberRefreshToken token =
-        refreshTokenRepository
-            .findByTokenHash(hash(rawToken))
-            .orElseThrow(this::invalidRefreshToken);
-    if (token.getRevokedAt() != null || !token.getExpiresAt().isAfter(now())) {
-      throw invalidRefreshToken();
-    }
-    return token;
+    return findActiveToken(rawToken).orElseThrow(this::invalidRefreshToken);
+  }
+
+  private Optional<MemberRefreshToken> findActiveToken(String rawToken) {
+    return refreshTokenRepository
+        .findByTokenHash(hash(rawToken))
+        .filter(token -> token.getRevokedAt() == null && token.getExpiresAt().isAfter(now()));
   }
 
   private String randomToken() {

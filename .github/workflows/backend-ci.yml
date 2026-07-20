@@ -42,14 +42,14 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        uses: docker/login-action@c66a8fcb2472d4283042d726b2a061b43b3f49ab
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
-        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
         with:
           context: .
           platforms: linux/amd64
