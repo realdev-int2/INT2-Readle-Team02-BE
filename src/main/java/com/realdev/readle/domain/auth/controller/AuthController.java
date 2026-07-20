@@ -123,14 +123,16 @@ public class AuthController {
   public ApiResponse<CurrentUserResponse> currentUser(Authentication authentication) {
     String uuid = String.valueOf(authentication.getPrincipal());
     Member member = authService.currentMember(uuid);
-    return new ApiResponse<>(new CurrentUserResponse(member.getUuid(), member.getNickname()));
+    return new ApiResponse<>(
+        new CurrentUserResponse(
+            member.getUuid(), member.getNickname(), member.getProfileImageUrl()));
   }
 
   public record ApiResponse<T>(T data) {}
 
   public record SessionResponse(boolean authenticated, String uuid) {}
 
-  public record CurrentUserResponse(String uuid, String nickname) {}
+  public record CurrentUserResponse(String uuid, String nickname, String profileImageUrl) {}
 
   private void requireMatchingBrowserState(String state, String browserState) {
     if (state == null
