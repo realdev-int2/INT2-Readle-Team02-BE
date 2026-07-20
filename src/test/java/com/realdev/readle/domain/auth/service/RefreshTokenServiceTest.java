@@ -77,12 +77,31 @@ class RefreshTokenServiceTest {
             refreshTokenRepository, new JwtService(properties), properties, clock);
     assertThatCode(() -> service.revoke(null, "member-uuid")).doesNotThrowAnyException();
     assertThatCode(() -> service.revoke(" ", "member-uuid")).doesNotThrowAnyException();
-    assertThatCode(() -> service.revoke("token", null)).doesNotThrowAnyException();
-    assertThatCode(() -> service.revoke("token", " ")).doesNotThrowAnyException();
     verifyNoInteractions(refreshTokenRepository);
 
     when(refreshTokenRepository.findByTokenHash(any())).thenReturn(java.util.Optional.empty());
     assertThatCode(() -> service.revoke("unknown-token", "member-uuid")).doesNotThrowAnyException();
+  }
+
+  @Test
+  void revokesPresentedRefreshTokenWithoutMemberUuid() {
+    Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
+    SecurityProperties properties = properties();
+    RefreshTokenService service =
+        new RefreshTokenService(
+            refreshTokenRepository, new JwtService(properties), properties, clock);
+    Member member = mock(Member.class);
+    when(refreshTokenRepository.save(any(MemberRefreshToken.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    String rawToken = service.issue(member);
+    ArgumentCaptor<MemberRefreshToken> saved = ArgumentCaptor.forClass(MemberRefreshToken.class);
+    verify(refreshTokenRepository).save(saved.capture());
+    when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(saved.getValue()));
+
+    service.revoke(rawToken, null);
+
+    assertThat(saved.getValue().getRevokedAt()).isNotNull();
   }
 
   @Test

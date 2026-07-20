@@ -79,11 +79,15 @@ public class RefreshTokenService {
 
   @Transactional
   public void revoke(String rawToken, String memberUuid) {
-    if (rawToken == null || rawToken.isBlank() || memberUuid == null || memberUuid.isBlank()) {
+    if (rawToken == null || rawToken.isBlank()) {
       return;
     }
     findActiveToken(rawToken)
-        .filter(token -> memberUuid.equals(token.getMember().getUuid()))
+        .filter(
+            token ->
+                memberUuid == null
+                    || memberUuid.isBlank()
+                    || memberUuid.equals(token.getMember().getUuid()))
         .ifPresent(MemberRefreshToken::revoke);
   }
 
