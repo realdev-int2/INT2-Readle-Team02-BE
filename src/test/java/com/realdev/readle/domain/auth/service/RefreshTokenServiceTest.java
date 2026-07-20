@@ -105,6 +105,27 @@ class RefreshTokenServiceTest {
   }
 
   @Test
+  void revokesPresentedRefreshTokenWithBlankMemberUuid() {
+    Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
+    SecurityProperties properties = properties();
+    RefreshTokenService service =
+        new RefreshTokenService(
+            refreshTokenRepository, new JwtService(properties), properties, clock);
+    Member member = mock(Member.class);
+    when(refreshTokenRepository.save(any(MemberRefreshToken.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    String rawToken = service.issue(member);
+    ArgumentCaptor<MemberRefreshToken> saved = ArgumentCaptor.forClass(MemberRefreshToken.class);
+    verify(refreshTokenRepository).save(saved.capture());
+    when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(saved.getValue()));
+
+    service.revoke(rawToken, " ");
+
+    assertThat(saved.getValue().getRevokedAt()).isNotNull();
+  }
+
+  @Test
   void doesNotRevokeAnActiveTokenOwnedByAnotherMember() {
     Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
     SecurityProperties properties = properties();
