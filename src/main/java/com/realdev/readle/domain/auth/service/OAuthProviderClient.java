@@ -49,7 +49,7 @@ public class OAuthProviderClient {
               "scope",
               provider == OAuthProvider.GOOGLE
                   ? "openid profile email"
-                  : "profile_nickname account_email")
+                  : "profile_nickname profile_image account_email")
           .encode()
           .build()
           .toUriString();
