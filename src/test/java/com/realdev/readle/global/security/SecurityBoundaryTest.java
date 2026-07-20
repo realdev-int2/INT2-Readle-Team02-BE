@@ -140,6 +140,39 @@ class SecurityBoundaryTest {
   }
 
   @Test
+  void deniesAnonymousAccessToQuizAttemptStartWithJsonUnauthorizedResponse() throws Exception {
+    mockMvc
+        .perform(post("/api/quizzes/1/attempts"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
+        .andExpect(jsonPath("$.error.details").isArray());
+  }
+
+  @Test
+  void deniesAnonymousAccessToQuizAttemptDetailWithJsonUnauthorizedResponse() throws Exception {
+    mockMvc
+        .perform(get("/api/quizzes/attempts/1"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
+        .andExpect(jsonPath("$.error.details").isArray());
+  }
+
+  @Test
+  void deniesAnonymousAccessToQuizAttemptSubmitWithJsonUnauthorizedResponse() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/quizzes/attempts/1/submit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
+        .andExpect(jsonPath("$.error.details").isArray());
+  }
+
+  @Test
   void deniesFallbackRoutesWithJsonUnauthorizedResponse() throws Exception {
     mockMvc
         .perform(get("/private"))
