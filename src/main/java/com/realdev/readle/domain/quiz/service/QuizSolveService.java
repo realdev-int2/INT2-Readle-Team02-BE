@@ -3,8 +3,10 @@ package com.realdev.readle.domain.quiz.service;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.repository.MemberRepository;
 import com.realdev.readle.domain.quiz.dto.request.QuizSubmitRequest;
+import com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizDetailResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizSubmitResponse;
+import com.realdev.readle.domain.quiz.entity.AttemptStatus;
 import com.realdev.readle.domain.quiz.entity.QuestionType;
 import com.realdev.readle.domain.quiz.entity.QuizAnswer;
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
@@ -19,6 +21,7 @@ import com.realdev.readle.domain.quiz.repository.QuizChoiceRepository;
 import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizResultRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
+import com.realdev.readle.domain.tag.repository.ContentTagRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import java.util.ArrayList;
@@ -46,6 +49,7 @@ public class QuizSolveService {
   private final QuizAnswerRepository quizAnswerRepository;
   private final QuizResultRepository quizResultRepository;
   private final MemberRepository memberRepository;
+  private final ContentTagRepository contentTagRepository;
   private final QuizAiGradingService quizAiGradingService;
   private final TransactionTemplate transactionTemplate;
 
@@ -262,6 +266,44 @@ public class QuizSolveService {
     } catch (DataIntegrityViolationException e) {
       throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
     }
+  }
+
+  @Transactional(readOnly = true)
+  public QuizAttemptResultResponse getAttemptResult(String memberUuid, Long attemptId) {
+    QuizAttempt quizAttempt =
+        quizAttemptRepository
+            .findById(attemptId)
+            .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
+
+    if (!quizAttempt.getMember().getUuid().equals(memberUuid)) {
+      throw new CustomException(QuizErrorCode.FORBIDDEN_ACCESS);
+    }
+
+    if (quizAttempt.getStatus() != AttemptStatus.SUBMITTED) {
+      throw new CustomException(QuizErrorCode.ATTEMPT_NOT_SUBMITTED);
+    }
+
+    QuizResult quizResult =
+        quizResultRepository
+            .findByQuizAttemptId(attemptId)
+            .orElseThrow(
+                () ->
+                    new CustomException(
+                        GlobalErrorCode.SERVER_ERROR, "해당 시도의 채점 결과 데이터가 존재하지 않습니다."));
+
+    List<QuizAnswer> quizAnswers =
+        quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(attemptId);
+
+    Long quizSetId = quizAttempt.getQuizSet().getId();
+    String title = quizAttempt.getQuizSet().getContent().getTitle();
+    Long contentId = quizAttempt.getQuizSet().getContent().getId();
+    List<String> tags =
+        contentTagRepository.findByContentIdWithTag(contentId).stream()
+            .map(ct -> ct.getTag().getName())
+            .toList();
+
+    return QuizAttemptResultResponse.from(
+        quizResult, quizAnswers, title, tags, quizSetId, attemptId);
   }
 
   private boolean isStaticMatch(String correct, String submitted) {

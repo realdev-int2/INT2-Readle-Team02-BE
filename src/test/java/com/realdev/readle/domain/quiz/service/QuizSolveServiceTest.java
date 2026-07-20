@@ -13,9 +13,11 @@ import static org.mockito.Mockito.verify;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.repository.MemberRepository;
 import com.realdev.readle.domain.quiz.dto.request.QuizSubmitRequest;
+import com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizSubmitResponse;
 import com.realdev.readle.domain.quiz.entity.AttemptStatus;
 import com.realdev.readle.domain.quiz.entity.QuestionType;
+import com.realdev.readle.domain.quiz.entity.QuizAnswer;
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import com.realdev.readle.domain.quiz.entity.QuizChoice;
 import com.realdev.readle.domain.quiz.entity.QuizQuestion;
@@ -28,6 +30,7 @@ import com.realdev.readle.domain.quiz.repository.QuizChoiceRepository;
 import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizResultRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
+import com.realdev.readle.domain.tag.repository.ContentTagRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import java.util.List;
@@ -54,6 +57,7 @@ class QuizSolveServiceTest {
   @Mock private QuizAnswerRepository quizAnswerRepository;
   @Mock private QuizResultRepository quizResultRepository;
   @Mock private MemberRepository memberRepository;
+  @Mock private ContentTagRepository contentTagRepository;
   @Mock private QuizAiGradingService quizAiGradingService;
   @Mock private TransactionTemplate transactionTemplate;
 
@@ -77,6 +81,7 @@ class QuizSolveServiceTest {
 
     quizSet = mock(QuizSet.class);
     ReflectionTestUtils.setField(quizSet, "id", 100L);
+    lenient().when(quizSet.getId()).thenReturn(100L);
     lenient().when(quizSet.getContent()).thenReturn(content);
 
     quizAttempt = mock(QuizAttempt.class);
@@ -403,5 +408,91 @@ class QuizSolveServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(GlobalErrorCode.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("getAttemptResult 성공 - 제출 완료된 퀴즈 결과를 조회한다")
+  void getAttemptResult_Success() {
+    given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttempt.getStatus()).willReturn(AttemptStatus.SUBMITTED);
+
+    com.realdev.readle.domain.content.entity.Content mockContent =
+        mock(com.realdev.readle.domain.content.entity.Content.class);
+    given(quizSet.getContent()).willReturn(mockContent);
+    given(mockContent.getTitle()).willReturn("Spring @Transactional 심층 이해");
+    given(mockContent.getId()).willReturn(50L);
+
+    com.realdev.readle.domain.tag.entity.ContentTag mockContentTag =
+        mock(com.realdev.readle.domain.tag.entity.ContentTag.class);
+    com.realdev.readle.domain.tag.entity.Tag mockTag =
+        mock(com.realdev.readle.domain.tag.entity.Tag.class);
+    given(mockContentTag.getTag()).willReturn(mockTag);
+    given(mockTag.getName()).willReturn("spring");
+    given(contentTagRepository.findByContentIdWithTag(50L)).willReturn(List.of(mockContentTag));
+
+    QuizResult mockResult = mock(QuizResult.class);
+    given(mockResult.getAccuracyRate()).willReturn(new java.math.BigDecimal("100.00"));
+    given(mockResult.getCorrectCount()).willReturn(2);
+    given(mockResult.getTotalCount()).willReturn(2);
+    given(mockResult.getSolveDurationSeconds()).willReturn(30);
+    given(mockResult.getCompletedAt()).willReturn(java.time.LocalDateTime.now());
+
+    given(quizResultRepository.findByQuizAttemptId(100L)).willReturn(Optional.of(mockResult));
+
+    QuizAnswer mockAnswer = mock(QuizAnswer.class);
+    given(mockAnswer.getQuizQuestion()).willReturn(question1);
+    given(mockAnswer.getSubmittedAnswerText()).willReturn("test");
+    given(mockAnswer.getIsCorrect()).willReturn(true);
+    given(mockAnswer.getAiFeedback()).willReturn("good");
+
+    given(quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(100L))
+        .willReturn(List.of(mockAnswer));
+
+    QuizAttemptResultResponse response = quizSolveService.getAttemptResult("test-uuid", 100L);
+
+    assertThat(response).isNotNull();
+    assertThat(response.getQuizSetId()).isEqualTo(100L);
+    assertThat(response.getAttemptId()).isEqualTo(100L);
+    assertThat(response.getTitle()).isEqualTo("Spring @Transactional 심층 이해");
+    assertThat(response.getTags()).containsExactly("spring");
+    assertThat(response.getAccuracyRate()).isEqualTo(new java.math.BigDecimal("100.00"));
+    assertThat(response.getResults()).hasSize(1);
+    assertThat(response.getResults().get(0).getSubmittedAnswer()).isEqualTo("test");
+  }
+
+  @Test
+  @DisplayName("getAttemptResult 실패 - 타인의 이력 조회 시 FORBIDDEN_ACCESS 발생")
+  void getAttemptResult_Forbidden() {
+    given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
+    given(member.getUuid()).willReturn("another-uuid");
+
+    assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.FORBIDDEN_ACCESS);
+  }
+
+  @Test
+  @DisplayName("getAttemptResult 실패 - 미제출 상태에서 조회 시 ATTEMPT_NOT_SUBMITTED 발생")
+  void getAttemptResult_NotSubmitted() {
+    given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
+    given(member.getUuid()).willReturn("test-uuid");
+    given(quizAttempt.getStatus()).willReturn(AttemptStatus.IN_PROGRESS);
+
+    assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.ATTEMPT_NOT_SUBMITTED);
+  }
+
+  @Test
+  @DisplayName("getAttemptResult 실패 - 시도 ID가 존재하지 않으면 ATTEMPT_NOT_FOUND 발생")
+  void getAttemptResult_NotFound() {
+    given(quizAttemptRepository.findById(100L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.ATTEMPT_NOT_FOUND);
   }
 }
