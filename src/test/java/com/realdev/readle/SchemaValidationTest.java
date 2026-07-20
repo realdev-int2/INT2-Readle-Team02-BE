@@ -4,9 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.DriverManager;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -62,13 +61,13 @@ class SchemaValidationTest {
     var url =
         "jdbc:h2:mem:schema-validation-" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1";
     flyway(url, "1").migrate();
-    var v1MemberColumns = memberColumnNames(url);
+    var v1MemberColumns = memberColumnSnapshot(url);
     insertMember(url, "null-email", null);
     insertMember(url, "present-email", "present@example.com");
 
     flyway(url, "2").migrate();
 
-    assertThat(memberColumnNames(url)).isEqualTo(v1MemberColumns);
+    assertThat(memberColumnSnapshot(url)).isEqualTo(v1MemberColumns);
     assertThat(memberEmails(url)).containsExactly(null, "present@example.com");
   }
 
@@ -79,16 +78,34 @@ class SchemaValidationTest {
         .load();
   }
 
-  private Set<String> memberColumnNames(String url) throws Exception {
+  private List<MemberColumn> memberColumnSnapshot(String url) throws Exception {
     try (var connection = DriverManager.getConnection(url, "sa", "");
         var columns = connection.getMetaData().getColumns(null, null, "MEMBER", null)) {
-      var names = new LinkedHashSet<String>();
+      var snapshot = new ArrayList<MemberColumn>();
       while (columns.next()) {
-        names.add(columns.getString("COLUMN_NAME"));
+        snapshot.add(
+            new MemberColumn(
+                columns.getString("COLUMN_NAME"),
+                columns.getInt("DATA_TYPE"),
+                columns.getString("TYPE_NAME"),
+                columns.getInt("COLUMN_SIZE"),
+                columns.getInt("NULLABLE"),
+                columns.getString("COLUMN_DEF"),
+                columns.getInt("ORDINAL_POSITION")));
       }
-      return names;
+      snapshot.sort(Comparator.comparingInt(MemberColumn::ordinalPosition));
+      return snapshot;
     }
   }
+
+  private record MemberColumn(
+      String name,
+      int jdbcType,
+      String typeName,
+      int columnSize,
+      int nullable,
+      String defaultValue,
+      int ordinalPosition) {}
 
   private void insertMember(String url, String oauthId, String email) throws Exception {
     var sql =
