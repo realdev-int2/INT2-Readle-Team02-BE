@@ -126,7 +126,7 @@ class OAuthProviderClientTest {
     assertThat(query).containsEntry("code_challenge", List.of("kakao-code-challenge"));
     assertThat(query).containsEntry("code_challenge_method", List.of("S256"));
     assertThat(UriUtils.decode(query.getFirst("scope"), StandardCharsets.UTF_8))
-        .isEqualTo("profile_nickname account_email");
+        .isEqualTo("profile_nickname profile_image account_email");
   }
 
   private SecurityProperties properties() {
