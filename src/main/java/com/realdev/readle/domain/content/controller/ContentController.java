@@ -4,6 +4,7 @@ import com.realdev.readle.domain.content.dto.request.ContentCreateRequest;
 import com.realdev.readle.domain.content.dto.request.ContentExtractRequest;
 import com.realdev.readle.domain.content.dto.response.ContentCreateResponse;
 import com.realdev.readle.domain.content.dto.response.ContentExtractResponse;
+import com.realdev.readle.domain.content.dto.response.ContentValidationResponse;
 import com.realdev.readle.domain.content.service.ContentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -44,5 +47,16 @@ public class ContentController {
       @Valid @RequestBody ContentCreateRequest request) {
     ContentCreateResponse response = contentService.createContent(request, memberUuid);
     return ResponseEntity.status(HttpStatus.CREATED).body(response);
+  }
+
+  @Operation(
+      summary = "콘텐츠 검증 상태 및 결과 조회",
+      description =
+          "비동기로 진행되는 콘텐츠의 적합성 검증 현재 상태(PENDING, PASSED, REJECTED, FAILED) 및 최종 결과를 조회합니다. 검증 실패(거절/에러) 시 사용자 노출용 사유 메시지와 우회 생성 가능 여부(bypassAvailable)를 함께 반환합니다.")
+  @GetMapping("/{contentId}/validation")
+  public ResponseEntity<ContentValidationResponse> validate(
+      @PathVariable Long contentId, @AuthenticationPrincipal String memberUuid) {
+    ContentValidationResponse response = contentService.getValidationResult(contentId, memberUuid);
+    return ResponseEntity.ok(response);
   }
 }

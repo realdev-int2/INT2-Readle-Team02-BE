@@ -12,4 +12,6 @@ public interface ContentValidationRepository extends JpaRepository<ContentValida
 
   @Query("select cv from ContentValidation cv join fetch cv.content where cv.id = :id")
   Optional<ContentValidation> findByIdWithContent(@Param("id") Long id);
+
+  Optional<ContentValidation> findFirstByContentIdOrderByCreatedAtDesc(Long contentId);
 }

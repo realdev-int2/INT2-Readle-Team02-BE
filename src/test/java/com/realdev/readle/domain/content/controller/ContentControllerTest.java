@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -25,6 +26,7 @@ import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.JwtService;
 import com.realdev.readle.global.security.SecurityConfig;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -443,5 +445,87 @@ class ContentControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error.code").value("INVALID_URL"))
         .andExpect(jsonPath("$.error.message").value("올바르지 않은 URL 형식입니다."));
+  }
+
+  @Test
+  @DisplayName("인증된 상태로 정상적으로 검증 결과를 조회하면 200 OK와 함께 결과를 반환한다")
+  void getValidationResult_success() throws Exception {
+    String memberUuid = UUID.randomUUID().toString();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+
+    com.realdev.readle.domain.content.dto.response.ContentValidationResponse response =
+        new com.realdev.readle.domain.content.dto.response.ContentValidationResponse(
+            1L,
+            ValidationStatus.REJECTED,
+            "NOT_DEVELOPMENT_RELATED",
+            "개발/기술 학습 콘텐츠로 인식되지 않았습니다. 관련된 콘텐츠를 등록해 주세요.",
+            true,
+            LocalDateTime.now().minusMinutes(5),
+            LocalDateTime.now());
+
+    when(contentService.getValidationResult(eq(1L), eq(memberUuid))).thenReturn(response);
+
+    mockMvc
+        .perform(
+            get("/api/contents/1/validation")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.contentId").value(1L))
+        .andExpect(jsonPath("$.status").value("REJECTED"))
+        .andExpect(jsonPath("$.errorCode").value("NOT_DEVELOPMENT_RELATED"))
+        .andExpect(jsonPath("$.message").value("개발/기술 학습 콘텐츠로 인식되지 않았습니다. 관련된 콘텐츠를 등록해 주세요."))
+        .andExpect(jsonPath("$.bypassAvailable").value(true))
+        .andExpect(jsonPath("$.validationMethod").doesNotExist()) // 은닉 확인
+        .andExpect(jsonPath("$.validationScore").doesNotExist()) // 은닉 확인
+        .andExpect(jsonPath("$.evidenceSnippets").doesNotExist()); // 은닉 확인
+  }
+
+  @Test
+  @DisplayName("인증되지 않은 사용자가 조회 요청 시 401 UNAUTHORIZED를 반환한다")
+  void getValidationResult_unauthorized() throws Exception {
+    when(contentService.getValidationResult(eq(1L), isNull()))
+        .thenThrow(new CustomException(GlobalErrorCode.UNAUTHORIZED));
+
+    mockMvc
+        .perform(get("/api/contents/1/validation").contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+  }
+
+  @Test
+  @DisplayName("타인의 콘텐츠를 조회하려고 시도할 때 403 FORBIDDEN을 반환한다")
+  void getValidationResult_forbidden() throws Exception {
+    String memberUuid = UUID.randomUUID().toString();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+
+    when(contentService.getValidationResult(eq(1L), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.CONTENT_ACCESS_DENIED));
+
+    mockMvc
+        .perform(
+            get("/api/contents/1/validation")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error.code").value("CONTENT_ACCESS_DENIED"));
+  }
+
+  @Test
+  @DisplayName("존재하지 않는 콘텐츠 조회 시 404 CONTENT_NOT_FOUND를 반환한다")
+  void getValidationResult_notFound() throws Exception {
+    String memberUuid = UUID.randomUUID().toString();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+
+    when(contentService.getValidationResult(eq(1L), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
+
+    mockMvc
+        .perform(
+            get("/api/contents/1/validation")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error.code").value("CONTENT_NOT_FOUND"));
   }
 }

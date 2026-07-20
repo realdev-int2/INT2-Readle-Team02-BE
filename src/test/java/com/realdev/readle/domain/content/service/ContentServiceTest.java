@@ -15,12 +15,12 @@ import com.realdev.readle.domain.content.entity.InputType;
 import com.realdev.readle.domain.content.entity.ValidationStatus;
 import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.domain.content.repository.ContentRepository;
+import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.exception.MemberErrorCode;
 import com.realdev.readle.domain.member.repository.MemberRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
-import com.realdev.readle.global.util.crawler.WebCrawler;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -36,8 +36,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class ContentServiceTest {
 
-  @Mock private WebCrawler webCrawler;
   @Mock private ContentRepository contentRepository;
+  @Mock private ContentValidationRepository contentValidationRepository;
   @Mock private MemberRepository memberRepository;
   @Mock private ApplicationEventPublisher eventPublisher;
   @InjectMocks private ContentService contentService;
@@ -467,5 +467,54 @@ class ContentServiceTest {
 
   private Content captureContent() {
     return contentCaptor.getValue();
+  }
+
+  @Test
+  @DisplayName("존재하지 않는 콘텐츠 조회 시 CONTENT_NOT_FOUND 예외가 발생한다")
+  void getValidationResult_contentNotFound() {
+    String memberUuid = UUID.randomUUID().toString();
+    when(contentRepository.findById(1L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> contentService.getValidationResult(1L, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.CONTENT_NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("타인의 콘텐츠 조회 시 CONTENT_ACCESS_DENIED 예외가 발생한다")
+  void getValidationResult_forbidden() {
+    String requesterUuid = UUID.randomUUID().toString();
+    String ownerUuid = UUID.randomUUID().toString();
+    Member owner = org.mockito.Mockito.mock(Member.class);
+    when(owner.getUuid()).thenReturn(ownerUuid);
+    Content content = org.mockito.Mockito.mock(Content.class);
+    when(content.getMember()).thenReturn(owner);
+
+    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+
+    assertThatThrownBy(() -> contentService.getValidationResult(1L, requesterUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.CONTENT_ACCESS_DENIED);
+  }
+
+  @Test
+  @DisplayName("검증 이력이 없는 경우 CONTENT_VALIDATION_NOT_FOUND 예외가 발생한다")
+  void getValidationResult_validationNotFound() {
+    String memberUuid = UUID.randomUUID().toString();
+    Member owner = org.mockito.Mockito.mock(Member.class);
+    when(owner.getUuid()).thenReturn(memberUuid);
+    Content content = org.mockito.Mockito.mock(Content.class);
+    when(content.getMember()).thenReturn(owner);
+
+    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> contentService.getValidationResult(1L, memberUuid))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND);
   }
 }

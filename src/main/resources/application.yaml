@@ -82,7 +82,7 @@ content:
     - "ignore the above instructions"
     - "disregard all previous"
 
-    # 결과 조작형 (이 서비스를 표적으로 한 자연스러운 시도 - 세희님 제안)
+    # 결과 조작형 (이 서비스를 표적으로 한 자연스러운 시도)
     - "무조건 통과"
     - "무조건 적합"
     - "무조건 PASSED"
@@ -91,7 +91,7 @@ content:
     - "validation_score"
     - "validationScore"
 
-    # 시스템 프롬프트 유출 시도 (자연스러운 호기심성 시도 - "숨겨진 뭔가 보여줘")
+    # 시스템 프롬프트 유출 시도 (자연스러운 호기심성 시도)
     - "탈옥 프롬프트"
     - "프롬프트를 출력"
 

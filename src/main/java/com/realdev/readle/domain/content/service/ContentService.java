@@ -4,11 +4,15 @@ import com.realdev.readle.domain.content.dto.request.ContentCreateRequest;
 import com.realdev.readle.domain.content.dto.request.ContentExtractRequest;
 import com.realdev.readle.domain.content.dto.response.ContentCreateResponse;
 import com.realdev.readle.domain.content.dto.response.ContentExtractResponse;
+import com.realdev.readle.domain.content.dto.response.ContentValidationResponse;
 import com.realdev.readle.domain.content.entity.Content;
+import com.realdev.readle.domain.content.entity.ContentValidation;
 import com.realdev.readle.domain.content.entity.InputType;
+import com.realdev.readle.domain.content.entity.ValidationMethod;
 import com.realdev.readle.domain.content.entity.ValidationStatus;
 import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.domain.content.repository.ContentRepository;
+import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.exception.MemberErrorCode;
 import com.realdev.readle.domain.member.repository.MemberRepository;
@@ -33,6 +37,7 @@ public class ContentService {
   private final ContentRepository contentRepository;
   private final MemberRepository memberRepository;
   private final ApplicationEventPublisher eventPublisher;
+  private final ContentValidationRepository contentValidationRepository;
 
   public ContentExtractResponse extract(ContentExtractRequest request) {
     WebCrawler.CrawledDocument crawledDocument = webCrawler.crawl(request.url());
@@ -57,6 +62,54 @@ public class ContentService {
     eventPublisher.publishEvent(new ContentCreatedEvent(saved.getId(), memberUuid));
 
     return new ContentCreateResponse(saved.getId(), ValidationStatus.PENDING);
+  }
+
+  @Transactional
+  public ContentValidationResponse getValidationResult(Long contentId, String memberUuid) {
+    validateAuthentication(memberUuid);
+
+    // 콘텐츠 존재 여부 및 본인 소유 확인
+    Content content =
+        contentRepository
+            .findById(contentId)
+            .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
+    if (!content.getMember().getUuid().equals(memberUuid)) {
+      throw new CustomException(ContentErrorCode.CONTENT_ACCESS_DENIED);
+    }
+
+    // 최신 검증 이력 조회
+    ContentValidation validation =
+        contentValidationRepository
+            .findFirstByContentIdOrderByCreatedAtDesc(contentId)
+            .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND));
+
+    // bypassAvailable 조건 계산
+    boolean bypassAvailable =
+        validation.getStatus() == ValidationStatus.REJECTED
+            && validation.getValidationMethod() == ValidationMethod.AI;
+
+    // errorCode 및 매핑 메시지 추출
+    String errorCodeString = null;
+    String message = null;
+
+    if (validation.getRejectReasonCode() != null) {
+      errorCodeString = validation.getRejectReasonCode().name();
+      message =
+          ValidationMessageConverter.convertRejectReasonMessage(validation.getRejectReasonCode());
+    } else if (validation.getErrorCode() != null) {
+      errorCodeString = validation.getErrorCode().name();
+      message = ValidationMessageConverter.convertErrorMessage(validation.getErrorCode());
+    }
+
+    // 응답 DTO 반환
+    return new ContentValidationResponse(
+        contentId,
+        validation.getStatus(),
+        errorCodeString,
+        message,
+        bypassAvailable,
+        validation.getCreatedAt(),
+        validation.getStatus() == ValidationStatus.PENDING ? null : validation.getValidatedAt());
   }
 
   private void validateAuthentication(String memberUuid) {
