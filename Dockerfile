@@ -29,4 +29,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=3 \
     CMD curl --fail --silent http://127.0.0.1:8080/api/actuator/health/readiness || exit 1
 
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-jar", "/app/app.jar"]

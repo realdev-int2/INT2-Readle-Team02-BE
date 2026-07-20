@@ -3,6 +3,7 @@ name: readle-local
 services:
   mysql:
     image: 'mysql:8.0'
+    command: ['mysqld', '--default-time-zone=+09:00']
     environment:
       - 'MYSQL_DATABASE=${MYSQL_DATABASE}'
       - 'MYSQL_PASSWORD=${MYSQL_PASSWORD}'
