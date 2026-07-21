@@ -76,6 +76,53 @@ class AuthControllerTest {
   }
 
   @Test
+  void redirectsMappedStartFailureToFixedLoginWithoutLeakingRequestData() throws Exception {
+    when(authService.start("google", "/dashboard?raw=state-code"))
+        .thenThrow(new CustomException(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED));
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/start")
+                .param("returnTo", "/dashboard?raw=state-code")
+                .param("error_description", "provider secret detail"))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            result -> {
+              assertThat(result.getResponse().getContentAsString())
+                  .doesNotContain(
+                      "/dashboard",
+                      "state-code",
+                      "provider secret detail",
+                      "OAUTH_AUTHORIZATION_FAILED");
+              assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                  .anyMatch(cookie -> cookie.contains(STATE_COOKIE + "=;"));
+              assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                  .noneMatch(cookie -> cookie.contains(RefreshTokenCookie.NAME));
+            });
+  }
+
+  @Test
+  void redirectsUnexpectedStartFailureToFixedLoginWithoutLeakingExceptionData() throws Exception {
+    when(authService.start("google", "/dashboard?raw=state-code"))
+        .thenThrow(new IllegalStateException("provider secret detail"));
+
+    mockMvc
+        .perform(get("/api/auth/google/start").param("returnTo", "/dashboard?raw=state-code"))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            result -> {
+              assertThat(result.getResponse().getContentAsString())
+                  .doesNotContain("/dashboard", "state-code", "provider secret detail");
+              assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                  .anyMatch(cookie -> cookie.contains(STATE_COOKIE + "=;"));
+              assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                  .noneMatch(cookie -> cookie.contains(RefreshTokenCookie.NAME));
+            });
+  }
+
+  @Test
   void rejectsCallbackWithoutMatchingBrowserStateBeforeTokenIssuance() throws Exception {
     mockMvc
         .perform(

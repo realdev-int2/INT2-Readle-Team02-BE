@@ -57,13 +57,19 @@ public class AuthController {
   @GetMapping("/auth/{provider}/start")
   public ResponseEntity<Void> start(
       @PathVariable String provider, @RequestParam(required = false) String returnTo) {
-    AuthService.StartResult result = authService.start(provider, returnTo);
-    return ResponseEntity.status(HttpStatus.FOUND)
-        .location(java.net.URI.create(result.authorizationUrl()))
-        .header(
-            HttpHeaders.SET_COOKIE,
-            OAuthStateCookie.create(result.state(), properties.stateMinutes()).toString())
-        .build();
+    try {
+      AuthService.StartResult result = authService.start(provider, returnTo);
+      return ResponseEntity.status(HttpStatus.FOUND)
+          .location(java.net.URI.create(result.authorizationUrl()))
+          .header(
+              HttpHeaders.SET_COOKIE,
+              OAuthStateCookie.create(result.state(), properties.stateMinutes()).toString())
+          .build();
+    } catch (RuntimeException exception) {
+      log.warn(
+          "OAuth start provider={} exception={}", provider, exception.getClass().getSimpleName());
+      return oauthFailureRedirect(OAUTH_FAILED, null);
+    }
   }
 
   @Operation(
@@ -77,11 +83,11 @@ public class AuthController {
       @RequestParam(required = false) String error,
       @CookieValue(value = OAuthStateCookie.NAME, required = false) String browserState) {
     if (!hasMatchingBrowserState(state, browserState)) {
-      return callbackFailure(OAUTH_FAILED, null);
+      return oauthFailureRedirect(OAUTH_FAILED, null);
     }
     if (error != null || code == null || code.isBlank()) {
       try {
-        return callbackFailure(
+        return oauthFailureRedirect(
             "access_denied".equals(error) ? OAUTH_CANCELLED : OAUTH_FAILED,
             authService.callbackFailure(provider, state));
       } catch (RuntimeException exception) {
@@ -89,7 +95,7 @@ public class AuthController {
             "OAuth callback provider={} exception={}",
             provider,
             exception.getClass().getSimpleName());
-        return callbackFailure(OAUTH_FAILED, null);
+        return oauthFailureRedirect(OAUTH_FAILED, null);
       }
     }
     try {
@@ -103,13 +109,13 @@ public class AuthController {
           .header(HttpHeaders.SET_COOKIE, OAuthStateCookie.delete().toString())
           .build();
     } catch (AuthService.CallbackExchangeFailure exception) {
-      return callbackFailure(OAUTH_FAILED, exception.returnTo());
+      return oauthFailureRedirect(OAUTH_FAILED, exception.returnTo());
     } catch (RuntimeException exception) {
       log.warn(
           "OAuth callback provider={} exception={}",
           provider,
           exception.getClass().getSimpleName());
-      return callbackFailure(OAUTH_FAILED, null);
+      return oauthFailureRedirect(OAUTH_FAILED, null);
     }
   }
 
@@ -163,7 +169,7 @@ public class AuthController {
 
   public record CurrentUserResponse(String uuid, String nickname, String profileImageUrl) {}
 
-  private ResponseEntity<Void> callbackFailure(String error, String returnTo) {
+  private ResponseEntity<Void> oauthFailureRedirect(String error, String returnTo) {
     String location = LOGIN_PATH + "?authError=" + error;
     if (returnTo != null) {
       location += "&returnTo=" + URLEncoder.encode(returnTo, StandardCharsets.UTF_8);
