@@ -39,8 +39,4 @@ public class ContentValidationService {
       }
     }
   }
-
-  public void markAsFailed(Long contentId, ValidationMethod validationMethod, ErrorCode errorCode) {
-    contentGuardrailService.markAsFailed(contentId, validationMethod, errorCode);
-  }
 }

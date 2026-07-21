@@ -476,9 +476,9 @@ class ContentControllerTest {
         .andExpect(jsonPath("$.errorCode").value("NOT_DEVELOPMENT_RELATED"))
         .andExpect(jsonPath("$.message").value("개발/기술 학습 콘텐츠로 인식되지 않았습니다. 관련된 콘텐츠를 등록해 주세요."))
         .andExpect(jsonPath("$.bypassAvailable").value(true))
-        .andExpect(jsonPath("$.validationMethod").doesNotExist()) // 은닉 확인
-        .andExpect(jsonPath("$.validationScore").doesNotExist()) // 은닉 확인
-        .andExpect(jsonPath("$.evidenceSnippets").doesNotExist()); // 은닉 확인
+        .andExpect(jsonPath("$.validationMethod").doesNotExist())
+        .andExpect(jsonPath("$.validationScore").doesNotExist())
+        .andExpect(jsonPath("$.evidenceSnippets").doesNotExist());
   }
 
   @Test
