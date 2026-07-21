@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 public enum QuizErrorCode implements ErrorCode {
   QUIZ_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 퀴즈 세트입니다."),
   ATTEMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 풀이 시도입니다."),
+  RESULT_REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 결과 리포트입니다."),
   SOURCE_VALIDATION_NOT_FOUND(HttpStatus.NOT_FOUND, "퀴즈 생성을 위한 콘텐츠 검증 정보를 찾을 수 없습니다."),
   EMPTY_SOURCE_TEXT_FOR_QUIZ(HttpStatus.BAD_REQUEST, "퀴즈 생성을 위한 원문 텍스트가 비어 있습니다."),
   VALIDATION_NOT_PASSED(HttpStatus.BAD_REQUEST, "해당 콘텐츠는 퀴즈 생성이 불가능한 상태입니다."),

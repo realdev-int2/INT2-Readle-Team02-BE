@@ -12,15 +12,20 @@ import com.realdev.readle.ReadleApplication;
 import com.realdev.readle.domain.auth.RefreshTokenCookie;
 import com.realdev.readle.domain.auth.service.RefreshTokenService;
 import com.realdev.readle.domain.member.entity.Member;
+import com.realdev.readle.domain.member.entity.MemberRefreshToken;
 import com.realdev.readle.domain.member.entity.OAuthProvider;
+import com.realdev.readle.domain.member.repository.MemberRefreshTokenRepository;
 import com.realdev.readle.domain.member.repository.MemberRepository;
 import jakarta.servlet.http.Cookie;
+import java.time.LocalDateTime;
+import java.util.Comparator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(
@@ -38,6 +43,8 @@ class SecurityBoundaryTest {
   @Autowired private MemberRepository memberRepository;
 
   @Autowired private RefreshTokenService refreshTokenService;
+
+  @Autowired private MemberRefreshTokenRepository refreshTokenRepository;
 
   @Autowired private JwtService jwtService;
 
@@ -80,22 +87,19 @@ class SecurityBoundaryTest {
   }
 
   @Test
-  void reportsJwtOnlySessionsAsUnauthenticated() throws Exception {
+  void reportsBlankRefreshTokenCookieAsUnauthenticated() throws Exception {
     mockMvc
-        .perform(
-            get("/api/auth/session")
-                .header("Authorization", "Bearer " + jwtService.issue("member-uuid")))
+        .perform(get("/api/auth/session").cookie(new Cookie(RefreshTokenCookie.NAME, " ")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.authenticated").value(false))
         .andExpect(jsonPath("$.data.uuid").value(org.hamcrest.Matchers.nullValue()));
   }
 
   @Test
-  void reportsJwtSessionsWithUnknownRefreshTokenAsUnauthenticated() throws Exception {
+  void reportsUnknownRefreshTokenCookieAsUnauthenticated() throws Exception {
     mockMvc
         .perform(
             get("/api/auth/session")
-                .header("Authorization", "Bearer " + jwtService.issue("member-uuid"))
                 .cookie(new Cookie(RefreshTokenCookie.NAME, "unknown-refresh-token")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.authenticated").value(false))
@@ -103,37 +107,50 @@ class SecurityBoundaryTest {
   }
 
   @Test
-  void reportsSessionAsAuthenticatedWhenJwtAndRefreshTokenBelongToSameMember() throws Exception {
+  void reportsActiveRefreshTokenCookieAsAuthenticatedWithoutBearer() throws Exception {
     Member member =
         memberRepository.save(
             Member.create(OAuthProvider.GOOGLE, "session-active", null, "tester", null));
     String refreshToken = refreshTokenService.issue(member);
 
     mockMvc
-        .perform(
-            get("/api/auth/session")
-                .header("Authorization", "Bearer " + jwtService.issue(member.getUuid()))
-                .cookie(new Cookie(RefreshTokenCookie.NAME, refreshToken)))
+        .perform(get("/api/auth/session").cookie(new Cookie(RefreshTokenCookie.NAME, refreshToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.authenticated").value(true))
         .andExpect(jsonPath("$.data.uuid").value(member.getUuid()));
   }
 
   @Test
-  void reportsSessionAsUnauthenticatedWhenRefreshTokenBelongsToAnotherMember() throws Exception {
-    Member jwtMember =
+  void reportsRevokedRefreshTokenCookieAsUnauthenticated() throws Exception {
+    Member member =
         memberRepository.save(
-            Member.create(OAuthProvider.GOOGLE, "session-jwt-member", null, "tester", null));
-    Member refreshMember =
-        memberRepository.save(
-            Member.create(OAuthProvider.GOOGLE, "session-refresh-member", null, "tester", null));
-    String refreshToken = refreshTokenService.issue(refreshMember);
+            Member.create(OAuthProvider.GOOGLE, "session-revoked", null, "tester", null));
+    String refreshToken = refreshTokenService.issue(member);
+
+    refreshTokenService.revoke(refreshToken, member.getUuid());
 
     mockMvc
-        .perform(
-            get("/api/auth/session")
-                .header("Authorization", "Bearer " + jwtService.issue(jwtMember.getUuid()))
-                .cookie(new Cookie(RefreshTokenCookie.NAME, refreshToken)))
+        .perform(get("/api/auth/session").cookie(new Cookie(RefreshTokenCookie.NAME, refreshToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.authenticated").value(false))
+        .andExpect(jsonPath("$.data.uuid").value(org.hamcrest.Matchers.nullValue()));
+  }
+
+  @Test
+  void reportsExpiredRefreshTokenCookieAsUnauthenticated() throws Exception {
+    Member member =
+        memberRepository.save(
+            Member.create(OAuthProvider.GOOGLE, "session-expired", null, "tester", null));
+    String refreshToken = refreshTokenService.issue(member);
+    MemberRefreshToken storedToken =
+        refreshTokenRepository.findAll().stream()
+            .max(Comparator.comparing(MemberRefreshToken::getId))
+            .orElseThrow();
+    ReflectionTestUtils.setField(storedToken, "expiresAt", LocalDateTime.now().minusDays(1));
+    refreshTokenRepository.saveAndFlush(storedToken);
+
+    mockMvc
+        .perform(get("/api/auth/session").cookie(new Cookie(RefreshTokenCookie.NAME, refreshToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.authenticated").value(false))
         .andExpect(jsonPath("$.data.uuid").value(org.hamcrest.Matchers.nullValue()));
@@ -186,6 +203,16 @@ class SecurityBoundaryTest {
   void deniesAnonymousAccessToQuizAttemptResultWithJsonUnauthorizedResponse() throws Exception {
     mockMvc
         .perform(get("/api/quizzes/attempts/1/result"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
+        .andExpect(jsonPath("$.error.details").isArray());
+  }
+
+  @Test
+  void deniesAnonymousAccessToResultReportWithJsonUnauthorizedResponse() throws Exception {
+    mockMvc
+        .perform(get("/api/result-reports/1"))
         .andExpect(status().isUnauthorized())
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))

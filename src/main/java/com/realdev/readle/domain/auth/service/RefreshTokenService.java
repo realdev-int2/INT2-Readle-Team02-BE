@@ -66,15 +66,11 @@ public class RefreshTokenService {
   }
 
   @Transactional(readOnly = true)
-  public boolean isActiveForMember(String rawToken, String memberUuid) {
-    if (rawToken == null || rawToken.isBlank() || memberUuid == null || memberUuid.isBlank()) {
-      return false;
+  public Optional<String> activeMemberUuid(String rawToken) {
+    if (rawToken == null || rawToken.isBlank()) {
+      return Optional.empty();
     }
-    return findActiveToken(rawToken)
-        .map(MemberRefreshToken::getMember)
-        .map(Member::getUuid)
-        .filter(memberUuid::equals)
-        .isPresent();
+    return findActiveToken(rawToken).map(MemberRefreshToken::getMember).map(Member::getUuid);
   }
 
   @Transactional

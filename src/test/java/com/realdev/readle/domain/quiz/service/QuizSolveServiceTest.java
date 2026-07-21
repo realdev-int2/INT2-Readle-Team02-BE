@@ -414,6 +414,7 @@ class QuizSolveServiceTest {
   @DisplayName("getAttemptResult 성공 - 제출 완료된 퀴즈 결과를 조회한다")
   void getAttemptResult_Success() {
     given(quizAttemptRepository.findById(100L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttempt.getId()).willReturn(100L);
     given(quizAttempt.getStatus()).willReturn(AttemptStatus.SUBMITTED);
 
     com.realdev.readle.domain.content.entity.Content mockContent =
@@ -494,5 +495,52 @@ class QuizSolveServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.ATTEMPT_NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("getResultReport 성공 - 결과 ID로 조회하고 실제 시도 ID를 응답한다")
+  void getResultReport_Success() {
+    QuizResult quizResult = mock(QuizResult.class);
+    given(quizResultRepository.findById(300L)).willReturn(Optional.of(quizResult));
+    given(quizResult.getQuizAttempt()).willReturn(quizAttempt);
+    given(quizAttempt.getStatus()).willReturn(AttemptStatus.SUBMITTED);
+
+    com.realdev.readle.domain.content.entity.Content content = quizSet.getContent();
+    given(content.getTitle()).willReturn("Spring @Transactional 심층 이해");
+    given(content.getId()).willReturn(50L);
+    given(contentTagRepository.findByContentIdWithTag(50L)).willReturn(List.of());
+    given(quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(200L))
+        .willReturn(List.of());
+
+    QuizAttemptResultResponse response = quizSolveService.getResultReport("test-uuid", 300L);
+
+    assertThat(response.getAttemptId()).isEqualTo(200L);
+    assertThat(response.getQuizSetId()).isEqualTo(100L);
+    assertThat(response.getTitle()).isEqualTo("Spring @Transactional 심층 이해");
+  }
+
+  @Test
+  @DisplayName("getResultReport 실패 - 타인의 결과 리포트이면 FORBIDDEN_ACCESS가 발생한다")
+  void getResultReport_Forbidden() {
+    QuizResult quizResult = mock(QuizResult.class);
+    given(quizResultRepository.findById(300L)).willReturn(Optional.of(quizResult));
+    given(quizResult.getQuizAttempt()).willReturn(quizAttempt);
+    given(member.getUuid()).willReturn("another-uuid");
+
+    assertThatThrownBy(() -> quizSolveService.getResultReport("test-uuid", 300L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.FORBIDDEN_ACCESS);
+  }
+
+  @Test
+  @DisplayName("getResultReport 실패 - 결과 ID가 존재하지 않으면 RESULT_REPORT_NOT_FOUND가 발생한다")
+  void getResultReport_NotFound() {
+    given(quizResultRepository.findById(300L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> quizSolveService.getResultReport("test-uuid", 300L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.RESULT_REPORT_NOT_FOUND);
   }
 }

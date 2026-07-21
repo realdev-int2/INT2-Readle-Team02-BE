@@ -88,6 +88,57 @@ class OAuthStateServiceTest {
   }
 
   @Test
+  void consumesFailureStateWithoutDecryptingVerifier() {
+    OAuthStateService service = service();
+    OAuthAuthorizationState state =
+        OAuthAuthorizationState.create(
+            "state-hash",
+            OAuthProvider.GOOGLE,
+            "/dashboard",
+            "malformed-ciphertext",
+            LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC).plusMinutes(1));
+    when(stateRepository.findByStateHashAndOauthProvider(any(), any()))
+        .thenReturn(Optional.of(state));
+
+    assertThat(service.consumeReturnTo(OAuthProvider.GOOGLE, "state")).isEqualTo("/dashboard");
+
+    verify(stateRepository).delete(state);
+  }
+
+  @Test
+  void consumeReturnToRejectsMissingState() {
+    OAuthStateService service = service();
+    when(stateRepository.findByStateHashAndOauthProvider(any(), any()))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.consumeReturnTo(OAuthProvider.GOOGLE, "state"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
+  }
+
+  @Test
+  void consumeReturnToRejectsExpiredState() {
+    OAuthStateService service = service();
+    OAuthAuthorizationState expired =
+        OAuthAuthorizationState.create(
+            "state-hash",
+            OAuthProvider.GOOGLE,
+            "/dashboard",
+            "unused-ciphertext",
+            LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC).minusNanos(1));
+    when(stateRepository.findByStateHashAndOauthProvider(any(), any()))
+        .thenReturn(Optional.of(expired));
+
+    assertThatThrownBy(() -> service.consumeReturnTo(OAuthProvider.GOOGLE, "state"))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
+
+    verify(stateRepository).delete(expired);
+  }
+
+  @Test
   void mapsLockAcquisitionFailuresToOAuthFailure() {
     OAuthStateService service = service();
     when(stateRepository.findByStateHashAndOauthProvider(any(), any()))

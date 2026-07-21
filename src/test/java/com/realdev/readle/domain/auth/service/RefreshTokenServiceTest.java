@@ -24,6 +24,7 @@ import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -33,15 +34,22 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class RefreshTokenServiceTest {
 
+  private static final Clock CLOCK =
+      Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
+  private static final SecurityProperties PROPERTIES = properties();
+
   @Mock private MemberRefreshTokenRepository refreshTokenRepository;
+  private RefreshTokenService service;
+
+  @BeforeEach
+  void setUp() {
+    service =
+        new RefreshTokenService(
+            refreshTokenRepository, new JwtService(PROPERTIES), PROPERTIES, CLOCK);
+  }
 
   @Test
   void revokesOnlyPresentedRefreshToken() throws Exception {
-    Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
-    SecurityProperties properties = properties();
-    RefreshTokenService service =
-        new RefreshTokenService(
-            refreshTokenRepository, new JwtService(properties), properties, clock);
     Member member = mock(Member.class);
     when(member.getUuid()).thenReturn("member-uuid");
     when(refreshTokenRepository.save(any(MemberRefreshToken.class)))
@@ -54,10 +62,9 @@ class RefreshTokenServiceTest {
                 MessageDigest.getInstance("SHA-256")
                     .digest(rawToken.getBytes(StandardCharsets.UTF_8)));
     ArgumentCaptor<MemberRefreshToken> saved = ArgumentCaptor.forClass(MemberRefreshToken.class);
-    org.mockito.Mockito.verify(refreshTokenRepository).save(saved.capture());
+    verify(refreshTokenRepository).save(saved.capture());
     assertThat(saved.getValue().getTokenHash()).isEqualTo(expectedHash);
-    when(refreshTokenRepository.findByTokenHash(any()))
-        .thenReturn(java.util.Optional.of(saved.getValue()));
+    when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(saved.getValue()));
 
     service.revoke(rawToken, "member-uuid");
 
@@ -70,26 +77,16 @@ class RefreshTokenServiceTest {
 
   @Test
   void ignoresMissingInactiveOrUnownedTokenDuringLogoutRevocation() {
-    Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
-    SecurityProperties properties = properties();
-    RefreshTokenService service =
-        new RefreshTokenService(
-            refreshTokenRepository, new JwtService(properties), properties, clock);
     assertThatCode(() -> service.revoke(null, "member-uuid")).doesNotThrowAnyException();
     assertThatCode(() -> service.revoke(" ", "member-uuid")).doesNotThrowAnyException();
     verifyNoInteractions(refreshTokenRepository);
 
-    when(refreshTokenRepository.findByTokenHash(any())).thenReturn(java.util.Optional.empty());
+    when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.empty());
     assertThatCode(() -> service.revoke("unknown-token", "member-uuid")).doesNotThrowAnyException();
   }
 
   @Test
   void revokesPresentedRefreshTokenWithoutMemberUuid() {
-    Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
-    SecurityProperties properties = properties();
-    RefreshTokenService service =
-        new RefreshTokenService(
-            refreshTokenRepository, new JwtService(properties), properties, clock);
     Member member = mock(Member.class);
     when(refreshTokenRepository.save(any(MemberRefreshToken.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -106,11 +103,6 @@ class RefreshTokenServiceTest {
 
   @Test
   void revokesPresentedRefreshTokenWithBlankMemberUuid() {
-    Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
-    SecurityProperties properties = properties();
-    RefreshTokenService service =
-        new RefreshTokenService(
-            refreshTokenRepository, new JwtService(properties), properties, clock);
     Member member = mock(Member.class);
     when(refreshTokenRepository.save(any(MemberRefreshToken.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -127,11 +119,6 @@ class RefreshTokenServiceTest {
 
   @Test
   void doesNotRevokeAnActiveTokenOwnedByAnotherMember() {
-    Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
-    SecurityProperties properties = properties();
-    RefreshTokenService service =
-        new RefreshTokenService(
-            refreshTokenRepository, new JwtService(properties), properties, clock);
     Member member = mock(Member.class);
     when(member.getUuid()).thenReturn("member-uuid");
     when(refreshTokenRepository.save(any(MemberRefreshToken.class)))
@@ -148,12 +135,7 @@ class RefreshTokenServiceTest {
   }
 
   @Test
-  void recognizesOnlyActiveRefreshTokensOwnedByTheSuppliedMember() {
-    Clock clock = Clock.fixed(Instant.parse("2026-07-14T00:00:00Z"), ZoneOffset.UTC);
-    SecurityProperties properties = properties();
-    RefreshTokenService service =
-        new RefreshTokenService(
-            refreshTokenRepository, new JwtService(properties), properties, clock);
+  void looksUpMemberUuidOnlyForActiveRefreshTokens() {
     Member member = mock(Member.class);
     when(member.getUuid()).thenReturn("member-uuid");
     when(refreshTokenRepository.save(any(MemberRefreshToken.class)))
@@ -164,32 +146,32 @@ class RefreshTokenServiceTest {
     verify(refreshTokenRepository).save(saved.capture());
 
     when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.empty());
-    assertThat(service.isActiveForMember(rawToken, "member-uuid")).isFalse();
+    assertThat(service.activeMemberUuid(rawToken)).isEmpty();
 
     when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(saved.getValue()));
-    assertThat(service.isActiveForMember(rawToken, "member-uuid")).isTrue();
-    assertThat(service.isActiveForMember(rawToken, "another-member-uuid")).isFalse();
-    assertThat(service.isActiveForMember(null, "member-uuid")).isFalse();
+    assertThat(service.activeMemberUuid(rawToken)).contains("member-uuid");
+    assertThat(service.activeMemberUuid(null)).isEmpty();
+    assertThat(service.activeMemberUuid(" ")).isEmpty();
 
     MemberRefreshToken expired =
         MemberRefreshToken.create(
             member,
             saved.getValue().getTokenHash(),
-            LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+            LocalDateTime.ofInstant(CLOCK.instant(), ZoneOffset.UTC));
     when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(expired));
-    assertThat(service.isActiveForMember(rawToken, "member-uuid")).isFalse();
+    assertThat(service.activeMemberUuid(rawToken)).isEmpty();
 
     MemberRefreshToken revoked =
         MemberRefreshToken.create(
             member,
             saved.getValue().getTokenHash(),
-            LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC).plusDays(1));
+            LocalDateTime.ofInstant(CLOCK.instant(), ZoneOffset.UTC).plusDays(1));
     revoked.revoke();
     when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(revoked));
-    assertThat(service.isActiveForMember(rawToken, "member-uuid")).isFalse();
+    assertThat(service.activeMemberUuid(rawToken)).isEmpty();
   }
 
-  private SecurityProperties properties() {
+  private static SecurityProperties properties() {
     return new SecurityProperties(
         "issuer",
         "01234567890123456789012345678901",
