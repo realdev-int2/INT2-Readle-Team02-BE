@@ -131,10 +131,11 @@ public class AuthController {
   public ApiResponse<SessionResponse> session(
       HttpServletRequest request,
       @CookieValue(value = RefreshTokenCookie.NAME, required = false) String refreshToken) {
+    // 지연 생성된 CSRF 토큰을 해석해 XSRF-TOKEN cookie를 응답에 발급한다.
     ((CsrfToken) request.getAttribute(CsrfToken.class.getName())).getToken();
     String uuid = refreshTokenService.activeMemberUuid(refreshToken).orElse(null);
     boolean authenticated = uuid != null;
-    return new ApiResponse<>(new SessionResponse(authenticated, authenticated ? uuid : null));
+    return new ApiResponse<>(new SessionResponse(authenticated, uuid));
   }
 
   @Operation(summary = "현재 사용자 조회", description = "인증된 회원의 기본 정보를 조회합니다.")
