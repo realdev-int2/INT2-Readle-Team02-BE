@@ -16,4 +16,5 @@ public record ContentValidationProperties(
     @Min(1) long callTimeoutSeconds,
     @NotEmpty List<String> promptInjectionKeywords,
     @NotBlank String badwordsKoResourcePath,
+    @NotBlank String safewordsPath,
     @NotEmpty List<String> whitelistDomains) {}

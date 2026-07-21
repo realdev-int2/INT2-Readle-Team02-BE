@@ -98,6 +98,9 @@ content:
     # 자바 리소스 경로로 추출해 둔 badwords 파일 경로
     badwords-ko-resource-path: "classpath:data/validation/badwords.data"
 
+    # 비속어 필터링 오탐지 방지용 화이트리스트 경로
+    safewords-path: "classpath:data/validation/safewords.data"
+
     # 2차 방어선 화이트리스트 도메인 설정
     whitelist-domains:
       # 국내 기업 기술 블로그
