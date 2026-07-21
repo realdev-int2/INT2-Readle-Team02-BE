@@ -75,7 +75,7 @@ content:
     min-length: 300
     max-attempts: 2
     retry-delay-ms: 1000
-    call-timeout-seconds: 5
+    call-timeout-seconds: 15
     prompt-injection-keywords:
     # 지침 무시형 (영어 정형 템플릿 - 실제 유포되는 탈옥 프롬프트에 흔함, 오탐 위험 낮음)
     - "ignore all previous instructions"
