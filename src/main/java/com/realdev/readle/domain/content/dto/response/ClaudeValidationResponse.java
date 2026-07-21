@@ -35,6 +35,22 @@ public record ClaudeValidationResponse(
           "AI 응답의 status는 PASSED 또는 REJECTED만 허용됩니다. 값: " + status);
     }
 
+    // 비즈니스 로직 강제: 60점 이상이면 PASSED, 미만이면 REJECTED
+    if (validationScore >= 60 && validationStatus == ValidationStatus.REJECTED) {
+      throw new CustomException(
+          ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE,
+          "validationScore가 60점 이상이면 status는 반드시 PASSED여야 합니다. (현재: REJECTED, 점수: "
+              + validationScore
+              + ")");
+    }
+    if (validationScore < 60 && validationStatus == ValidationStatus.PASSED) {
+      throw new CustomException(
+          ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE,
+          "validationScore가 60점 미만이면 status는 반드시 REJECTED여야 합니다. (현재: PASSED, 점수: "
+              + validationScore
+              + ")");
+    }
+
     if (validationStatus == ValidationStatus.REJECTED) {
       if (rejectReasonCode == null || rejectReasonCode.isBlank()) {
         throw new CustomException(

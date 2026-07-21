@@ -74,8 +74,12 @@ public class AiValidationTxHelper {
     if (snippets == null || snippets.isEmpty()) {
       return null;
     }
+
+    // 최대 3개까지만 저장하도록 강제 (AI가 지시사항을 무시하고 초과 반환하는 경우 대비)
+    List<String> truncatedSnippets = snippets.size() > 3 ? snippets.subList(0, 3) : snippets;
+
     try {
-      return objectMapper.writeValueAsString(snippets);
+      return objectMapper.writeValueAsString(truncatedSnippets);
     } catch (Exception e) {
       // evidence_snippets는 DB 스키마상 유효한 JSON 배열이어야 하므로,
       // 직렬화 실패 시 잘못된 형식(toString())을 저장하지 않고 null로 남긴 뒤 로그로 추적
