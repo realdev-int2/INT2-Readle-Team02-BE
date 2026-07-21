@@ -117,15 +117,17 @@ public class ClaudeClient {
                 List.of(ClaudeRequest.Message.builder().role("user").content(userPrompt).build()))
             .build();
 
-    String rawResponse =
-        client.post().uri("/v1/messages").body(request).retrieve().body(String.class);
-
-    log.debug("[CLAUDE_RAW_RESPONSE] {}", rawResponse);
+    log.debug("[CLAUDE_API_REQUEST] Claude API로 요청을 전송합니다.");
 
     try {
-      return objectMapper.readValue(rawResponse, ClaudeResponse.class);
-    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-      throw new CustomException(GlobalErrorCode.SERVER_ERROR, "Claude 응답 파싱에 실패했습니다.");
+      ClaudeResponse response =
+          client.post().uri("/v1/messages").body(request).retrieve().body(ClaudeResponse.class);
+
+      log.debug("[CLAUDE_API_RESPONSE] 정상적으로 응답을 수신했습니다.");
+      return response;
+    } catch (org.springframework.web.client.RestClientResponseException e) {
+      log.error("[CLAUDE_API_ERROR] Claude API HTTP 오류: {}", e.getResponseBodyAsString());
+      throw e;
     }
   }
 
@@ -154,7 +156,7 @@ public class ClaudeClient {
             .filter(java.util.Objects::nonNull)
             .collect(java.util.stream.Collectors.joining("\n"));
 
-    if (generatedText == null || generatedText.isBlank()) {
+    if (generatedText.isBlank()) {
       throw new CustomException(GlobalErrorCode.SERVER_ERROR, "Claude API 응답에 유효한 텍스트 블록이 없습니다.");
     }
     return generatedText;
