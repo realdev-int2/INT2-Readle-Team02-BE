@@ -16,6 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.realdev.readle.domain.auth.RefreshTokenCookie;
 import com.realdev.readle.domain.auth.service.AuthService;
 import com.realdev.readle.domain.auth.service.RefreshTokenService;
@@ -27,17 +31,20 @@ import com.realdev.readle.global.security.JwtService;
 import com.realdev.readle.global.security.SecurityErrorResponseWriter;
 import com.realdev.readle.global.security.SecurityProperties;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.DefaultCsrfToken;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -56,6 +63,23 @@ class AuthControllerTest {
   @MockBean private JwtService jwtService;
   @MockBean private SecurityErrorResponseWriter securityErrorResponseWriter;
   @MockBean private SecurityProperties properties;
+
+  private Logger controllerLogger;
+  private ListAppender<ILoggingEvent> logAppender;
+
+  @BeforeEach
+  void attachControllerLogAppender() {
+    controllerLogger = (Logger) LoggerFactory.getLogger(AuthController.class);
+    logAppender = new ListAppender<>();
+    logAppender.start();
+    controllerLogger.addAppender(logAppender);
+  }
+
+  @AfterEach
+  void detachControllerLogAppender() {
+    controllerLogger.detachAppender(logAppender);
+    logAppender.stop();
+  }
 
   @Test
   void startsOAuthWithBrowserBoundStateCookie() throws Exception {
@@ -100,6 +124,14 @@ class AuthControllerTest {
               assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
                   .noneMatch(cookie -> cookie.contains(RefreshTokenCookie.NAME));
             });
+
+    assertOnlyLog(
+        Level.WARN,
+        "OAuth failure flow=start provider=google exception=CustomException",
+        "/dashboard",
+        "state-code",
+        "provider secret detail",
+        "OAUTH_AUTHORIZATION_FAILED");
   }
 
   @Test
@@ -120,6 +152,13 @@ class AuthControllerTest {
               assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
                   .noneMatch(cookie -> cookie.contains(RefreshTokenCookie.NAME));
             });
+
+    assertOnlyLog(
+        Level.ERROR,
+        "OAuth failure flow=start provider=google exception=IllegalStateException",
+        "/dashboard",
+        "state-code",
+        "provider secret detail");
   }
 
   @Test
@@ -297,7 +336,9 @@ class AuthControllerTest {
         .perform(
             get("/api/auth/google/callback")
                 .param("error", "provider_error")
+                .param("code", "authorization-code")
                 .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
                 .cookie(new Cookie(STATE_COOKIE, "expected-state")))
         .andExpect(status().isFound())
         .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
@@ -305,6 +346,13 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    assertOnlyLog(
+        Level.WARN,
+        "OAuth failure flow=callback provider=google exception=CustomException",
+        "authorization-code",
+        "expected-state",
+        "raw provider detail");
   }
 
   @Test
@@ -316,7 +364,9 @@ class AuthControllerTest {
         .perform(
             get("/api/auth/google/callback")
                 .param("error", "provider_error")
+                .param("code", "authorization-code")
                 .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
                 .cookie(new Cookie(STATE_COOKIE, "expected-state")))
         .andExpect(status().isFound())
         .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
@@ -324,6 +374,14 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    assertOnlyLog(
+        Level.ERROR,
+        "OAuth failure flow=callback provider=google exception=IllegalStateException",
+        "authorization-code",
+        "expected-state",
+        "raw provider detail",
+        "raw failure");
   }
 
   @Test
@@ -354,6 +412,7 @@ class AuthControllerTest {
             });
 
     verify(authService).callback("google", "authorization-code", "expected-state");
+    assertThat(logAppender.list).isEmpty();
   }
 
   @Test
@@ -366,6 +425,7 @@ class AuthControllerTest {
             get("/api/auth/google/callback")
                 .param("code", "authorization-code")
                 .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
                 .cookie(new Cookie(STATE_COOKIE, "expected-state")))
         .andExpect(status().isFound())
         .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
@@ -373,6 +433,13 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    assertOnlyLog(
+        Level.WARN,
+        "OAuth failure flow=callback provider=google exception=CustomException",
+        "authorization-code",
+        "expected-state",
+        "raw provider detail");
   }
 
   @Test
@@ -385,6 +452,7 @@ class AuthControllerTest {
             get("/api/auth/google/callback")
                 .param("code", "authorization-code")
                 .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
                 .cookie(new Cookie(STATE_COOKIE, "expected-state")))
         .andExpect(status().isFound())
         .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
@@ -392,6 +460,14 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    assertOnlyLog(
+        Level.ERROR,
+        "OAuth failure flow=callback provider=google exception=IllegalStateException",
+        "authorization-code",
+        "expected-state",
+        "raw provider detail",
+        "raw failure");
   }
 
   @Test
@@ -452,11 +528,15 @@ class AuthControllerTest {
         new UsernamePasswordAuthenticationToken(
             "member-uuid", null, AuthorityUtils.createAuthorityList("ROLE_USER"));
 
-    mockMvc
-        .perform(
-            get("/api/users/me").with(authentication(authentication)).principal(authentication))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.profileImageUrl").value("https://example.com/profile.png"));
+    SecurityContextHolder.getContext().setAuthentication(authentication);
+    try {
+      mockMvc
+          .perform(get("/api/users/me").with(authentication(authentication)))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.profileImageUrl").value("https://example.com/profile.png"));
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
   }
 
   @Test
@@ -464,30 +544,6 @@ class AuthControllerTest {
     AuthController controller = new AuthController(authService, refreshTokenService, properties);
 
     assertThatThrownBy(() -> controller.currentUser(null))
-        .isInstanceOf(CustomException.class)
-        .extracting("errorCode")
-        .isEqualTo(GlobalErrorCode.UNAUTHORIZED);
-  }
-
-  @Test
-  void currentUserRejectsAnonymousIdentity() {
-    Authentication authentication =
-        new AnonymousAuthenticationToken(
-            "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
-    AuthController controller = new AuthController(authService, refreshTokenService, properties);
-
-    assertThatThrownBy(() -> controller.currentUser(authentication))
-        .isInstanceOf(CustomException.class)
-        .extracting("errorCode")
-        .isEqualTo(GlobalErrorCode.UNAUTHORIZED);
-  }
-
-  @Test
-  void currentUserRejectsUnauthenticatedIdentity() {
-    Authentication authentication = new UsernamePasswordAuthenticationToken("member-uuid", null);
-    AuthController controller = new AuthController(authService, refreshTokenService, properties);
-
-    assertThatThrownBy(() -> controller.currentUser(authentication))
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(GlobalErrorCode.UNAUTHORIZED);
@@ -502,7 +558,7 @@ class AuthControllerTest {
     AuthController controller = new AuthController(authService, refreshTokenService, properties);
 
     AuthController.ApiResponse<AuthController.SessionResponse> response =
-        controller.session(authentication, request, "refresh-token");
+        controller.session(authentication, "member-uuid", request, "refresh-token");
 
     assertThat(response.data().authenticated()).isFalse();
     assertThat(response.data().uuid()).isNull();
@@ -512,20 +568,9 @@ class AuthControllerTest {
   @Test
   void logoutForwardsAuthenticatedPrincipalToRefreshTokenService() {
     new AuthController(authService, refreshTokenService, properties)
-        .logout(
-            new UsernamePasswordAuthenticationToken(
-                "member-uuid", null, AuthorityUtils.createAuthorityList("ROLE_USER")),
-            "refresh-token");
+        .logout("member-uuid", "refresh-token");
 
     verify(refreshTokenService).revoke("refresh-token", "member-uuid");
-  }
-
-  @Test
-  void logoutRevokesRefreshTokenWithoutUnauthenticatedPrincipal() {
-    new AuthController(authService, refreshTokenService, properties)
-        .logout(new UsernamePasswordAuthenticationToken("member-uuid", null), "refresh-token");
-
-    verify(refreshTokenService).revoke("refresh-token", null);
   }
 
   @Test
@@ -545,5 +590,14 @@ class AuthControllerTest {
                     .contains("Secure")
                     .contains("Path=/")
                     .contains("SameSite=Lax"));
+  }
+
+  private void assertOnlyLog(Level level, String message, String... absent) {
+    assertThat(logAppender.list).hasSize(1);
+    ILoggingEvent event = logAppender.list.get(0);
+    assertThat(event.getLevel()).isEqualTo(level);
+    assertThat(event.getFormattedMessage()).isEqualTo(message);
+    assertThat(event.getThrowableProxy()).isNull();
+    assertThat(event.getFormattedMessage()).doesNotContain(absent);
   }
 }
