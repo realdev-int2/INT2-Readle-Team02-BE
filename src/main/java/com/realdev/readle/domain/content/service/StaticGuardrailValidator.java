@@ -4,16 +4,27 @@ import com.realdev.readle.domain.content.config.ContentValidationProperties;
 import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.content.entity.RejectReasonCode;
 import com.vane.badwordfiltering.BadWordFiltering;
+import java.util.List;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class StaticGuardrailValidator {
 
   private final ContentValidationProperties properties;
   private final BadWordFiltering badWordFiltering;
+
+  private final List<String> safeWords;
+
+  public StaticGuardrailValidator(
+      ContentValidationProperties properties,
+      BadWordFiltering badWordFiltering,
+      @Qualifier("safeWords") List<String> safeWords) {
+    this.properties = properties;
+    this.badWordFiltering = badWordFiltering;
+    this.safeWords = safeWords;
+  }
 
   public Optional<RejectReasonCode> validate(Content content) {
     String text =
@@ -27,7 +38,14 @@ public class StaticGuardrailValidator {
       return Optional.of(RejectReasonCode.CONTENT_TOO_SHORT);
     }
 
-    if (badWordFiltering.check(text)) {
+    String safeText = text;
+    if (safeWords != null) {
+      for (String safeWord : safeWords) {
+        safeText = safeText.replace(safeWord, "*".repeat(safeWord.length()));
+      }
+    }
+
+    if (badWordFiltering.check(safeText)) {
       return Optional.of(RejectReasonCode.BAD_WORD);
     }
 

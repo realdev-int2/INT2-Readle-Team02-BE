@@ -7,18 +7,29 @@ import static org.mockito.Mockito.when;
 
 import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.global.exception.CustomException;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLSession;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class WebCrawlerTest {
 
@@ -526,5 +537,66 @@ class WebCrawlerTest {
     assertThat(requestedUrls).hasSize(2);
     assertThat(requestedUrls.get(1))
         .isEqualTo("https://public-site.com/Relative-Path?Token=AbCdEf");
+  }
+
+  @Test
+  @DisplayName("IP 리터럴과 DNS의 SAN 검증 로직이 분리되어 올바르게 동작한다 (IPv4/IPv6 변형 포함)")
+  void testHostnameVerifierWithIpAndDns() throws Exception {
+    AtomicReference<HostnameVerifier> verifierRef = new AtomicReference<>();
+
+    WebCrawler testCrawler =
+        new WebCrawler() {
+          @Override
+          @NonNull HttpURLConnection getHttpURLConnection(
+              String currentUrl, String host, InetAddress safeAddress) throws IOException {
+            HttpsURLConnection mockConn = mock(HttpsURLConnection.class);
+            when(mockConn.getResponseCode()).thenReturn(200);
+            when(mockConn.getInputStream()).thenReturn(new ByteArrayInputStream("".getBytes()));
+
+            Mockito.doAnswer(
+                    invocation -> {
+                      verifierRef.set(invocation.getArgument(0));
+                      return null;
+                    })
+                .when(mockConn)
+                .setHostnameVerifier(ArgumentMatchers.any());
+
+            return mockConn;
+          }
+        };
+
+    Method fetchHtmlMethod =
+        WebCrawler.class.getDeclaredMethod(
+            "fetchHtml", String.class, String.class, InetAddress.class);
+    fetchHtmlMethod.setAccessible(true);
+    fetchHtmlMethod.invoke(testCrawler, "https://[::1]/", "[::1]", InetAddress.getByName("::1"));
+
+    HostnameVerifier verifier = verifierRef.get();
+    assertThat(verifier).isNotNull();
+
+    // 1. IPv6 변형 테스트 (host는 [::1], SAN은 0:0:0:0:0:0:0:1)
+    SSLSession session1 = mock(SSLSession.class);
+    X509Certificate cert1 = mock(X509Certificate.class);
+    when(session1.getPeerCertificates()).thenReturn(new Certificate[] {cert1});
+    when(cert1.getSubjectAlternativeNames()).thenReturn(List.of(List.of(7, "0:0:0:0:0:0:0:1")));
+    assertThat(verifier.verify("[::1]", session1)).isTrue();
+
+    // 2. IP 호스트인데 dNSName(Type 2) SAN만 있는 경우 차단
+    SSLSession session2 = mock(SSLSession.class);
+    X509Certificate cert2 = mock(X509Certificate.class);
+    when(session2.getPeerCertificates()).thenReturn(new Certificate[] {cert2});
+    when(cert2.getSubjectAlternativeNames()).thenReturn(List.of(List.of(2, "[::1]")));
+    assertThat(verifier.verify("[::1]", session2)).isFalse();
+
+    // 3. 도메인 호스트인데 iPAddress(Type 7) SAN이 있는 경우 차단 (도메인은 Type 2만 허용해야 함)
+    fetchHtmlMethod.invoke(
+        testCrawler, "https://example.com/", "example.com", InetAddress.getByName("127.0.0.1"));
+    HostnameVerifier domainVerifier = verifierRef.get();
+
+    SSLSession session3 = mock(SSLSession.class);
+    X509Certificate cert3 = mock(X509Certificate.class);
+    when(session3.getPeerCertificates()).thenReturn(new Certificate[] {cert3});
+    when(cert3.getSubjectAlternativeNames()).thenReturn(List.of(List.of(7, "127.0.0.1")));
+    assertThat(domainVerifier.verify("example.com", session3)).isFalse();
   }
 }

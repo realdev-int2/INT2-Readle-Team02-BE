@@ -75,7 +75,7 @@ content:
     min-length: 300
     max-attempts: 2
     retry-delay-ms: 1000
-    call-timeout-seconds: 5
+    call-timeout-seconds: 15
     prompt-injection-keywords:
     # 지침 무시형 (영어 정형 템플릿 - 실제 유포되는 탈옥 프롬프트에 흔함, 오탐 위험 낮음)
     - "ignore all previous instructions"
@@ -97,6 +97,9 @@ content:
 
     # 자바 리소스 경로로 추출해 둔 badwords 파일 경로
     badwords-ko-resource-path: "classpath:data/validation/badwords.data"
+
+    # 비속어 필터링 오탐지 방지용 화이트리스트 경로
+    safewords-path: "classpath:data/validation/safewords.data"
 
     # 2차 방어선 화이트리스트 도메인 설정
     whitelist-domains:

@@ -11,6 +11,10 @@ import java.net.MalformedURLException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.net.UnknownHostException;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.Collection;
 import java.util.List;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SNIHostName;
@@ -35,6 +39,11 @@ public class WebCrawler {
   private static final int TIMEOUT_MS = 3000;
   private static final int MAX_BODY_SIZE = 5 * 1024 * 1024; // 5MB
   private static final int MAX_REDIRECTS = 3;
+
+  static {
+    // HttpURLConnection에서 Host 헤더를 임의로 조작할 수 있도록 허용 (IP Pinning 시 가상 호스팅 라우팅 문제 해결)
+    System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+  }
 
   public CrawledDocument crawl(String url) {
     log.info("[CRAWL_START] URL: {}", url);
@@ -127,8 +136,44 @@ public class WebCrawler {
       httpsConn.setSSLSocketFactory(
           new SniSSLSocketFactory((SSLSocketFactory) SSLSocketFactory.getDefault(), host));
       httpsConn.setHostnameVerifier(
-          (hostname, session) ->
-              HttpsURLConnection.getDefaultHostnameVerifier().verify(host, session));
+          (hostname, session) -> {
+            try {
+              Certificate[] certs = session.getPeerCertificates();
+              if (certs.length > 0 && certs[0] instanceof X509Certificate x509) {
+                Collection<List<?>> sans = x509.getSubjectAlternativeNames();
+                if (sans != null) {
+                  boolean isIpHost = isIpLiteral(host);
+                  for (List<?> san : sans) {
+                    int type = (Integer) san.get(0);
+                    if (isIpHost && type == 7) { // iPAddress
+                      String sanIp = (String) san.get(1);
+                      try {
+                        String cleanHost =
+                            host.startsWith("[") && host.endsWith("]")
+                                ? host.substring(1, host.length() - 1)
+                                : host;
+                        InetAddress hostAddr = InetAddress.getByName(cleanHost);
+                        InetAddress sanAddr = InetAddress.getByName(sanIp);
+                        if (hostAddr.equals(sanAddr)) {
+                          return true;
+                        }
+                      } catch (UnknownHostException ex) {
+                        // Ignore parse errors
+                      }
+                    } else if (!isIpHost && type == 2) { // dNSName
+                      String dnsName = (String) san.get(1);
+                      if (matchDomain(host, dnsName)) {
+                        return true;
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (Exception e) {
+              log.error("SSL 호스트명 검증에 실패했습니다. 대상 호스트: {}", host, e);
+            }
+            return false;
+          });
     }
 
     int statusCode = conn.getResponseCode();
@@ -149,8 +194,31 @@ public class WebCrawler {
       }
     } else {
       conn.disconnect();
-      throw new HttpStatusException("HTTP Error", statusCode, currentUrl);
+      throw new HttpStatusException("HTTP 요청 실패", statusCode, currentUrl);
     }
+  }
+
+  private boolean matchDomain(String host, String domain) {
+    if (host.equalsIgnoreCase(domain)) {
+      return true;
+    }
+    if (domain.startsWith("*.")) {
+      String suffix = domain.substring(2);
+      int dotIdx = host.indexOf('.');
+      if (dotIdx != -1) {
+        return host.substring(dotIdx + 1).equalsIgnoreCase(suffix);
+      } else {
+        return host.equalsIgnoreCase(suffix);
+      }
+    }
+    return false;
+  }
+
+  private boolean isIpLiteral(String host) {
+    if (host.startsWith("[") && host.endsWith("]")) {
+      return true; // IPv6 literal
+    }
+    return host.matches("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$"); // IPv4 literal
   }
 
   @NonNull HttpURLConnection getHttpURLConnection(
