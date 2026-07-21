@@ -8,7 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.realdev.readle.domain.quiz.dto.response.QuizAttemptResultResponse;
+import com.realdev.readle.domain.quiz.exception.QuizErrorCode;
 import com.realdev.readle.domain.quiz.service.QuizSolveService;
+import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.security.JwtService;
 import com.realdev.readle.global.security.SecurityConfig;
 import java.math.BigDecimal;
@@ -64,15 +66,45 @@ class ResultReportControllerTest {
             .completedAt(LocalDateTime.of(2026, 7, 21, 10, 0))
             .results(List.of())
             .build();
-    given(quizSolveService.getAttemptResult(memberUuid, 601L)).willReturn(response);
+    given(quizSolveService.getResultReport(memberUuid, 701L)).willReturn(response);
 
     mockMvc
-        .perform(get("/api/result-reports/601").with(authentication(authentication)))
+        .perform(get("/api/result-reports/701").with(authentication(authentication)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.quizSetId").value(201))
         .andExpect(jsonPath("$.attemptId").value(601))
         .andExpect(jsonPath("$.title").value("Spring 학습 결과"));
 
-    then(quizSolveService).should().getAttemptResult(memberUuid, 601L);
+    then(quizSolveService).should().getResultReport(memberUuid, 701L);
+  }
+
+  @Test
+  @DisplayName("존재하지 않는 결과 리포트를 조회하면 404를 반환한다")
+  void getResultReport_NotFound() throws Exception {
+    String memberUuid = "member-uuid";
+    Authentication authentication =
+        new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    given(quizSolveService.getResultReport(memberUuid, 701L))
+        .willThrow(new CustomException(QuizErrorCode.RESULT_REPORT_NOT_FOUND));
+
+    mockMvc
+        .perform(get("/api/result-reports/701").with(authentication(authentication)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error.code").value("RESULT_REPORT_NOT_FOUND"));
+  }
+
+  @Test
+  @DisplayName("다른 사용자의 결과 리포트를 조회하면 403을 반환한다")
+  void getResultReport_Forbidden() throws Exception {
+    String memberUuid = "member-uuid";
+    Authentication authentication =
+        new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    given(quizSolveService.getResultReport(memberUuid, 701L))
+        .willThrow(new CustomException(QuizErrorCode.FORBIDDEN_ACCESS));
+
+    mockMvc
+        .perform(get("/api/result-reports/701").with(authentication(authentication)))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error.code").value("FORBIDDEN_ACCESS"));
   }
 }

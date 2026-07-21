@@ -275,13 +275,7 @@ public class QuizSolveService {
             .findById(attemptId)
             .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
 
-    if (!quizAttempt.getMember().getUuid().equals(memberUuid)) {
-      throw new CustomException(QuizErrorCode.FORBIDDEN_ACCESS);
-    }
-
-    if (quizAttempt.getStatus() != AttemptStatus.SUBMITTED) {
-      throw new CustomException(QuizErrorCode.ATTEMPT_NOT_SUBMITTED);
-    }
+    validateAttemptAccess(quizAttempt, memberUuid);
 
     QuizResult quizResult =
         quizResultRepository
@@ -291,6 +285,34 @@ public class QuizSolveService {
                     new CustomException(
                         GlobalErrorCode.SERVER_ERROR, "해당 시도의 채점 결과 데이터가 존재하지 않습니다."));
 
+    return buildAttemptResult(quizAttempt, quizResult);
+  }
+
+  @Transactional(readOnly = true)
+  public QuizAttemptResultResponse getResultReport(String memberUuid, Long reportId) {
+    QuizResult quizResult =
+        quizResultRepository
+            .findById(reportId)
+            .orElseThrow(() -> new CustomException(QuizErrorCode.RESULT_REPORT_NOT_FOUND));
+    QuizAttempt quizAttempt = quizResult.getQuizAttempt();
+
+    validateAttemptAccess(quizAttempt, memberUuid);
+    return buildAttemptResult(quizAttempt, quizResult);
+  }
+
+  private void validateAttemptAccess(QuizAttempt quizAttempt, String memberUuid) {
+    if (!quizAttempt.getMember().getUuid().equals(memberUuid)) {
+      throw new CustomException(QuizErrorCode.FORBIDDEN_ACCESS);
+    }
+
+    if (quizAttempt.getStatus() != AttemptStatus.SUBMITTED) {
+      throw new CustomException(QuizErrorCode.ATTEMPT_NOT_SUBMITTED);
+    }
+  }
+
+  private QuizAttemptResultResponse buildAttemptResult(
+      QuizAttempt quizAttempt, QuizResult quizResult) {
+    Long attemptId = quizAttempt.getId();
     List<QuizAnswer> quizAnswers =
         quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(attemptId);
 
