@@ -106,6 +106,8 @@ spotless {
 }
 
 tasks.named('test') {
+	systemProperty 'user.timezone', 'Asia/Seoul'
+
 	useJUnitPlatform {
 		excludeTags 'live'
 	}
