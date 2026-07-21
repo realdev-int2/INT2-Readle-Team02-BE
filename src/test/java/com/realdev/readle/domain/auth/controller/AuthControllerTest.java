@@ -7,6 +7,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -82,9 +83,15 @@ class AuthControllerTest {
                 .param("code", "authorization-code")
                 .param("state", "expected-state")
                 .cookie(new Cookie(STATE_COOKIE, "different-state")))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
 
     verify(authService, never()).callback("google", "authorization-code", "expected-state");
+    verify(authService, never()).callbackFailure("google", "expected-state");
   }
 
   @Test
@@ -94,9 +101,250 @@ class AuthControllerTest {
             get("/api/auth/google/callback")
                 .param("code", "authorization-code")
                 .param("state", "expected-state"))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
 
     verify(authService, never()).callback("google", "authorization-code", "expected-state");
+    verify(authService, never()).callbackFailure("google", "expected-state");
+  }
+
+  @Test
+  void rejectsCallbackWithBlankStateParameterBeforeTokenIssuance() throws Exception {
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("code", "authorization-code")
+                .param("state", "")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    verifyNoInteractions(authService);
+  }
+
+  @Test
+  void rejectsCallbackWithBlankBrowserStateCookieBeforeTokenIssuance() throws Exception {
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("code", "authorization-code")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "")))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    verifyNoInteractions(authService);
+  }
+
+  @Test
+  void redirectsAccessDeniedCallbackWithCancellationCodeAfterConsumingMatchingState()
+      throws Exception {
+    when(authService.callbackFailure("google", "expected-state")).thenReturn("/dashboard");
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("error", "access_denied")
+                .param("error_description", "provider cancellation detail")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(
+            header()
+                .string(
+                    HttpHeaders.LOCATION, "/login?authError=oauth_cancelled&returnTo=%2Fdashboard"))
+        .andExpect(
+            header()
+                .stringValues(HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))))
+        .andExpect(
+            result ->
+                assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                    .noneMatch(cookie -> cookie.contains(RefreshTokenCookie.NAME)));
+
+    verify(authService).callbackFailure("google", "expected-state");
+    verify(authService, never()).callback("google", null, "expected-state");
+  }
+
+  @Test
+  void redirectsGenericProviderErrorWithOnlyStoredSafeReturnTo() throws Exception {
+    when(authService.callbackFailure("google", "expected-state"))
+        .thenReturn("/quizzes/123?from=dashboard");
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("error", "provider_error")
+                .param("error_description", "raw provider detail")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(
+            header()
+                .string(
+                    HttpHeaders.LOCATION,
+                    "/login?authError=oauth_failed&returnTo=%2Fquizzes%2F123%3Ffrom%3Ddashboard"));
+
+    verify(authService).callbackFailure("google", "expected-state");
+    verify(authService, never()).callback("google", null, "expected-state");
+  }
+
+  @Test
+  void redirectsMissingCodeWithOnlyStoredSafeReturnTo() throws Exception {
+    when(authService.callbackFailure("google", "expected-state")).thenReturn("/dashboard");
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(
+            header()
+                .string(
+                    HttpHeaders.LOCATION, "/login?authError=oauth_failed&returnTo=%2Fdashboard"));
+
+    verify(authService).callbackFailure("google", "expected-state");
+    verify(authService, never()).callback("google", null, "expected-state");
+  }
+
+  @Test
+  void redirectsUnusableStoredStateToFixedLogin() throws Exception {
+    when(authService.callbackFailure("google", "expected-state"))
+        .thenThrow(new CustomException(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED));
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("error", "provider_error")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    verify(authService).callbackFailure("google", "expected-state");
+    verify(authService, never()).callback("google", null, "expected-state");
+  }
+
+  @Test
+  void redirectsAnyCustomFailureDuringFailureCallback() throws Exception {
+    when(authService.callbackFailure("google", "expected-state"))
+        .thenThrow(new CustomException(GlobalErrorCode.UNAUTHORIZED));
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("error", "provider_error")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+  }
+
+  @Test
+  void redirectsUnexpectedFailureDuringFailureCallback() throws Exception {
+    when(authService.callbackFailure("google", "expected-state"))
+        .thenThrow(new IllegalStateException("raw failure"));
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("error", "provider_error")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+  }
+
+  @Test
+  void redirectsProviderExchangeFailureWithoutLeakingRawCallbackValues() throws Exception {
+    when(authService.callback("google", "authorization-code", "expected-state"))
+        .thenThrow(new AuthService.CallbackExchangeFailure("/dashboard"));
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("code", "authorization-code")
+                .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(
+            header()
+                .string(
+                    HttpHeaders.LOCATION, "/login?authError=oauth_failed&returnTo=%2Fdashboard"))
+        .andExpect(
+            result -> {
+              assertThat(result.getResponse().getContentAsString())
+                  .doesNotContain("authorization-code", "expected-state", "raw provider detail");
+              assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                  .noneMatch(cookie -> cookie.contains(RefreshTokenCookie.NAME));
+              assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                  .anyMatch(cookie -> cookie.contains(STATE_COOKIE + "=;"));
+            });
+
+    verify(authService).callback("google", "authorization-code", "expected-state");
+  }
+
+  @Test
+  void redirectsAnyCustomFailureDuringSuccessfulCallback() throws Exception {
+    when(authService.callback("google", "authorization-code", "expected-state"))
+        .thenThrow(new CustomException(GlobalErrorCode.UNAUTHORIZED));
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("code", "authorization-code")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+  }
+
+  @Test
+  void redirectsUnexpectedFailureDuringSuccessfulCallback() throws Exception {
+    when(authService.callback("google", "authorization-code", "expected-state"))
+        .thenThrow(new IllegalStateException("raw failure"));
+
+    mockMvc
+        .perform(
+            get("/api/auth/google/callback")
+                .param("code", "authorization-code")
+                .param("state", "expected-state")
+                .cookie(new Cookie(STATE_COOKIE, "expected-state")))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
+        .andExpect(
+            header()
+                .stringValues(
+                    HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
   }
 
   @Test

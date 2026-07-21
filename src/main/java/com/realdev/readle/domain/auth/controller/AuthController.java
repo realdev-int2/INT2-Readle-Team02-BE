@@ -12,8 +12,10 @@ import com.realdev.readle.global.security.SecurityProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +33,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 @Tag(name = "Auth", description = "OAuth2/JWT 인증 API")
+@Slf4j
 public class AuthController {
+
+  private static final String LOGIN_PATH = "/login";
+  private static final String OAUTH_CANCELLED = "oauth_cancelled";
+  private static final String OAUTH_FAILED = "oauth_failed";
 
   private final AuthService authService;
   private final RefreshTokenService refreshTokenService;
@@ -67,17 +74,43 @@ public class AuthController {
       @PathVariable String provider,
       @RequestParam(required = false) String code,
       @RequestParam(required = false) String state,
+      @RequestParam(required = false) String error,
       @CookieValue(value = OAuthStateCookie.NAME, required = false) String browserState) {
-    requireMatchingBrowserState(state, browserState);
-    AuthService.CallbackResult result = authService.callback(provider, code, state);
-    return ResponseEntity.status(HttpStatus.FOUND)
-        .location(java.net.URI.create(result.returnTo()))
-        .header(
-            HttpHeaders.SET_COOKIE,
-            RefreshTokenCookie.create(result.refreshToken(), properties.refreshTokenDays())
-                .toString())
-        .header(HttpHeaders.SET_COOKIE, OAuthStateCookie.delete().toString())
-        .build();
+    if (!hasMatchingBrowserState(state, browserState)) {
+      return callbackFailure(OAUTH_FAILED, null);
+    }
+    if (error != null || code == null || code.isBlank()) {
+      try {
+        return callbackFailure(
+            "access_denied".equals(error) ? OAUTH_CANCELLED : OAUTH_FAILED,
+            authService.callbackFailure(provider, state));
+      } catch (RuntimeException exception) {
+        log.warn(
+            "OAuth callback provider={} exception={}",
+            provider,
+            exception.getClass().getSimpleName());
+        return callbackFailure(OAUTH_FAILED, null);
+      }
+    }
+    try {
+      AuthService.CallbackResult result = authService.callback(provider, code, state);
+      return ResponseEntity.status(HttpStatus.FOUND)
+          .location(java.net.URI.create(result.returnTo()))
+          .header(
+              HttpHeaders.SET_COOKIE,
+              RefreshTokenCookie.create(result.refreshToken(), properties.refreshTokenDays())
+                  .toString())
+          .header(HttpHeaders.SET_COOKIE, OAuthStateCookie.delete().toString())
+          .build();
+    } catch (AuthService.CallbackExchangeFailure exception) {
+      return callbackFailure(OAUTH_FAILED, exception.returnTo());
+    } catch (RuntimeException exception) {
+      log.warn(
+          "OAuth callback provider={} exception={}",
+          provider,
+          exception.getClass().getSimpleName());
+      return callbackFailure(OAUTH_FAILED, null);
+    }
   }
 
   @Operation(summary = "Access Token 갱신", description = "리프레시 토큰 쿠키로 액세스 토큰을 발급합니다.")
@@ -130,14 +163,24 @@ public class AuthController {
 
   public record CurrentUserResponse(String uuid, String nickname, String profileImageUrl) {}
 
-  private void requireMatchingBrowserState(String state, String browserState) {
-    if (state == null
-        || browserState == null
-        || !MessageDigest.isEqual(
-            state.getBytes(StandardCharsets.UTF_8),
-            browserState.getBytes(StandardCharsets.UTF_8))) {
-      throw new CustomException(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
+  private ResponseEntity<Void> callbackFailure(String error, String returnTo) {
+    String location = LOGIN_PATH + "?authError=" + error;
+    if (returnTo != null) {
+      location += "&returnTo=" + URLEncoder.encode(returnTo, StandardCharsets.UTF_8);
     }
+    return ResponseEntity.status(HttpStatus.FOUND)
+        .location(java.net.URI.create(location))
+        .header(HttpHeaders.SET_COOKIE, OAuthStateCookie.delete().toString())
+        .build();
+  }
+
+  private boolean hasMatchingBrowserState(String state, String browserState) {
+    return state != null
+        && browserState != null
+        && !state.isBlank()
+        && !browserState.isBlank()
+        && MessageDigest.isEqual(
+            state.getBytes(StandardCharsets.UTF_8), browserState.getBytes(StandardCharsets.UTF_8));
   }
 
   private String memberUuidOrNull(Authentication authentication) {

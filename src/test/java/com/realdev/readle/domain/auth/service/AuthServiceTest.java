@@ -119,6 +119,60 @@ class AuthServiceTest {
   }
 
   @Test
+  void consumesCancellationStateWithoutDecryptingVerifierOrCallingProvider() {
+    when(stateService.consumeReturnTo(OAuthProvider.GOOGLE, "state")).thenReturn("/library");
+
+    String returnTo = authService.callbackFailure("google", "state");
+
+    assertThat(returnTo).isEqualTo("/library");
+    verify(stateService).consumeReturnTo(OAuthProvider.GOOGLE, "state");
+    verifyNoInteractions(providerClient, loginService, properties);
+  }
+
+  @Test
+  void retainsSafeReturnToWhenProviderExchangeFails() {
+    OAuthStateService.ConsumedOAuthState consumed =
+        new OAuthStateService.ConsumedOAuthState("/library", "code-verifier");
+    CustomException exchangeFailure =
+        new CustomException(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
+    when(properties.backendOrigin()).thenReturn("https://api.readle.test");
+    when(stateService.consume(OAuthProvider.GOOGLE, "state")).thenReturn(consumed);
+    when(providerClient.exchange(
+            OAuthProvider.GOOGLE,
+            "authorization-code",
+            "code-verifier",
+            "https://api.readle.test/api/auth/google/callback"))
+        .thenThrow(exchangeFailure);
+
+    assertThatThrownBy(() -> authService.callback("google", "authorization-code", "state"))
+        .isInstanceOf(AuthService.CallbackExchangeFailure.class)
+        .extracting("returnTo")
+        .isEqualTo("/library");
+
+    verifyNoInteractions(loginService);
+  }
+
+  @Test
+  void propagatesNonOAuthCustomExchangeFailure() {
+    OAuthStateService.ConsumedOAuthState consumed =
+        new OAuthStateService.ConsumedOAuthState("/library", "code-verifier");
+    CustomException exchangeFailure = new CustomException(GlobalErrorCode.UNAUTHORIZED);
+    when(properties.backendOrigin()).thenReturn("https://api.readle.test");
+    when(stateService.consume(OAuthProvider.GOOGLE, "state")).thenReturn(consumed);
+    when(providerClient.exchange(
+            OAuthProvider.GOOGLE,
+            "authorization-code",
+            "code-verifier",
+            "https://api.readle.test/api/auth/google/callback"))
+        .thenThrow(exchangeFailure);
+
+    assertThatThrownBy(() -> authService.callback("google", "authorization-code", "state"))
+        .isSameAs(exchangeFailure);
+
+    verifyNoInteractions(loginService);
+  }
+
+  @Test
   void propagatesProviderExchangeFailureWithoutUpsertingMemberOrIssuingRefreshToken() {
     OAuthStateService.ConsumedOAuthState consumed =
         new OAuthStateService.ConsumedOAuthState("/library", "code-verifier");

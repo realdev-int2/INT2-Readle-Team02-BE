@@ -98,13 +98,23 @@ public class OAuthStateService {
   }
 
   public ConsumedOAuthState consume(OAuthProvider provider, String rawState) {
+    return consume(provider, rawState, true);
+  }
+
+  public String consumeReturnTo(OAuthProvider provider, String rawState) {
+    return consume(provider, rawState, false).returnTo();
+  }
+
+  private ConsumedOAuthState consume(
+      OAuthProvider provider, String rawState, boolean decryptCodeVerifier) {
     if (rawState == null || rawState.isBlank()) {
       throw oauthFailure();
     }
     ConsumedOAuthState consumed;
     try {
       consumed =
-          consumeTransactionTemplate.execute(status -> consumeInTransaction(provider, rawState));
+          consumeTransactionTemplate.execute(
+              status -> consumeInTransaction(provider, rawState, decryptCodeVerifier));
     } catch (PessimisticLockException | PessimisticLockingFailureException exception) {
       throw oauthFailure();
     }
@@ -114,7 +124,8 @@ public class OAuthStateService {
     return consumed;
   }
 
-  private ConsumedOAuthState consumeInTransaction(OAuthProvider provider, String rawState) {
+  private ConsumedOAuthState consumeInTransaction(
+      OAuthProvider provider, String rawState, boolean decryptCodeVerifier) {
     OAuthAuthorizationState state =
         stateRepository
             .findByStateHashAndOauthProvider(sha256(rawState), provider)
@@ -123,12 +134,14 @@ public class OAuthStateService {
       stateRepository.delete(state);
       return null;
     }
-    String verifier;
-    try {
-      verifier = decrypt(state.getCodeVerifierCiphertext(), provider);
-    } catch (CustomException exception) {
-      stateRepository.delete(state);
-      return null;
+    String verifier = null;
+    if (decryptCodeVerifier) {
+      try {
+        verifier = decrypt(state.getCodeVerifierCiphertext(), provider);
+      } catch (CustomException exception) {
+        stateRepository.delete(state);
+        return null;
+      }
     }
     stateRepository.delete(state);
     return new ConsumedOAuthState(state.getReturnTo(), verifier);

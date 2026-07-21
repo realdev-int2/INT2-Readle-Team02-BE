@@ -45,10 +45,22 @@ public class AuthService {
   public CallbackResult callback(String providerName, String code, String state) {
     OAuthProvider provider = provider(providerName);
     OAuthStateService.ConsumedOAuthState consumed = stateService.consume(provider, state);
-    OAuthProfile profile =
-        providerClient.exchange(provider, code, consumed.codeVerifier(), callbackUri(provider));
+    OAuthProfile profile;
+    try {
+      profile =
+          providerClient.exchange(provider, code, consumed.codeVerifier(), callbackUri(provider));
+    } catch (CustomException exception) {
+      if (exception.getErrorCode() != GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED) {
+        throw exception;
+      }
+      throw new CallbackExchangeFailure(consumed.returnTo());
+    }
     String refreshToken = loginService.login(profile);
     return new CallbackResult(consumed.returnTo(), refreshToken);
+  }
+
+  public String callbackFailure(String providerName, String state) {
+    return stateService.consumeReturnTo(provider(providerName), state);
   }
 
   @Transactional(readOnly = true)
@@ -81,6 +93,20 @@ public class AuthService {
   }
 
   public record CallbackResult(String returnTo, String refreshToken) {}
+
+  public static final class CallbackExchangeFailure extends RuntimeException {
+
+    private final String returnTo;
+
+    public CallbackExchangeFailure(String returnTo) {
+      super("OAuth provider exchange failed");
+      this.returnTo = returnTo;
+    }
+
+    public String returnTo() {
+      return returnTo;
+    }
+  }
 
   public record StartResult(String authorizationUrl, String state) {}
 }
