@@ -51,6 +51,26 @@ class ResultReportControllerTest {
   @MockitoBean private JwtService jwtService;
 
   @Test
+  @DisplayName("조회 조건을 생략하면 기본 크기와 최신순으로 학습 히스토리를 조회한다")
+  void getResultReports_UsesDefaultQueryParameters() throws Exception {
+    String memberUuid = "member-uuid";
+    Authentication authentication =
+        new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+    ResultReportHistoryResponse response =
+        ResultReportHistoryResponse.of(List.of(), 10, null, false);
+    given(resultReportService.getHistory(memberUuid, null, 10, "latest", null))
+        .willReturn(response);
+
+    mockMvc
+        .perform(get("/api/result-reports").with(authentication(authentication)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.size").value(10))
+        .andExpect(jsonPath("$.hasNext").value(false));
+
+    then(resultReportService).should().getHistory(memberUuid, null, 10, "latest", null);
+  }
+
+  @Test
   @DisplayName("인증된 사용자의 UUID와 조회 조건으로 학습 히스토리를 조회한다")
   void getResultReports_UsesAuthenticatedMemberUuidAndQueryParameters() throws Exception {
     String memberUuid = "member-uuid";
