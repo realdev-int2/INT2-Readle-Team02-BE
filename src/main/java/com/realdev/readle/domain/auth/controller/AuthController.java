@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,9 +67,7 @@ public class AuthController {
               OAuthStateCookie.create(result.state(), properties.stateMinutes()).toString())
           .build();
     } catch (RuntimeException exception) {
-      log.warn(
-          "OAuth start provider={} exception={}", provider, exception.getClass().getSimpleName());
-      return oauthFailureRedirect(OAUTH_FAILED, null);
+      return oauthRuntimeFailureRedirect("start", provider, exception);
     }
   }
 
@@ -91,11 +90,7 @@ public class AuthController {
             "access_denied".equals(error) ? OAUTH_CANCELLED : OAUTH_FAILED,
             authService.callbackFailure(provider, state));
       } catch (RuntimeException exception) {
-        log.warn(
-            "OAuth callback provider={} exception={}",
-            provider,
-            exception.getClass().getSimpleName());
-        return oauthFailureRedirect(OAUTH_FAILED, null);
+        return oauthRuntimeFailureRedirect("callback", provider, exception);
       }
     }
     try {
@@ -111,11 +106,7 @@ public class AuthController {
     } catch (AuthService.CallbackExchangeFailure exception) {
       return oauthFailureRedirect(OAUTH_FAILED, exception.returnTo());
     } catch (RuntimeException exception) {
-      log.warn(
-          "OAuth callback provider={} exception={}",
-          provider,
-          exception.getClass().getSimpleName());
-      return oauthFailureRedirect(OAUTH_FAILED, null);
+      return oauthRuntimeFailureRedirect("callback", provider, exception);
     }
   }
 
@@ -129,9 +120,9 @@ public class AuthController {
   @Operation(summary = "로그아웃", description = "현재 리프레시 토큰을 폐기하고 쿠키를 삭제합니다.")
   @PostMapping("/auth/logout")
   public ResponseEntity<Void> logout(
-      Authentication authentication,
+      @AuthenticationPrincipal String memberUuid,
       @CookieValue(value = RefreshTokenCookie.NAME, required = false) String refreshToken) {
-    refreshTokenService.revoke(refreshToken, memberUuidOrNull(authentication));
+    refreshTokenService.revoke(refreshToken, memberUuid);
     return ResponseEntity.noContent()
         .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.delete().toString())
         .build();
@@ -141,6 +132,7 @@ public class AuthController {
   @GetMapping("/auth/session")
   public ApiResponse<SessionResponse> session(
       Authentication authentication,
+      @AuthenticationPrincipal String memberUuid,
       HttpServletRequest request,
       @CookieValue(value = RefreshTokenCookie.NAME, required = false) String refreshToken) {
     ((CsrfToken) request.getAttribute(CsrfToken.class.getName())).getToken();
@@ -148,16 +140,18 @@ public class AuthController {
         authentication != null
             && authentication.isAuthenticated()
             && !(authentication instanceof AnonymousAuthenticationToken);
-    String uuid = authenticated ? memberUuidOrNull(authentication) : null;
+    String uuid = authenticated ? memberUuid : null;
     authenticated = authenticated && refreshTokenService.isActiveForMember(refreshToken, uuid);
     return new ApiResponse<>(new SessionResponse(authenticated, authenticated ? uuid : null));
   }
 
   @Operation(summary = "현재 사용자 조회", description = "인증된 회원의 기본 정보를 조회합니다.")
   @GetMapping("/users/me")
-  public ApiResponse<CurrentUserResponse> currentUser(Authentication authentication) {
-    String uuid = requiredMemberUuid(authentication);
-    Member member = authService.currentMember(uuid);
+  public ApiResponse<CurrentUserResponse> currentUser(@AuthenticationPrincipal String memberUuid) {
+    if (memberUuid == null) {
+      throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
+    }
+    Member member = authService.currentMember(memberUuid);
     return new ApiResponse<>(
         new CurrentUserResponse(
             member.getUuid(), member.getNickname(), member.getProfileImageUrl()));
@@ -180,6 +174,24 @@ public class AuthController {
         .build();
   }
 
+  private ResponseEntity<Void> oauthRuntimeFailureRedirect(
+      String flow, String provider, RuntimeException exception) {
+    if (exception instanceof CustomException) {
+      log.warn(
+          "OAuth failure flow={} provider={} exception={}",
+          flow,
+          provider,
+          exception.getClass().getSimpleName());
+    } else {
+      log.error(
+          "OAuth failure flow={} provider={} exception={}",
+          flow,
+          provider,
+          exception.getClass().getSimpleName());
+    }
+    return oauthFailureRedirect(OAUTH_FAILED, null);
+  }
+
   private boolean hasMatchingBrowserState(String state, String browserState) {
     return state != null
         && browserState != null
@@ -187,23 +199,5 @@ public class AuthController {
         && !browserState.isBlank()
         && MessageDigest.isEqual(
             state.getBytes(StandardCharsets.UTF_8), browserState.getBytes(StandardCharsets.UTF_8));
-  }
-
-  private String memberUuidOrNull(Authentication authentication) {
-    if (authentication == null
-        || !authentication.isAuthenticated()
-        || authentication instanceof AnonymousAuthenticationToken) {
-      return null;
-    }
-    Object principal = authentication.getPrincipal();
-    return principal == null ? null : String.valueOf(principal);
-  }
-
-  private String requiredMemberUuid(Authentication authentication) {
-    String memberUuid = memberUuidOrNull(authentication);
-    if (memberUuid == null) {
-      throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
-    }
-    return memberUuid;
   }
 }
