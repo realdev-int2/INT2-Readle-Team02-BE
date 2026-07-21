@@ -20,11 +20,11 @@ public class ResultReportController {
 
   private final QuizSolveService quizSolveService;
 
-  @Operation(summary = "결과 리포트 상세 조회", description = "결과 리포트 ID(풀이 시도 ID)로 퀴즈 풀이 결과를 조회합니다.")
+  @Operation(summary = "결과 리포트 상세 조회", description = "결과 리포트 ID로 퀴즈 풀이 결과를 조회합니다.")
   @GetMapping("/{reportId}")
   public ResponseEntity<QuizAttemptResultResponse> getResultReport(
       @PathVariable("reportId") Long reportId, @AuthenticationPrincipal String memberUuid) {
-    QuizAttemptResultResponse response = quizSolveService.getAttemptResult(memberUuid, reportId);
+    QuizAttemptResultResponse response = quizSolveService.getResultReport(memberUuid, reportId);
     return ResponseEntity.ok(response);
   }
 }
