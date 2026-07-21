@@ -336,7 +336,9 @@ class AuthControllerTest {
         .perform(
             get("/api/auth/google/callback")
                 .param("error", "provider_error")
+                .param("code", "authorization-code")
                 .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
                 .cookie(new Cookie(STATE_COOKIE, "expected-state")))
         .andExpect(status().isFound())
         .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
@@ -344,6 +346,13 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    assertOnlyLog(
+        Level.WARN,
+        "OAuth failure flow=callback provider=google exception=CustomException",
+        "authorization-code",
+        "expected-state",
+        "raw provider detail");
   }
 
   @Test
@@ -355,7 +364,9 @@ class AuthControllerTest {
         .perform(
             get("/api/auth/google/callback")
                 .param("error", "provider_error")
+                .param("code", "authorization-code")
                 .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
                 .cookie(new Cookie(STATE_COOKIE, "expected-state")))
         .andExpect(status().isFound())
         .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
@@ -363,6 +374,14 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    assertOnlyLog(
+        Level.ERROR,
+        "OAuth failure flow=callback provider=google exception=IllegalStateException",
+        "authorization-code",
+        "expected-state",
+        "raw provider detail",
+        "raw failure");
   }
 
   @Test
@@ -406,6 +425,7 @@ class AuthControllerTest {
             get("/api/auth/google/callback")
                 .param("code", "authorization-code")
                 .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
                 .cookie(new Cookie(STATE_COOKIE, "expected-state")))
         .andExpect(status().isFound())
         .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
@@ -413,6 +433,13 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    assertOnlyLog(
+        Level.WARN,
+        "OAuth failure flow=callback provider=google exception=CustomException",
+        "authorization-code",
+        "expected-state",
+        "raw provider detail");
   }
 
   @Test
@@ -425,6 +452,7 @@ class AuthControllerTest {
             get("/api/auth/google/callback")
                 .param("code", "authorization-code")
                 .param("state", "expected-state")
+                .param("error_description", "raw provider detail")
                 .cookie(new Cookie(STATE_COOKIE, "expected-state")))
         .andExpect(status().isFound())
         .andExpect(header().string(HttpHeaders.LOCATION, "/login?authError=oauth_failed"))
@@ -432,6 +460,14 @@ class AuthControllerTest {
             header()
                 .stringValues(
                     HttpHeaders.SET_COOKIE, hasItem(containsString(STATE_COOKIE + "=;"))));
+
+    assertOnlyLog(
+        Level.ERROR,
+        "OAuth failure flow=callback provider=google exception=IllegalStateException",
+        "authorization-code",
+        "expected-state",
+        "raw provider detail",
+        "raw failure");
   }
 
   @Test
