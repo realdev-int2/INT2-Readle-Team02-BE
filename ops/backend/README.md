@@ -1,75 +1,74 @@
-# Backend deploy helper
+# 백엔드 배포 헬퍼
 
-`deploy-backend.sh` runs the backend-only temporary Blue-Green deployment for the
-single EC2 rootful Podman stack.
+`deploy-backend.sh`는 단일 EC2 rootful Podman 스택에서 백엔드만 대상으로
+임시 Blue-Green 배포를 수행합니다.
 
-## Prerequisites
+## 사전 조건
 
-- Run on the EC2 host that owns `readle-nginx` and the backend containers.
-- Keep `readle-nginx`, `readle-frontend`, and both backend slots on
-  `readle-public`. Backend slots must not publish host ports.
-- Keep both backend slots and MySQL on `readle-private`; `readle-nginx` must
-  not join this network, so it has only the public default route.
-- Keep the production backend env file on the host at `/etc/readle/backend.env`
-  unless `READLE_BACKEND_ENV_FILE` overrides it.
-- Keep the GHCR image repository prefix in
-  `/etc/readle/backend-image-repository`, one line only, for example:
+- `readle-nginx`와 백엔드 컨테이너를 소유한 EC2 호스트에서 실행합니다.
+- `readle-nginx`, `readle-frontend`, 두 백엔드 slot은 `readle-public`에
+  연결합니다. 백엔드 slot은 호스트 port를 publish하면 안 됩니다.
+- 두 백엔드 slot과 MySQL은 `readle-private`에 연결합니다. `readle-nginx`는
+  public default route만 갖도록 이 네트워크에 연결하지 않습니다.
+- `READLE_BACKEND_ENV_FILE`로 재정의하지 않는 한 production 백엔드 env 파일은
+  호스트의 `/etc/readle/backend.env`에 유지합니다.
+- GHCR image repository prefix는 `/etc/readle/backend-image-repository`에 한 줄로
+  관리합니다. 예시는 다음과 같습니다.
 
   ```text
   ghcr.io/<owner>/int2-readle-team02-be
   ```
 
-## First-time host install
+## 최초 호스트 설치
 
-Install the shipped helper once at the path CI invokes:
+CI가 호출하는 경로에 제공된 헬퍼를 한 번 설치합니다.
 
 ```sh
 sudo install -d -o root -g root -m 0755 /usr/local/libexec/readle-backend
 sudo install -o root -g root -m 0755 ./deploy-backend.sh /usr/local/libexec/readle-backend/deploy-backend
 ```
 
-This bootstrap copies the reviewed helper to the EC2 host with root ownership
-and executable mode. Normal deployment does not `git pull`, build with Gradle,
-or build an image on the host; CI passes the published immutable image digest
-and matching Git revision to the installed helper.
+이 초기화 과정은 검토된 헬퍼를 root 소유·실행 가능 모드로 EC2 호스트에 복사합니다.
+일반 배포에서는 호스트에서 `git pull`, Gradle build, image build를 수행하지 않습니다.
+CI가 publish된 immutable image digest와 일치하는 Git revision을 설치된 헬퍼에
+전달합니다.
 
-## Nginx upstream include bootstrap
+## Nginx upstream include 초기화
 
-The helper updates one host-side include file and expects the Nginx container to
-see the same file through a bind mount.
+헬퍼는 호스트 측 include 파일 하나를 갱신하며, Nginx 컨테이너가 bind mount를 통해
+같은 파일을 참조해야 합니다.
 
-| Path | Default |
+| 경로 | 기본값 |
 | --- | --- |
-| Host include | `/opt/readle/nginx/readle-backend-upstream.conf` |
-| Container include | `/etc/nginx/readle-backend-upstream.conf` |
+| 호스트 include | `/opt/readle/nginx/readle-backend-upstream.conf` |
+| 컨테이너 include | `/etc/nginx/readle-backend-upstream.conf` |
 
-Bootstrap the host file from
-`ops/backend/nginx/backend-upstream.conf.template`, bind-mount it into
-`readle-nginx`, and include this exact container path from the Nginx config:
+`ops/backend/nginx/backend-upstream.conf.template`로 호스트 파일을 초기화한 뒤
+`readle-nginx`에 bind mount하고, Nginx config에서는 아래 컨테이너 경로를 정확히
+include합니다.
 
 ```nginx
 include /etc/nginx/readle-backend-upstream.conf;
 ```
 
-Because this is a file bind mount, update its contents in place; do not replace
-the host file with `mv`, which leaves the container mount on the previous inode.
+파일 bind mount이므로 내용은 in-place로 갱신합니다. 호스트 파일을 `mv`로 교체하면
+컨테이너 mount가 이전 inode를 계속 참조하므로 사용하면 안 됩니다.
 
-The active slot in `/var/lib/readle/backend-deploy.env` must match this include.
+`/var/lib/readle/backend-deploy.env`의 active slot은 이 include와 일치해야 합니다.
 
-## Slots and limits
+## Slot과 리소스 제한
 
-The helper uses two fixed backend slots:
+헬퍼는 다음 두 개의 고정 백엔드 slot을 사용합니다.
 
 - `readle-backend-blue`
 - `readle-backend-green`
 
-Only one slot serves traffic at a time. During deployment the inactive slot runs
-as the candidate, and both backend slots run with `--memory=640m`.
+한 시점에는 하나의 slot만 트래픽을 처리합니다. 배포 중에는 비활성 slot이
+candidate로 실행되며, 두 백엔드 slot 모두 `--memory=640m`으로 실행됩니다.
 
-## Deploy
+## 배포
 
-From this directory, pass an immutable image digest and the expected
-40-character Git revision:
+이 디렉터리에서 immutable image digest와 예상 40자 Git revision을 전달합니다.
 
 ```sh
 sudo ./deploy-backend.sh \
@@ -77,28 +76,26 @@ sudo ./deploy-backend.sh \
   <40-lowercase-git-sha>
 ```
 
-The script pulls the digest, checks the image label
-`org.opencontainers.image.revision`, starts the candidate on `readle-public`
-then attaches `readle-private`, waits for `/api/actuator/health/readiness`,
-updates the Nginx upstream include, runs `nginx -t`, reloads Nginx, and smoke checks
-`/api/actuator/health/readiness` through the edge.
+스크립트는 digest를 pull하고 image label `org.opencontainers.image.revision`을
+확인합니다. Candidate를 `readle-public`에서 시작한 뒤 `readle-private`에 연결하고,
+`/api/actuator/health/readiness`를 대기합니다. 이후 Nginx upstream include를 갱신하고
+`nginx -t`, Nginx reload, edge를 통한 `/api/actuator/health/readiness` smoke check를
+순서대로 수행합니다.
 
-Deployments use two locks:
+배포에는 다음 두 잠금을 사용합니다.
 
-- `/run/lock/readle-candidate-deploy.lock`: shared candidate lock that prevents
-  another candidate-style app deployment from running at the same time.
-- `/run/lock/readle-backend-deploy.lock`: backend deployment lock.
+- `/run/lock/readle-candidate-deploy.lock`: 다른 candidate 방식 app 배포와의 동시
+  실행을 막는 공용 candidate 잠금입니다.
+- `/run/lock/readle-backend-deploy.lock`: 백엔드 배포 전용 잠금입니다.
 
-## Rollback behavior
+## Rollback 동작
 
-If candidate readiness or `nginx -t` fails, the helper removes the candidate and
-keeps traffic on the current active slot.
+Candidate readiness 또는 `nginx -t`가 실패하면 헬퍼는 candidate를 제거하고,
+트래픽은 기존 active slot에 유지합니다.
 
-After Nginx reload, the helper writes pending rollback state before smoke
-checking the edge. If the smoke check fails, it restores the previous upstream
-include, reloads Nginx, clears pending rollback state, and removes the failed
-candidate.
+Nginx reload 후 헬퍼는 edge smoke check 전에 pending rollback state를 기록합니다.
+Smoke check가 실패하면 이전 upstream include를 복구하고 Nginx를 reload한 다음,
+pending rollback state를 비우고 실패한 candidate를 제거합니다.
 
-After a successful cutover, the helper records the new `last_good_*` state,
-keeps the old image tuple in `previous_*`, clears pending rollback state, and
-stops the old slot.
+Cutover가 성공하면 헬퍼는 새 `last_good_*` state를 기록하고 이전 image tuple은
+`previous_*`에 유지합니다. 이후 pending rollback state를 비우고 이전 slot을 중지합니다.
