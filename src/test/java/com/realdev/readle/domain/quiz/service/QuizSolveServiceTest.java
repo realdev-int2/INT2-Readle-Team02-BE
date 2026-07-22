@@ -91,6 +91,7 @@ class QuizSolveServiceTest {
     lenient().when(quizAttempt.getMember()).thenReturn(member);
     lenient().when(quizAttempt.getStatus()).thenReturn(AttemptStatus.IN_PROGRESS);
     lenient().when(quizAttemptRepository.findById(200L)).thenReturn(Optional.of(quizAttempt));
+    lenient().when(quizAttemptRepository.findWithDetailsById(200L)).thenReturn(Optional.of(quizAttempt));
     lenient()
         .when(quizAttempt.getStartedAt())
         .thenReturn(java.time.LocalDateTime.now().minusMinutes(5));
@@ -128,6 +129,7 @@ class QuizSolveServiceTest {
   void submitAnswers_Success() {
     given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
     given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(quizAttempt));
     given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
         .willReturn(List.of(question1, question2));
     given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
@@ -175,6 +177,7 @@ class QuizSolveServiceTest {
   void submitAnswers_StaticMatch() {
     given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
     given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(quizAttempt));
     given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
         .willReturn(List.of(question1, question2));
     given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
