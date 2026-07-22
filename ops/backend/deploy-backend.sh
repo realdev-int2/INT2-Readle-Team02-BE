@@ -503,6 +503,26 @@ self_test() {
   local repository_file state_file env_file state_dir good_sha good_ref good_image old_image
   local log_file include_file include_backup save_count_file
 
+  assert_not_grep() {
+    local pattern="$1" file="$2" status
+    if grep -q -- "$pattern" "$file"; then
+      die "self-test found an unexpected log entry: $pattern"
+    else
+      status=$?
+    fi
+    [[ "$status" == 1 ]] || die "self-test could not inspect log: $file"
+  }
+
+  assert_no_glob_matches() {
+    local pattern="$1" status
+    if compgen -G "$pattern" >/dev/null; then
+      die "self-test found an unexpected file: $pattern"
+    else
+      status=$?
+    fi
+    [[ "$status" == 1 ]] || die "self-test could not inspect files: $pattern"
+  }
+
   original_repository_file="$IMAGE_REPOSITORY_FILE"
   original_state="$STATE_FILE"
   original_env="$ENV_FILE"
@@ -631,7 +651,7 @@ self_test() {
   ) 2>/dev/null; then
     die "self-test accepted Nginx on the private network"
   fi
-  ! grep -q ' rm -f ' "$log_file"
+  assert_not_grep ' rm -f ' "$log_file"
   log_file="$(mktemp)"
   if (
     podman_cmd() {
@@ -647,7 +667,7 @@ self_test() {
   ) 2>/dev/null; then
     die "self-test accepted an invalid memory limit"
   fi
-  ! grep -q 'rm -f\|exec readle-nginx\|{{.Image}}' "$log_file"
+  assert_not_grep 'rm -f\|exec readle-nginx\|{{.Image}}' "$log_file"
   wait_healthy "$SLOT_B"
   grep -q "inspect $SLOT_B --format {{.State.Health.Status}}" "$log_file"
   printf '%s\n' "server $SLOT_B:8080;" > "$NGINX_UPSTREAM_INCLUDE_HOST"
@@ -670,7 +690,7 @@ self_test() {
   ) 2>/dev/null; then
     die "self-test accepted a published backend port"
   fi
-  ! grep -q 'HostConfig.Memory\|exec readle-nginx\|{{.Image}}\|rm -f' "$log_file"
+  assert_not_grep 'HostConfig.Memory\|exec readle-nginx\|{{.Image}}\|rm -f' "$log_file"
 
   include_file="$state_dir/backend-upstream-no-backup.conf"
   printf '%s\n' "server $SLOT_A:8080;" > "$include_file"
@@ -706,8 +726,8 @@ self_test() {
   edge_smoke() { return 0; }
   flock() { return 0; }
   deploy "$good_ref" "$good_sha"
-  ! compgen -G "$state_dir/.readle-backend-upstream.conf.backup.*" >/dev/null
-  ! grep -q "^pull " "$log_file"
+  assert_no_glob_matches "$state_dir/.readle-backend-upstream.conf.backup.*"
+  assert_not_grep "^pull " "$log_file"
 
   log_file="$(mktemp)"
   if (
@@ -733,7 +753,7 @@ self_test() {
   ) 2>/dev/null; then
     die "self-test accepted a deployment with an invalid image revision"
   fi
-  ! compgen -G "$state_dir/.readle-backend-upstream.conf.backup.*" >/dev/null
+  assert_no_glob_matches "$state_dir/.readle-backend-upstream.conf.backup.*"
 
   log_file="$(mktemp)"
   if (
@@ -765,7 +785,7 @@ self_test() {
   ) 2>/dev/null; then
     die "self-test accepted an unhealthy candidate"
   fi
-  ! compgen -G "$state_dir/.readle-backend-upstream.conf.backup.*" >/dev/null
+  assert_no_glob_matches "$state_dir/.readle-backend-upstream.conf.backup.*"
 
   log_file="$(mktemp)"
   include_file="$state_dir/backend-upstream-host.conf"
@@ -790,7 +810,7 @@ self_test() {
   include_backup="$(backup_nginx_include)"
   printf '%s\n' "server $SLOT_B:8080;" > "$NGINX_UPSTREAM_INCLUDE_HOST"
   rollback_after_flip "$include_backup" "$SLOT_B"
-  ! grep -q "cat > $NGINX_UPSTREAM_INCLUDE" "$log_file"
+  assert_not_grep "cat > $NGINX_UPSTREAM_INCLUDE" "$log_file"
   [[ "$(cat "$NGINX_UPSTREAM_INCLUDE_HOST")" == "$(nginx_include_line "$SLOT_A")" ]]
   [[ -z "$pending_rollback_image" && -z "$pending_rollback_revision" && -z "$pending_rollback_ref" ]]
   load_state
@@ -816,7 +836,7 @@ self_test() {
     podman_cmd rm -f "$SLOT_B" >/dev/null 2>&1 || true
   fi
   [[ "$(cat "$NGINX_UPSTREAM_INCLUDE_HOST")" == "$(nginx_include_line "$SLOT_A")" ]]
-  ! grep -q "exec $NGINX nginx -t" "$log_file"
+  assert_not_grep "exec $NGINX nginx -t" "$log_file"
 
   log_file="$(mktemp)"
   save_count_file="$(mktemp)"
@@ -948,8 +968,8 @@ self_test() {
   [[ "$(cat "$NGINX_UPSTREAM_INCLUDE_HOST")" == "$(nginx_include_line "$SLOT_A")" ]]
   grep -q '^save_state$' "$log_file"
   grep -q "rm -f $SLOT_B" "$log_file"
-  ! grep -q "exec $NGINX nginx -s reload" "$log_file"
-  ! compgen -G "$state_dir/.readle-backend-upstream.conf.backup.*" >/dev/null
+  assert_not_grep "exec $NGINX nginx -s reload" "$log_file"
+  assert_no_glob_matches "$state_dir/.readle-backend-upstream.conf.backup.*"
 
   rm -rf "$state_dir"
   IMAGE_REPOSITORY_FILE="$original_repository_file"
