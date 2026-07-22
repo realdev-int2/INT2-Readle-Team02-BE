@@ -1,6 +1,7 @@
 package com.realdev.readle.domain.content.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.content.entity.ContentValidation;
@@ -98,9 +99,7 @@ class ContentServiceConcurrencyTest {
                 e.printStackTrace();
               }
             } catch (Exception e) {
-              System.out.println(
-                  "Unexpected exception: " + e.getClass().getName() + " - " + e.getMessage());
-              e.printStackTrace();
+              fail("Unexpected exception: " + e.getMessage());
             } finally {
               latch.countDown();
             }

@@ -227,9 +227,7 @@ public class ContentService {
         contentRepository
             .findById(contentId)
             .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
-    if (!content.getMember().getUuid().equals(memberUuid)) {
-      throw new CustomException(ContentErrorCode.CONTENT_ACCESS_DENIED);
-    }
+    validateOwnership(content, memberUuid);
   }
 
   private Content getOwnedContentWithLock(Long contentId, String memberUuid) {
@@ -237,10 +235,14 @@ public class ContentService {
         contentRepository
             .findByIdWithPessimisticLock(contentId)
             .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
+    validateOwnership(content, memberUuid);
+    return content;
+  }
+
+  private void validateOwnership(Content content, String memberUuid) {
     if (!content.getMember().getUuid().equals(memberUuid)) {
       throw new CustomException(ContentErrorCode.CONTENT_ACCESS_DENIED);
     }
-    return content;
   }
 
   private ContentValidation getLatestValidation(Long contentId) {
