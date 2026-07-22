@@ -827,7 +827,6 @@ self_test() {
         *"HostConfig.PortBindings"*) return 0 ;;
         "inspect $SLOT_A --format {{.HostConfig.Memory}}") memory_limit_bytes; return 0 ;;
         "inspect $SLOT_A --format {{.HostConfig.RestartPolicy.Name}}") printf '%s\n' always; return 0 ;;
-        "inspect $SLOT_A --format {{.HostConfig.Memory}}") memory_limit_bytes; return 0 ;;
         "inspect $NGINX --format "*NetworkSettings.Networks*) printf '%s\n' "$PUBLIC_NETWORK"; return 0 ;;
       "inspect $SLOT_A --format "*NetworkSettings.Networks*) printf '%s\n' "$PUBLIC_NETWORK $PRIVATE_NETWORK"; return 0 ;;
         "exec $NGINX sh -c grep -R -F 'include $NGINX_UPSTREAM_INCLUDE;' /etc/nginx >/dev/null 2>&1") return 0 ;;
