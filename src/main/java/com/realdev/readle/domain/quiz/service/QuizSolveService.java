@@ -101,7 +101,7 @@ public class QuizSolveService {
     // [가드레일 선행 검증] 비관적 락 및 상태 전이(GRADING) 트랜잭션 전에 입력값 유효성 전면 검사
     QuizAttempt preAttempt =
         quizAttemptRepository
-            .findById(attemptId)
+            .findWithDetailsById(attemptId)
             .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
 
     if (!preAttempt.getMember().getUuid().equals(memberUuid)) {
