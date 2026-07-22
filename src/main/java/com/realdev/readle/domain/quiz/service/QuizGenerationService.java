@@ -3,6 +3,7 @@ package com.realdev.readle.domain.quiz.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.domain.content.entity.ContentValidation;
+import com.realdev.readle.domain.content.entity.ValidationMethod;
 import com.realdev.readle.domain.content.entity.ValidationStatus;
 import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.domain.quiz.dto.ClaudeQuizResponseDto;
@@ -52,12 +53,6 @@ public class QuizGenerationService {
                     new CustomException(
                         QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
 
-    // Validation 상태 분기: PASSED만 허용하는 allow-list로 변경
-    if (validation.getStatus() != ValidationStatus.PASSED) {
-      throw new CustomException(QuizErrorCode.VALIDATION_NOT_PASSED);
-    }
-    final boolean isBypassed = false;
-
     // 1. 초기 QuizSet 레코드 생성 및 저장 (Transaction 분리)
     QuizSet quizSet =
         transactionTemplate.execute(
@@ -83,6 +78,16 @@ public class QuizGenerationService {
                           () ->
                               new CustomException(
                                   QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
+
+              boolean bypassAvailable =
+                  managedValidation.getStatus() == ValidationStatus.REJECTED
+                      && managedValidation.getValidationMethod() == ValidationMethod.AI;
+
+              // Validation 상태 분기: PASSED 또는 bypassAvailable 허용
+              if (managedValidation.getStatus() != ValidationStatus.PASSED && !bypassAvailable) {
+                throw new CustomException(QuizErrorCode.VALIDATION_NOT_PASSED);
+              }
+              boolean isBypassed = bypassAvailable;
 
               QuizSet newQuizSet;
               try {
