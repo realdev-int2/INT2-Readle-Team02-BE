@@ -528,4 +528,110 @@ class ContentControllerTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.error.code").value("CONTENT_NOT_FOUND"));
   }
+
+  @Test
+  @DisplayName("FAILED 상태인 콘텐츠에 대해 재시도 요청 시 200 OK와 PENDING 상태를 반환한다")
+  void retryValidation_success() throws Exception {
+    String memberUuid = UUID.randomUUID().toString();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+
+    com.realdev.readle.domain.content.dto.response.ContentValidationResponse response =
+        new com.realdev.readle.domain.content.dto.response.ContentValidationResponse(
+            1L, ValidationStatus.PENDING, null, null, false, LocalDateTime.now(), null);
+
+    when(contentService.retryValidation(eq(1L), eq(memberUuid))).thenReturn(response);
+
+    mockMvc
+        .perform(
+            post("/api/contents/1/validation/retry")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.contentId").value(1L))
+        .andExpect(jsonPath("$.status").value("PENDING"));
+  }
+
+  @Test
+  @DisplayName("미인증 상태로 재시도 요청 시 401 UNAUTHORIZED를 반환한다")
+  void retryValidation_unauthorized() throws Exception {
+    when(contentService.retryValidation(eq(1L), isNull()))
+        .thenThrow(new CustomException(GlobalErrorCode.UNAUTHORIZED));
+
+    mockMvc
+        .perform(post("/api/contents/1/validation/retry").contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+  }
+
+  @Test
+  @DisplayName("타인의 콘텐츠에 재시도를 요청하면 403 CONTENT_ACCESS_DENIED를 반환한다")
+  void retryValidation_forbidden() throws Exception {
+    String memberUuid = UUID.randomUUID().toString();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+
+    when(contentService.retryValidation(eq(1L), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.CONTENT_ACCESS_DENIED));
+
+    mockMvc
+        .perform(
+            post("/api/contents/1/validation/retry")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error.code").value("CONTENT_ACCESS_DENIED"));
+  }
+
+  @Test
+  @DisplayName("존재하지 않는 콘텐츠에 재시도 요청 시 404 CONTENT_NOT_FOUND를 반환한다")
+  void retryValidation_notFound() throws Exception {
+    String memberUuid = UUID.randomUUID().toString();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+
+    when(contentService.retryValidation(eq(1L), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
+
+    mockMvc
+        .perform(
+            post("/api/contents/1/validation/retry")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error.code").value("CONTENT_NOT_FOUND"));
+  }
+
+  @Test
+  @DisplayName("진행 중(PENDING)인 콘텐츠에 재시도 요청 시 409 VALIDATION_ALREADY_RUNNING을 반환한다")
+  void retryValidation_alreadyRunning() throws Exception {
+    String memberUuid = UUID.randomUUID().toString();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+
+    when(contentService.retryValidation(eq(1L), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.VALIDATION_ALREADY_RUNNING));
+
+    mockMvc
+        .perform(
+            post("/api/contents/1/validation/retry")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.error.code").value("VALIDATION_ALREADY_RUNNING"));
+  }
+
+  @Test
+  @DisplayName("PASSED/REJECTED 상태에 재시도 요청 시 400 NOT_RETRYABLE을 반환한다")
+  void retryValidation_notRetryable() throws Exception {
+    String memberUuid = UUID.randomUUID().toString();
+    Authentication auth = new UsernamePasswordAuthenticationToken(memberUuid, null, List.of());
+
+    when(contentService.retryValidation(eq(1L), eq(memberUuid)))
+        .thenThrow(new CustomException(ContentErrorCode.NOT_RETRYABLE));
+
+    mockMvc
+        .perform(
+            post("/api/contents/1/validation/retry")
+                .with(authentication(auth))
+                .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("NOT_RETRYABLE"));
+  }
 }

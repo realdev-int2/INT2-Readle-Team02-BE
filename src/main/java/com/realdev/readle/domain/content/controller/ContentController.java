@@ -59,4 +59,15 @@ public class ContentController {
     ContentValidationResponse response = contentService.getValidationResult(contentId, memberUuid);
     return ResponseEntity.ok(response);
   }
+
+  @Operation(
+      summary = "콘텐츠 검증 재시도",
+      description =
+          "검증에 실패(FAILED)한 콘텐츠에 대해 검증 파이프라인을 처음부터 다시 실행합니다. 기존 FAILED 상태의 검증 이력을 덮어쓰지 않고 새로운 PENDING 이력이 생성됩니다.")
+  @PostMapping("/{contentId}/validation/retry")
+  public ResponseEntity<ContentValidationResponse> retryValidation(
+      @PathVariable Long contentId, @AuthenticationPrincipal String memberUuid) {
+    ContentValidationResponse response = contentService.retryValidation(contentId, memberUuid);
+    return ResponseEntity.ok(response);
+  }
 }
