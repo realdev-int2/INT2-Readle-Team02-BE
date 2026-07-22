@@ -32,11 +32,11 @@ jobs:
     needs: backend
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     permissions:
       contents: read
       packages: write
-    env:
-      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/int2-readle-team02-be
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -48,15 +48,64 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Normalize image name
+        id: image
+        shell: bash
+        run: printf 'name=ghcr.io/%s/int2-readle-team02-be\n' "${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@cb941d0b895b09c17fa011d41c411b33c752cf28
         with:
           context: .
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.IMAGE_NAME }}:main
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:main
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+
+  deploy-backend:
+    needs: publish-image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    concurrency:
+      group: backend-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      IMAGE_DIGEST: ${{ needs.publish-image.outputs.digest }}
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      EC2_USER: ${{ vars.EC2_USER }}
+      EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+      EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+    steps:
+      - name: Deploy published digest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          key_file="$(mktemp)"
+          known_hosts_file="$(mktemp)"
+          trap 'rm -f "$key_file" "$known_hosts_file"' EXIT
+
+          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > "$key_file"
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > "$known_hosts_file"
+          chmod 600 "$key_file" "$known_hosts_file"
+
+          image_name="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/int2-readle-team02-be"
+          image_ref="${image_name}@${IMAGE_DIGEST}"
+          ssh -i "$key_file" \
+            -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=4 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$known_hosts_file" \
+            "$EC2_USER@$EC2_HOST" \
+            "sudo /usr/local/libexec/readle-backend/deploy-backend $image_ref $GITHUB_SHA"
