@@ -123,16 +123,21 @@ public class ClaudeClient {
     try {
       String rawResponse =
           client.post().uri("/v1/messages").body(request).retrieve().body(String.class);
-      log.debug("[CLAUDE_API_RAW_RESPONSE] {}", rawResponse);
+      
+      if (rawResponse == null || rawResponse.isBlank()) {
+        log.error("[CLAUDE_API_ERROR] Claude API 빈 응답 수신");
+        throw new RestClientException("Claude API 응답 본문이 비어있습니다.");
+      }
+
       ClaudeResponse response;
       try {
         response = objectMapper.readValue(rawResponse, ClaudeResponse.class);
       } catch (JsonProcessingException jpe) {
-        log.error("[CLAUDE_API_ERROR] JSON 파싱에 실패했습니다: {}", rawResponse);
+        log.error("[CLAUDE_API_ERROR] JSON 파싱에 실패했습니다. 응답 길이: {}", rawResponse.length());
         throw new RestClientException("Claude API 응답 파싱 실패", jpe);
       }
 
-      log.debug("[CLAUDE_API_RESPONSE] 정상적으로 응답을 수신했습니다.");
+      log.debug("[CLAUDE_API_RESPONSE] 정상적으로 응답을 수신했습니다. 응답 길이: {}", rawResponse.length());
       return response;
     } catch (RestClientResponseException e) {
       log.error("[CLAUDE_API_ERROR] Claude API HTTP 오류: {}", e.getResponseBodyAsString());
