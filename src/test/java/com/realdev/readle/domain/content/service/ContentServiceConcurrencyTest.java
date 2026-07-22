@@ -13,6 +13,7 @@ import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.entity.OAuthProvider;
 import com.realdev.readle.domain.member.repository.MemberRepository;
+import com.realdev.readle.global.config.ClaudeTestConfig;
 import com.realdev.readle.global.exception.CustomException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -27,7 +28,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import com.realdev.readle.global.config.ClaudeTestConfig;
 
 @SpringBootTest
 @ActiveProfiles("test")
