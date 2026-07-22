@@ -679,7 +679,7 @@ class ContentServiceTest {
   @DisplayName("재시도 시 콘텐츠가 없으면 CONTENT_NOT_FOUND 예외가 발생한다")
   void retryValidation_contentNotFound() {
     String memberUuid = UUID.randomUUID().toString();
-    when(contentRepository.findById(1L)).thenReturn(Optional.empty());
+    when(contentRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> contentService.retryValidation(1L, memberUuid))
         .isInstanceOf(CustomException.class)
@@ -694,7 +694,7 @@ class ContentServiceTest {
     String ownerUuid = UUID.randomUUID().toString();
     Content content = mockOwnedContent(ownerUuid);
 
-    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+    when(contentRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(content));
 
     assertThatThrownBy(() -> contentService.retryValidation(1L, requesterUuid))
         .isInstanceOf(CustomException.class)
@@ -708,7 +708,7 @@ class ContentServiceTest {
     String memberUuid = UUID.randomUUID().toString();
     Content content = mockOwnedContent(memberUuid);
 
-    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+    when(contentRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
         .thenReturn(Optional.empty());
 
@@ -726,7 +726,7 @@ class ContentServiceTest {
     ContentValidation validation =
         ContentValidation.builder().status(ValidationStatus.PENDING).build();
 
-    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+    when(contentRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
         .thenReturn(Optional.of(validation));
 
@@ -744,7 +744,7 @@ class ContentServiceTest {
     ContentValidation validation =
         ContentValidation.builder().status(ValidationStatus.PASSED).build();
 
-    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+    when(contentRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
         .thenReturn(Optional.of(validation));
 
@@ -762,7 +762,7 @@ class ContentServiceTest {
     ContentValidation validation =
         ContentValidation.builder().status(ValidationStatus.REJECTED).build();
 
-    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+    when(contentRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
         .thenReturn(Optional.of(validation));
 
@@ -782,7 +782,7 @@ class ContentServiceTest {
     ContentValidation validation =
         ContentValidation.builder().status(ValidationStatus.FAILED).build();
 
-    when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
+    when(contentRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(content));
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
         .thenReturn(Optional.of(validation));
 
