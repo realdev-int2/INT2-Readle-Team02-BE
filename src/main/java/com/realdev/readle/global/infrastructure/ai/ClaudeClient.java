@@ -1,5 +1,7 @@
 package com.realdev.readle.global.infrastructure.ai;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.global.config.ClaudeProperties;
 import com.realdev.readle.global.exception.CustomException;
@@ -88,7 +90,9 @@ public class ClaudeClient {
       String userPrompt,
       RestClientException e) {
     log.warn(
-        "[CLAUDE_API_WARNING] Claude API 일시적 호출 실패. 500ms 후 1회 재시도를 진행합니다. 에러: {}", e.getMessage());
+        "[CLAUDE_API_WARNING] Claude API 일시적 호출 실패. 500ms 후 1회 재시도를 진행합니다. model={}, errorType={}",
+        model,
+        e.getClass().getSimpleName());
     try {
       Thread.sleep(500);
     } catch (InterruptedException ie) {
@@ -98,9 +102,9 @@ public class ClaudeClient {
       return executeGenerateMessage(client, model, systemPrompt, userPrompt);
     } catch (RestClientException retryEx) {
       log.error(
-          "[CLAUDE_API_ERROR] Claude API 재시도 호출도 실패하였습니다. 최종 실패 처리합니다. 에러: {}",
-          retryEx.getMessage(),
-          retryEx);
+          "[CLAUDE_API_ERROR] Claude API 재시도 호출도 실패하였습니다. 최종 실패 처리합니다. model={}, errorType={}",
+          model,
+          retryEx.getClass().getSimpleName());
       throw retryEx;
     }
   }
@@ -117,16 +121,51 @@ public class ClaudeClient {
                 List.of(ClaudeRequest.Message.builder().role("user").content(userPrompt).build()))
             .build();
 
-    log.debug("[CLAUDE_API_REQUEST] Claude API로 요청을 전송합니다.");
+    log.debug("[CLAUDE_API_REQUEST] Claude API로 요청을 전송합니다. model={}", model);
 
     try {
-      ClaudeResponse response =
-          client.post().uri("/v1/messages").body(request).retrieve().body(ClaudeResponse.class);
+      String rawResponse =
+          client.post().uri("/v1/messages").body(request).retrieve().body(String.class);
 
-      log.debug("[CLAUDE_API_RESPONSE] 정상적으로 응답을 수신했습니다.");
+      if (rawResponse == null || rawResponse.isBlank()) {
+        log.error("[CLAUDE_API_ERROR] Claude API 빈 응답 수신");
+        throw new RestClientException("Claude API 응답 본문이 비어있습니다.");
+      }
+
+      ClaudeResponse response;
+      try {
+        response = objectMapper.readValue(rawResponse, ClaudeResponse.class);
+      } catch (JsonProcessingException jpe) {
+        log.error(
+            "[CLAUDE_API_ERROR] JSON 파싱에 실패했습니다. model={}, 응답 길이={}, 오류: {}",
+            model,
+            rawResponse.length(),
+            jpe.getMessage());
+        throw new RestClientException("Claude API 응답 파싱 실패", jpe);
+      }
+
+      log.debug(
+          "[CLAUDE_API_RESPONSE] 정상적으로 응답을 수신했습니다. model={}, 응답 길이={}",
+          model,
+          rawResponse.length());
       return response;
-    } catch (org.springframework.web.client.RestClientResponseException e) {
-      log.error("[CLAUDE_API_ERROR] Claude API HTTP 오류: {}", e.getResponseBodyAsString());
+    } catch (RestClientResponseException e) {
+      String errorBody = e.getResponseBodyAsString();
+      try {
+        JsonNode errorNode = objectMapper.readTree(errorBody);
+        String errorType = errorNode.path("error").path("type").asText("unknown");
+        String errorMessage = errorNode.path("error").path("message").asText("(no message)");
+        log.error(
+            "[CLAUDE_API_ERROR] Claude API HTTP 오류: status={}, type={}, message={}",
+            e.getStatusCode(),
+            errorType,
+            errorMessage);
+      } catch (Exception parseEx) {
+        log.error(
+            "[CLAUDE_API_ERROR] Claude API HTTP 오류: status={}, bodyLength={}",
+            e.getStatusCode(),
+            errorBody.length());
+      }
       throw e;
     }
   }
