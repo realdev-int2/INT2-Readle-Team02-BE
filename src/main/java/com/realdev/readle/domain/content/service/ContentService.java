@@ -67,7 +67,7 @@ public class ContentService {
   @Transactional(readOnly = true)
   public ContentValidationResponse getValidationResult(Long contentId, String memberUuid) {
     validateAuthentication(memberUuid);
-    getOwnedContent(contentId, memberUuid);
+    validateContentOwnership(contentId, memberUuid);
     ContentValidation validation = getLatestValidation(contentId);
 
     // bypassAvailable 조건 계산
@@ -102,7 +102,7 @@ public class ContentService {
   @Transactional
   public ContentValidationResponse retryValidation(Long contentId, String memberUuid) {
     validateAuthentication(memberUuid);
-    Content content = getOwnedContent(contentId, memberUuid);
+    Content content = getOwnedContentWithLock(contentId, memberUuid);
 
     ContentValidation validation = getLatestValidation(contentId);
 
@@ -222,10 +222,20 @@ public class ContentService {
     return text.substring(0, Math.min(TITLE_FALLBACK_LENGTH, text.length()));
   }
 
-  private Content getOwnedContent(Long contentId, String memberUuid) {
+  private void validateContentOwnership(Long contentId, String memberUuid) {
     Content content =
         contentRepository
             .findById(contentId)
+            .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
+    if (!content.getMember().getUuid().equals(memberUuid)) {
+      throw new CustomException(ContentErrorCode.CONTENT_ACCESS_DENIED);
+    }
+  }
+
+  private Content getOwnedContentWithLock(Long contentId, String memberUuid) {
+    Content content =
+        contentRepository
+            .findByIdWithPessimisticLock(contentId)
             .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
     if (!content.getMember().getUuid().equals(memberUuid)) {
       throw new CustomException(ContentErrorCode.CONTENT_ACCESS_DENIED);
