@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.content.entity.ContentValidation;
 import com.realdev.readle.domain.content.entity.ValidationStatus;
+import com.realdev.readle.domain.content.entity.ValidationMethod;
 import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.quiz.dto.response.QuizCreateResponse;
@@ -77,6 +79,16 @@ class QuizGenerationServiceTest {
     validation = org.mockito.Mockito.mock(ContentValidation.class);
     ReflectionTestUtils.setField(validation, "id", 100L);
     org.mockito.BDDMockito.lenient().when(validation.getContent()).thenReturn(content);
+
+    org.mockito.BDDMockito.lenient()
+        .when(transactionTemplate.execute(org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(
+            invocation -> {
+              org.springframework.transaction.support.TransactionCallback callback =
+                  invocation.getArgument(0);
+              if (callback == null) return null;
+              return callback.doInTransaction(null);
+            });
   }
 
   @Test
@@ -138,10 +150,10 @@ class QuizGenerationServiceTest {
   @Test
   @DisplayName("기존에 FAILED 상태인 퀴즈 세트가 있으면 retry()를 호출하여 로우를 재활용한다")
   void createQuizSet_ReusesFailedQuizSet() {
-    // given
-    given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
-    given(contentValidationRepository.findByIdWithContent(100L))
-        .willReturn(Optional.of(validation));
+    lenient().when(validation.getStatus()).thenReturn(ValidationStatus.PASSED);
+    lenient()
+        .when(contentValidationRepository.findByIdWithContent(100L))
+        .thenReturn(Optional.of(validation));
 
     // 기존 FAILED 상태의 QuizSet 모킹
     QuizSet existingQuizSet = org.mockito.Mockito.spy(QuizSet.create(content, validation, false));
@@ -200,10 +212,10 @@ class QuizGenerationServiceTest {
   @Test
   @DisplayName("기존에 FAILED 상태인 퀴즈 세트 재시도 중 AI 호출에 실패하면, retry() 후 다시 FAILED로 상태가 복구된다")
   void createQuizSet_ReusesFailedQuizSet_AndFailsAgain() {
-    // given
-    given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
-    given(contentValidationRepository.findByIdWithContent(100L))
-        .willReturn(Optional.of(validation));
+    lenient().when(validation.getStatus()).thenReturn(ValidationStatus.PASSED);
+    lenient()
+        .when(contentValidationRepository.findByIdWithContent(100L))
+        .thenReturn(Optional.of(validation));
 
     // 기존 FAILED 상태의 QuizSet 모킹
     QuizSet existingQuizSet = org.mockito.Mockito.spy(QuizSet.create(content, validation, false));
@@ -276,6 +288,7 @@ class QuizGenerationServiceTest {
   void createQuizSet_ThrowsWhenPending() {
     // given
     given(validation.getStatus()).willReturn(ValidationStatus.PENDING);
+    org.mockito.BDDMockito.lenient().when(validation.getValidationMethod()).thenReturn(ValidationMethod.STATIC_GUARDRAIL);
     given(contentValidationRepository.findByIdWithContent(100L))
         .willReturn(Optional.of(validation));
 
@@ -291,6 +304,7 @@ class QuizGenerationServiceTest {
   void createQuizSet_ThrowsWhenFailed() {
     // given
     given(validation.getStatus()).willReturn(ValidationStatus.FAILED);
+    org.mockito.BDDMockito.lenient().when(validation.getValidationMethod()).thenReturn(ValidationMethod.STATIC_GUARDRAIL);
     given(contentValidationRepository.findByIdWithContent(100L))
         .willReturn(Optional.of(validation));
 
@@ -589,5 +603,92 @@ class QuizGenerationServiceTest {
     // 태그 저장이 수행되지 않았음을 확인
     org.mockito.Mockito.verify(tagService, org.mockito.Mockito.never())
         .saveContentTags(any(), any());
+  }
+
+  // =========================================================================
+  // 6. Validation 및 Bypass(우회) 분기 회귀 테스트
+  // =========================================================================
+
+  @Test
+  @DisplayName("AI 검증 REJECTED인 경우 우회 생성이 허용되고 isBypassed가 true로 설정된다")
+  void createQuizSet_AllowsBypass_WhenAiRejected() {
+    // given
+    lenient().when(validation.getStatus()).thenReturn(ValidationStatus.REJECTED);
+    lenient().when(validation.getValidationMethod()).thenReturn(ValidationMethod.AI);
+    lenient()
+        .when(contentValidationRepository.findByIdWithContent(100L))
+        .thenReturn(Optional.of(validation));
+
+    given(transactionTemplate.execute(any()))
+        .willAnswer(
+            invocation -> {
+              org.springframework.transaction.support.TransactionCallback callback =
+                  invocation.getArgument(0);
+              return callback.doInTransaction(null);
+            });
+
+    given(quizSetRepository.findBySourceValidationId(100L)).willReturn(Optional.empty());
+
+    // saveAndFlush 될 때 isBypassed가 true인지 검증
+    given(quizSetRepository.saveAndFlush(any(QuizSet.class)))
+        .willAnswer(
+            invocation -> {
+              QuizSet arg = invocation.getArgument(0);
+              assertThat(arg.getIsBypassed()).isTrue();
+              ReflectionTestUtils.setField(arg, "id", 200L);
+              return arg;
+            });
+    lenient()
+        .when(quizSetRepository.findById(200L))
+        .thenAnswer(
+            invocation -> {
+              QuizSet mockSet = QuizSet.create(validation.getContent(), validation, true);
+              ReflectionTestUtils.setField(mockSet, "id", 200L);
+              return Optional.of(mockSet);
+            });
+
+    given(promptLoader.loadPrompt(anyString(), any())).willReturn("system prompt");
+
+    String claudeJsonResponse =
+        """
+            {
+              "tags": ["Test"],
+              "quizzes": [
+                {
+                  "id": 1,
+                  "type": "multiple_choice",
+                  "question": "Test Q?",
+                  "options": ["A", "B"],
+                  "code_snippet": null,
+                  "answer": "0"
+                }
+              ]
+            }
+            """;
+    given(claudeClient.getGeneratedText(anyString(), anyString())).willReturn(claudeJsonResponse);
+
+    // when
+    QuizCreateResponse response = quizGenerationService.createQuizSet(100L);
+
+    // then
+    assertThat(response).isNotNull();
+    assertThat(response.getQuizId()).isEqualTo(200L);
+  }
+
+  @Test
+  @DisplayName("STATIC_GUARDRAIL 검증 REJECTED인 경우 우회 생성이 불가하며 예외가 발생한다")
+  void createQuizSet_ThrowsException_WhenStaticGuardrailRejected() {
+    // given
+    lenient().when(validation.getStatus()).thenReturn(ValidationStatus.REJECTED);
+    lenient().when(validation.getValidationMethod()).thenReturn(ValidationMethod.STATIC_GUARDRAIL);
+    lenient()
+        .when(contentValidationRepository.findByIdWithContent(100L))
+        .thenReturn(Optional.of(validation));
+
+    // when & then
+    assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.VALIDATION_NOT_PASSED);
   }
 }

@@ -53,16 +53,6 @@ public class QuizGenerationService {
                     new CustomException(
                         QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
 
-    boolean bypassAvailable =
-        validation.getStatus() == ValidationStatus.REJECTED
-            && validation.getValidationMethod() == ValidationMethod.AI;
-
-    // Validation 상태 분기: PASSED 또는 bypassAvailable 허용
-    if (validation.getStatus() != ValidationStatus.PASSED && !bypassAvailable) {
-      throw new CustomException(QuizErrorCode.VALIDATION_NOT_PASSED);
-    }
-    final boolean isBypassed = bypassAvailable;
-
     // 1. 초기 QuizSet 레코드 생성 및 저장 (Transaction 분리)
     QuizSet quizSet =
         transactionTemplate.execute(
@@ -88,6 +78,16 @@ public class QuizGenerationService {
                           () ->
                               new CustomException(
                                   QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
+
+              boolean bypassAvailable =
+                  managedValidation.getStatus() == ValidationStatus.REJECTED
+                      && managedValidation.getValidationMethod() == ValidationMethod.AI;
+
+              // Validation 상태 분기: PASSED 또는 bypassAvailable 허용
+              if (managedValidation.getStatus() != ValidationStatus.PASSED && !bypassAvailable) {
+                throw new CustomException(QuizErrorCode.VALIDATION_NOT_PASSED);
+              }
+              boolean isBypassed = bypassAvailable;
 
               QuizSet newQuizSet;
               try {
