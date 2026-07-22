@@ -75,7 +75,7 @@ verify_host_surface() {
   command -v "${READLE_SYSTEMCTL:-$SYSTEMCTL}" >/dev/null || die "missing systemctl command: ${READLE_SYSTEMCTL:-$SYSTEMCTL}"
   network_exists "$PUBLIC_NETWORK" || die "missing Podman network: $PUBLIC_NETWORK"
   network_exists "$PRIVATE_NETWORK" || die "missing Podman network: $PRIVATE_NETWORK"
-  validate_container "${READLE_NGINX_CONTAINER:-$NGINX_CONTAINER}" "$PUBLIC_NETWORK"
+  validate_container "${READLE_NGINX_CONTAINER:-$NGINX_CONTAINER}" "$PUBLIC_NETWORK" always
   validate_container "${READLE_FRONTEND_CONTAINER:-$FRONTEND_CONTAINER}" "$PUBLIC_NETWORK" always
   validate_container "$mysql" "$PRIVATE_NETWORK" always
 }
@@ -132,7 +132,7 @@ case "$*" in
   "inspect frontend-extra --format {{range \$name, \$_ := .NetworkSettings.Networks}}{{\$name}} {{end}}") printf 'readle-public readle-extra \n'; exit 0 ;;
   "inspect mysql-extra --format {{range \$name, \$_ := .NetworkSettings.Networks}}{{\$name}} {{end}}") printf 'readle-private readle-extra \n'; exit 0 ;;
   "inspect missing --format {{range \$name, \$_ := .NetworkSettings.Networks}}{{\$name}} {{end}}") exit 0 ;;
-  "inspect readle-mysql --format {{.HostConfig.RestartPolicy.Name}}") printf 'always\n'; exit 0 ;;
+  "inspect readle-nginx --format {{.HostConfig.RestartPolicy.Name}}"|"inspect readle-mysql --format {{.HostConfig.RestartPolicy.Name}}") printf 'always\n'; exit 0 ;;
   "inspect readle-frontend --format {{.HostConfig.RestartPolicy.Name}}"|"inspect frontend-extra --format {{.HostConfig.RestartPolicy.Name}}"|"inspect mysql-extra --format {{.HostConfig.RestartPolicy.Name}}") printf 'always\n'; exit 0 ;;
   "inspect missing --format {{.HostConfig.RestartPolicy.Name}}") exit 0 ;;
 esac
@@ -178,6 +178,7 @@ STUB
     READLE_HELPER_LOG="$helper_log" \
     verify_preflight
   [[ ! -e "$helper_log" ]] || die "self-test preflight invoked backend helper"
+  grep -qx 'podman inspect readle-nginx --format {{.HostConfig.RestartPolicy.Name}}' "$log_file" || die "self-test did not verify Nginx restart policy"
   ! grep -Eq 'systemctl|flock|--verify-backend-topology' "$log_file" || die "self-test preflight was not lock-free/prereq-only"
 
   : > "$log_file"

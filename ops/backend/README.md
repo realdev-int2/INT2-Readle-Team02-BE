@@ -126,6 +126,9 @@ sudo ./deploy-backend.sh \
   실행을 막는 공용 candidate 잠금입니다.
 - `/run/lock/readle-backend-deploy.lock`: 백엔드 배포 전용 잠금입니다.
 
+Runtime verifier도 공용 candidate 잠금을 최대 30초 대기합니다. frontend 또는 backend
+배포 중 수동 verifier 실행은 timeout으로 실패할 수 있으므로, 배포 완료 후 다시 실행합니다.
+
 ## Rollback 동작
 
 Candidate readiness 또는 `nginx -t`가 실패하면 헬퍼는 candidate를 제거하고,

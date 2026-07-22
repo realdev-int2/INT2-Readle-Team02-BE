@@ -418,6 +418,7 @@ validate_backend_topology() {
   validate_nginx_include_path "$NGINX_UPSTREAM_INCLUDE_HOST" || die "invalid host Nginx include path"
   [[ -f "$NGINX_UPSTREAM_INCLUDE_HOST" ]] || die "missing host Nginx upstream include: $NGINX_UPSTREAM_INCLUDE_HOST"
   container_exists "$NGINX" || die "missing Nginx container: $NGINX"
+  container_running "$NGINX" || die "Nginx container is not running: $NGINX"
   container_exists "$active_slot" || die "missing active backend slot: $active_slot"
   container_running "$active_slot" || die "active backend slot is not running: $active_slot"
   inactive="$(inactive_slot "$active_slot")"
@@ -1042,6 +1043,7 @@ self_test() {
       case "$*" in
         "container exists $NGINX"|"container exists $SLOT_A") return 0 ;;
         "container exists $SLOT_B") return 1 ;;
+        "inspect $NGINX --format {{.State.Running}}") printf '%s\n' true; return 0 ;;
         "inspect $SLOT_A --format {{.State.Running}}") printf '%s\n' true; return 0 ;;
         "inspect $SLOT_A --format {{.Image}}") printf '%s\n' "$old_image"; return 0 ;;
         *"HostConfig.PortBindings"*) return 0 ;;
@@ -1071,7 +1073,26 @@ self_test() {
       printf '%s\n' "$*" >> "$log_file"
       case "$*" in
         "container exists $NGINX"|"container exists $SLOT_A") return 0 ;;
+        "inspect $NGINX --format {{.State.Running}}") printf '%s\n' true; return 0 ;;
+        "inspect $SLOT_A --format {{.State.Running}}") printf '%s\n' false; return 0 ;;
+        *) printf 'unexpected podman command: %s\n' "$*" >&2; return 1 ;;
+      esac
+    }
+    flock() { return 0; }
+    verify_backend_topology
+  ) 2>/dev/null; then
+    die "self-test accepted a stopped active backend slot"
+  fi
+  assert_not_grep '^pull \|^run \|^stop \|rm -f\|nginx -s reload\|save_state' "$log_file"
+
+  log_file="$(mktemp)"
+  if (
+    podman_cmd() {
+      printf '%s\n' "$*" >> "$log_file"
+      case "$*" in
+        "container exists $NGINX"|"container exists $SLOT_A") return 0 ;;
         "container exists $SLOT_B") return 1 ;;
+        "inspect $NGINX --format {{.State.Running}}") printf '%s\n' true; return 0 ;;
         "inspect $SLOT_A --format {{.State.Running}}") printf '%s\n' true; return 0 ;;
         "inspect $SLOT_A --format {{.Image}}") printf '%s\n' "$old_image"; return 0 ;;
         *"HostConfig.PortBindings"*) return 0 ;;
