@@ -123,7 +123,7 @@ public class ClaudeClient {
     try {
       String rawResponse =
           client.post().uri("/v1/messages").body(request).retrieve().body(String.class);
-      
+
       if (rawResponse == null || rawResponse.isBlank()) {
         log.error("[CLAUDE_API_ERROR] Claude API 빈 응답 수신");
         throw new RestClientException("Claude API 응답 본문이 비어있습니다.");

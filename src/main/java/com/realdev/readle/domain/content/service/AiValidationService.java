@@ -274,9 +274,7 @@ public class AiValidationService {
     if (text == null) {
       return "";
     }
-    return text.replace("&", "&amp;")
-               .replace("<", "&lt;")
-               .replace(">", "&gt;");
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
   }
 
   private String getUserPrompt(String text) {
