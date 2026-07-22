@@ -1,5 +1,6 @@
 package com.realdev.readle.global.infrastructure.ai;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.global.config.ClaudeProperties;
 import com.realdev.readle.global.exception.CustomException;
@@ -120,12 +121,20 @@ public class ClaudeClient {
     log.debug("[CLAUDE_API_REQUEST] Claude API로 요청을 전송합니다.");
 
     try {
-      ClaudeResponse response =
-          client.post().uri("/v1/messages").body(request).retrieve().body(ClaudeResponse.class);
+      String rawResponse =
+          client.post().uri("/v1/messages").body(request).retrieve().body(String.class);
+      log.debug("[CLAUDE_API_RAW_RESPONSE] {}", rawResponse);
+      ClaudeResponse response;
+      try {
+        response = objectMapper.readValue(rawResponse, ClaudeResponse.class);
+      } catch (JsonProcessingException jpe) {
+        log.error("[CLAUDE_API_ERROR] JSON 파싱에 실패했습니다: {}", rawResponse);
+        throw new RestClientException("Claude API 응답 파싱 실패", jpe);
+      }
 
       log.debug("[CLAUDE_API_RESPONSE] 정상적으로 응답을 수신했습니다.");
       return response;
-    } catch (org.springframework.web.client.RestClientResponseException e) {
+    } catch (RestClientResponseException e) {
       log.error("[CLAUDE_API_ERROR] Claude API HTTP 오류: {}", e.getResponseBodyAsString());
       throw e;
     }
