@@ -162,10 +162,11 @@ public class QuizSolveService {
         }
         choiceMap.put(question.getId(), choice);
       } else {
-        String answerText = answerReq.getSubmittedAnswerText();
-        if (answerText == null || answerText.trim().isEmpty()) {
+        String rawAnswerText = answerReq.getSubmittedAnswerText();
+        if (rawAnswerText == null || rawAnswerText.trim().isEmpty()) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
+        String answerText = sanitizeAnswerText(rawAnswerText);
         // 주관식/빈칸 답안 검증 (트랜잭션 시작 전 차단)
         if (answerText.length() > 100) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
@@ -207,7 +208,7 @@ public class QuizSolveService {
         staticAnswers.add(
             QuizAnswer.createForChoice(lockedAttempt, question, choice, choice.getIsCorrect()));
       } else {
-        String answerText = answerReq.getSubmittedAnswerText();
+        String answerText = sanitizeAnswerText(answerReq.getSubmittedAnswerText());
         if (isStaticMatch(question.getCorrectAnswer(), answerText)) {
           staticAnswers.add(
               QuizAnswer.createForWritten(lockedAttempt, question, answerText, true, null));
@@ -335,5 +336,12 @@ public class QuizSolveService {
     String normalizedCorrect = correct.trim().toLowerCase().replaceAll("\\s+", " ");
     String normalizedSubmitted = submitted.trim().toLowerCase().replaceAll("\\s+", " ");
     return normalizedCorrect.equals(normalizedSubmitted);
+  }
+
+  private String sanitizeAnswerText(String input) {
+    if (input == null) {
+      return "";
+    }
+    return input.replace("<", "&lt;").replace(">", "&gt;");
   }
 }

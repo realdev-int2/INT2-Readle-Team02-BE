@@ -21,6 +21,7 @@ import com.realdev.readle.domain.tag.service.TagService;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
+import com.realdev.readle.global.util.JsonExtractor;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -234,13 +235,7 @@ public class QuizGenerationService {
 
   private ClaudeQuizResponseDto parseAndValidate(String jsonResponse) {
     try {
-      if (jsonResponse.startsWith("```json")) {
-        jsonResponse = jsonResponse.substring(7);
-        if (jsonResponse.endsWith("```")) {
-          jsonResponse = jsonResponse.substring(0, jsonResponse.length() - 3);
-        }
-      }
-      jsonResponse = jsonResponse.trim();
+      jsonResponse = JsonExtractor.extractJson(jsonResponse);
 
       ClaudeQuizResponseDto response =
           objectMapper.readValue(jsonResponse, ClaudeQuizResponseDto.class);

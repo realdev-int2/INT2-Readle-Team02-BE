@@ -7,6 +7,7 @@ import com.realdev.readle.domain.quiz.entity.QuizQuestion;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
+import com.realdev.readle.global.util.JsonExtractor;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -92,16 +93,7 @@ public class QuizAiGradingService {
 
   private ClaudeGradingResponseDto parseAndValidate(String jsonResponse) {
     try {
-      jsonResponse = jsonResponse.trim();
-      if (jsonResponse.startsWith("```json")) {
-        jsonResponse = jsonResponse.substring(7);
-      } else if (jsonResponse.startsWith("```")) {
-        jsonResponse = jsonResponse.substring(3);
-      }
-      if (jsonResponse.endsWith("```")) {
-        jsonResponse = jsonResponse.substring(0, jsonResponse.length() - 3);
-      }
-      jsonResponse = jsonResponse.trim();
+      jsonResponse = JsonExtractor.extractJson(jsonResponse);
 
       ClaudeGradingResponseDto response =
           objectMapper.readValue(jsonResponse, ClaudeGradingResponseDto.class);
