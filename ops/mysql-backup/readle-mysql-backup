@@ -130,18 +130,40 @@ run_backup_locked() {
 
   timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
   OBJECT_KEY="backups/mysql/${timestamp}.sql.gz"
-  TMP_ARCHIVE="$(mktemp "$STAGE_DIR/.readle-mysql-backup.XXXXXX.sql.gz")" || fail_run "mktemp failed"
-  trap cleanup EXIT INT TERM
-  chmod 600 "$TMP_ARCHIVE" || fail_run "chmod failed"
+  TMP_ARCHIVE="$(mktemp "$STAGE_DIR/.readle-mysql-backup.XXXXXX.sql.gz")" || {
+    fail_run "mktemp failed"
+    exit 1
+  }
+  trap cleanup EXIT
+  trap 'cleanup; exit 143' INT TERM
+  chmod 600 "$TMP_ARCHIVE" || {
+    fail_run "chmod failed"
+    exit 1
+  }
 
-  dump_archive || fail_run "mysqldump gzip failed"
-  [[ -s "$TMP_ARCHIVE" ]] || fail_run "empty archive"
-  gzip -t "$TMP_ARCHIVE" || fail_run "gzip validation failed"
+  dump_archive || {
+    fail_run "mysqldump gzip failed"
+    exit 1
+  }
+  [[ -s "$TMP_ARCHIVE" ]] || {
+    fail_run "empty archive"
+    exit 1
+  }
+  gzip -t "$TMP_ARCHIVE" || {
+    fail_run "gzip validation failed"
+    exit 1
+  }
   LOCAL_BYTES="$(bytes_of "$TMP_ARCHIVE")"
-  [[ "$LOCAL_BYTES" =~ ^[0-9]+$ && "$LOCAL_BYTES" -gt 0 ]] || fail_run "invalid local byte count"
+  [[ "$LOCAL_BYTES" =~ ^[0-9]+$ && "$LOCAL_BYTES" -gt 0 ]] || {
+    fail_run "invalid local byte count"
+    exit 1
+  }
 
   aws_cmd s3 cp "$TMP_ARCHIVE" "s3://$S3_BUCKET/$OBJECT_KEY" --region "$AWS_REGION" --only-show-errors ||
-    fail_run "upload failed"
+    {
+      fail_run "upload failed"
+      exit 1
+    }
   remote_bytes="$(
     aws_cmd s3api head-object \
       --bucket "$S3_BUCKET" \
@@ -149,10 +171,19 @@ run_backup_locked() {
       --region "$AWS_REGION" \
       --query ContentLength \
       --output text
-  )" || fail_run "head-object failed"
-  [[ "$remote_bytes" == "$LOCAL_BYTES" ]] || fail_run "content length mismatch"
+  )" || {
+    fail_run "head-object failed"
+    exit 1
+  }
+  [[ "$remote_bytes" == "$LOCAL_BYTES" ]] || {
+    fail_run "content length mismatch"
+    exit 1
+  }
 
-  write_state success "" || fail_run "state write failed"
+  write_state success "" || {
+    fail_run "state write failed"
+    exit 1
+  }
   log "backup ok: key=$OBJECT_KEY bytes=$LOCAL_BYTES"
 }
 
@@ -201,7 +232,7 @@ assert_no_archives() {
 }
 
 self_test() {
-  local tmp bin script mode state metadata metadata_owner metadata_mode env_file
+  local tmp bin script mode state metadata metadata_owner metadata_mode env_file pid signal_status
   tmp="$(mktemp -d)"
   bin="$tmp/bin"
   mkdir -p "$bin"
@@ -219,6 +250,7 @@ printf '\n' >> "$READLE_STUB_LOG"
 IFS= read -r password
 [[ "$password" == "self-test-secret" ]] || exit 9
 [[ "${READLE_PODMAN_MODE:-}" == "dump-fail" ]] && exit 10
+[[ "${READLE_PODMAN_MODE:-}" == "signal" ]] && sleep 1
 printf 'CREATE TABLE t(id int);\n'
 STUB
   chmod +x "$bin/podman"
@@ -311,6 +343,19 @@ STUB
     grep -qx 'status=failure' "$tmp/state-$mode.env" || die "self-test failure state missing: $mode"
     assert_no_archives "$tmp/stage-$mode"
   done
+
+  : > "$tmp/calls.log"
+  "$script" --self-test-case signal "$tmp" >/dev/null 2>&1 &
+  pid=$!
+  while ! grep -q '^podman' "$tmp/calls.log"; do sleep 0.01; done
+  kill -TERM "$pid"
+  if wait "$pid"; then
+    die "self-test accepted SIGTERM"
+  else
+    signal_status=$?
+  fi
+  [[ "$signal_status" -eq 143 ]] || die "self-test SIGTERM status mismatch: $signal_status"
+  assert_no_archives "$tmp/stage-signal"
 
   log "self-test ok"
 }
