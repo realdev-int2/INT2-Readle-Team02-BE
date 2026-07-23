@@ -50,13 +50,13 @@ public class QuizAiGradingService {
                 return executeWithTimeoutAndRetry(
                     question, submittedAnswer, articleText, retriesLeft - 1);
               } else {
-                log.error("AI 채점 최종 실패. Fallback 결과로 반환합니다.", ex);
-                return CompletableFuture.completedFuture(
-                    new AiEvaluationResult(
-                        question,
-                        submittedAnswer,
-                        false,
-                        "AI 채점 서버와의 연결이 원활하지 않아 채점(JSON 변환 등)에 실패했습니다."));
+                log.error("AI 채점 최종 실패. 예외를 전파하여 전체 롤백 처리합니다.", ex);
+                CompletableFuture<AiEvaluationResult> failedFuture = new CompletableFuture<>();
+                failedFuture.completeExceptionally(
+                    new CustomException(
+                        com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED,
+                        "AI 채점 서비스 연동 중 오류가 발생했습니다."));
+                return failedFuture;
               }
             });
   }
