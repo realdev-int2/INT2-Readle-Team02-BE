@@ -1,0 +1,379 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_FILE="/etc/readle/backend.env"
+MYSQL_CONTAINER="readle-mysql"
+STAGE_DIR="${READLE_MYSQL_BACKUP_STAGE_DIR:-/var/lib/readle/mysql-backup}"
+STATE_FILE="${READLE_MYSQL_BACKUP_STATE_FILE:-/var/lib/readle/mysql-backup/readle-mysql-backup.state}"
+LOCK_FILE="${READLE_MYSQL_BACKUP_LOCK_FILE:-/run/lock/readle-mysql-backup.lock}"
+PODMAN="${READLE_PODMAN:-podman}"
+AWS="${READLE_AWS:-aws}"
+FLOCK="${READLE_FLOCK:-flock}"
+TMP_ARCHIVE=""
+OBJECT_KEY=""
+LOCAL_BYTES=""
+
+log() { printf '%s\n' "$*" >&2; }
+die() { log "error: $*"; exit 1; }
+
+cleanup() {
+  [[ -z "$TMP_ARCHIVE" ]] || rm -f -- "$TMP_ARCHIVE"
+}
+
+bytes_of() {
+  stat -c '%s' "$1" 2>/dev/null || stat -f '%z' "$1"
+}
+
+file_owner_and_mode() {
+  stat -c '%u %a' "$1" 2>/dev/null || stat -f '%u %Lp' "$1"
+}
+
+is_secure_env_metadata() {
+  [[ "$1" == "0" && "$2" == "600" ]]
+}
+
+validate_env_file() {
+  local owner mode
+  [[ -f "$ENV_FILE" && -r "$ENV_FILE" ]] || die "missing env file: $ENV_FILE"
+  read -r owner mode < <(file_owner_and_mode "$ENV_FILE") || die "cannot inspect env file: $ENV_FILE"
+  is_secure_env_metadata "$owner" "$mode" ||
+    die "env file must be root-owned with no group/world access: $ENV_FILE"
+}
+
+load_env_file() {
+  unset MYSQL_DATABASE MYSQL_ROOT_PASSWORD AWS_REGION S3_BUCKET
+  # shellcheck source=/etc/readle/backend.env
+  source "$ENV_FILE"
+}
+
+prepare_state_dir() {
+  umask 077
+  mkdir -p "$STAGE_DIR"
+  chmod 700 "$STAGE_DIR"
+}
+
+write_state() {
+  local status="$1" error="${2:-}" state_dir temp now
+  state_dir="$(dirname "$STATE_FILE")"
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  mkdir -p "$state_dir"
+  temp="$(mktemp "$state_dir/.readle-mysql-backup.state.XXXXXX")" || return 1
+  {
+    printf 'status=%s\n' "$status"
+    printf 'timestamp_utc=%s\n' "$now"
+    printf 'database=%s\n' "${MYSQL_DATABASE:-}"
+    printf 'bucket=%s\n' "${S3_BUCKET:-}"
+    printf 'key=%s\n' "$OBJECT_KEY"
+    printf 'bytes=%s\n' "$LOCAL_BYTES"
+    printf 'error=%s\n' "$error"
+  } > "$temp" || { rm -f "$temp"; return 1; }
+  chmod 600 "$temp" || { rm -f "$temp"; return 1; }
+  mv -f "$temp" "$STATE_FILE"
+}
+
+fail_run() {
+  local reason="$1"
+  write_state failure "$reason" || log "error: failed to write failure state"
+  log "backup failed: $reason"
+  return 1
+}
+
+validate_name() {
+  [[ "$1" =~ ^[A-Za-z0-9_.-]+$ ]]
+}
+
+validate_database_name() {
+  validate_name "$1" && [[ "$1" != -* ]]
+}
+
+validate_env() {
+  [[ -n "${MYSQL_DATABASE:-}" ]] || { fail_run "missing MYSQL_DATABASE"; return 1; }
+  [[ -n "${MYSQL_ROOT_PASSWORD:-}" ]] || { fail_run "missing MYSQL_ROOT_PASSWORD"; return 1; }
+  [[ -n "${AWS_REGION:-}" ]] || { fail_run "missing AWS_REGION"; return 1; }
+  [[ -n "${S3_BUCKET:-}" ]] || { fail_run "missing S3_BUCKET"; return 1; }
+  [[ "$MYSQL_ROOT_PASSWORD" != *$'\n'* && "$MYSQL_ROOT_PASSWORD" != *$'\r'* ]] || {
+    fail_run "invalid MYSQL_ROOT_PASSWORD"; return 1;
+  }
+  validate_database_name "$MYSQL_DATABASE" || { fail_run "invalid MYSQL_DATABASE"; return 1; }
+  validate_name "$AWS_REGION" || { fail_run "invalid AWS_REGION"; return 1; }
+  [[ "$S3_BUCKET" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] || {
+    fail_run "invalid S3_BUCKET"; return 1;
+  }
+}
+
+podman_cmd() {
+  "$PODMAN" "$@"
+}
+
+aws_cmd() {
+  "$AWS" "$@"
+}
+
+flock_cmd() {
+  "$FLOCK" "$@"
+}
+
+dump_archive() {
+  printf '%s\n' "$MYSQL_ROOT_PASSWORD" |
+    podman_cmd exec -i "$MYSQL_CONTAINER" sh -c '
+      IFS= read -r MYSQL_PWD || exit 1
+      export MYSQL_PWD
+      exec mysqldump -uroot --single-transaction --quick --routines --events --triggers --no-tablespaces --set-gtid-purged=OFF --databases "$0"
+    ' "$MYSQL_DATABASE" |
+    gzip -c > "$TMP_ARCHIVE"
+}
+
+run_backup_locked() {
+  local timestamp remote_bytes
+  prepare_state_dir
+  validate_env || return 1
+
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  OBJECT_KEY="backups/mysql/${timestamp}.sql.gz"
+  TMP_ARCHIVE="$(mktemp "$STAGE_DIR/.readle-mysql-backup.XXXXXX.sql.gz")" || {
+    fail_run "mktemp failed"
+    exit 1
+  }
+  trap cleanup EXIT
+  trap 'cleanup; exit 143' INT TERM
+  chmod 600 "$TMP_ARCHIVE" || {
+    fail_run "chmod failed"
+    exit 1
+  }
+
+  dump_archive || {
+    fail_run "mysqldump gzip failed"
+    exit 1
+  }
+  [[ -s "$TMP_ARCHIVE" ]] || {
+    fail_run "empty archive"
+    exit 1
+  }
+  gzip -t "$TMP_ARCHIVE" || {
+    fail_run "gzip validation failed"
+    exit 1
+  }
+  LOCAL_BYTES="$(bytes_of "$TMP_ARCHIVE")"
+  [[ "$LOCAL_BYTES" =~ ^[0-9]+$ && "$LOCAL_BYTES" -gt 0 ]] || {
+    fail_run "invalid local byte count"
+    exit 1
+  }
+
+  aws_cmd s3 cp "$TMP_ARCHIVE" "s3://$S3_BUCKET/$OBJECT_KEY" --region "$AWS_REGION" --only-show-errors ||
+    {
+      fail_run "upload failed"
+      exit 1
+    }
+  remote_bytes="$(
+    aws_cmd s3api head-object \
+      --bucket "$S3_BUCKET" \
+      --key "$OBJECT_KEY" \
+      --region "$AWS_REGION" \
+      --query ContentLength \
+      --output text
+  )" || {
+    fail_run "head-object failed"
+    exit 1
+  }
+  [[ "$remote_bytes" == "$LOCAL_BYTES" ]] || {
+    fail_run "content length mismatch"
+    exit 1
+  }
+
+  write_state success "" || {
+    fail_run "state write failed"
+    exit 1
+  }
+  log "backup ok: key=$OBJECT_KEY bytes=$LOCAL_BYTES"
+}
+
+run_backup() {
+  local lock_dir
+  umask 077
+  prepare_state_dir
+  lock_dir="$(dirname "$LOCK_FILE")"
+  mkdir -p "$lock_dir"
+  exec 9>"$LOCK_FILE"
+  flock_cmd -n 9 || fail_run "backup already running"
+  run_backup_locked
+}
+
+self_test_case() {
+  local mode="$1" root="$2"
+  export READLE_STUB_LOG="$root/calls.log"
+  export READLE_AWS_MODE="$mode"
+  export READLE_PODMAN_MODE="$mode"
+  export READLE_PODMAN="$root/bin/podman"
+  export READLE_AWS="$root/bin/aws"
+  export READLE_FLOCK="$root/bin/flock"
+  export READLE_MYSQL_BACKUP_STAGE_DIR="$root/stage-$mode"
+  export READLE_MYSQL_BACKUP_STATE_FILE="$root/state-$mode.env"
+  export READLE_MYSQL_BACKUP_LOCK_FILE="$root/lock-$mode"
+  STAGE_DIR="$READLE_MYSQL_BACKUP_STAGE_DIR"
+  STATE_FILE="$READLE_MYSQL_BACKUP_STATE_FILE"
+  LOCK_FILE="$READLE_MYSQL_BACKUP_LOCK_FILE"
+  PODMAN="$READLE_PODMAN"
+  AWS="$READLE_AWS"
+  FLOCK="$READLE_FLOCK"
+  MYSQL_DATABASE="readle"
+  MYSQL_ROOT_PASSWORD="self-test-secret"
+  AWS_REGION="ap-northeast-2"
+  S3_BUCKET="readle-backups"
+  [[ "$mode" == "missing-env" ]] && unset MYSQL_DATABASE
+  [[ "$mode" == "all-databases" ]] && MYSQL_DATABASE="--all-databases"
+  run_backup
+}
+
+assert_no_archives() {
+  local dir="$1" found=""
+  [[ -d "$dir" ]] || return 0
+  found="$(find "$dir" -type f -name '*.sql.gz' -print -quit)"
+  [[ -z "$found" ]] || die "self-test left archive behind: $found"
+}
+
+self_test() {
+  local tmp bin script mode state metadata metadata_owner metadata_mode env_file pid signal_status
+  tmp="$(mktemp -d)"
+  bin="$tmp/bin"
+  mkdir -p "$bin"
+  script="${BASH_SOURCE[0]}"
+  trap "rm -rf '$tmp'" EXIT
+
+  cat > "$bin/podman" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'podman' >> "$READLE_STUB_LOG"
+for arg in "$@"; do printf ' [%s]' "$arg" >> "$READLE_STUB_LOG"; done
+printf '\n' >> "$READLE_STUB_LOG"
+[[ "$*" == *"self-test-secret"* ]] && exit 7
+[[ "$1 $2 $3" == "exec -i readle-mysql" ]] || exit 8
+IFS= read -r password
+[[ "$password" == "self-test-secret" ]] || exit 9
+[[ "${READLE_PODMAN_MODE:-}" == "dump-fail" ]] && exit 10
+[[ "${READLE_PODMAN_MODE:-}" == "signal" ]] && sleep 1
+printf 'CREATE TABLE t(id int);\n'
+STUB
+  chmod +x "$bin/podman"
+
+  cat > "$bin/aws" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'aws' >> "$READLE_STUB_LOG"
+for arg in "$@"; do printf ' [%s]' "$arg" >> "$READLE_STUB_LOG"; done
+printf '\n' >> "$READLE_STUB_LOG"
+case "${READLE_AWS_MODE:-}" in
+  upload-fail)
+    [[ "$1 $2" == "s3 cp" ]] && exit 11
+    ;;
+  head-fail)
+    [[ "$1 $2" == "s3api head-object" ]] && exit 12
+    ;;
+  mismatch)
+    [[ "$1 $2" == "s3api head-object" ]] && { printf '1\n'; exit 0; }
+    ;;
+esac
+if [[ "$1 $2" == "s3 cp" ]]; then
+  stat -c '%s' "$3" 2>/dev/null || stat -f '%z' "$3" >/dev/null
+  exit 0
+fi
+if [[ "$1 $2" == "s3api head-object" ]]; then
+  file="$(find "${READLE_MYSQL_BACKUP_STAGE_DIR:?}" -type f -name '*.sql.gz' -print -quit)"
+  stat -c '%s' "$file" 2>/dev/null || stat -f '%z' "$file"
+  exit 0
+fi
+exit 13
+STUB
+  chmod +x "$bin/aws"
+
+  cat > "$bin/flock" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'flock' >> "$READLE_STUB_LOG"
+for arg in "$@"; do printf ' [%s]' "$arg" >> "$READLE_STUB_LOG"; done
+printf '\n' >> "$READLE_STUB_LOG"
+[[ "${READLE_AWS_MODE:-}" == "lock-fail" ]] && exit 14
+exit 0
+STUB
+  chmod +x "$bin/flock"
+
+  : > "$tmp/calls.log"
+  "$script" --self-test-case success "$tmp"
+  state="$tmp/state-success.env"
+  grep -qx 'status=success' "$state" || die "self-test success state missing"
+  grep -q 'key=backups/mysql/.*[.]sql[.]gz' "$state" || die "self-test success key missing"
+  grep -Fq -- '--databases' "$tmp/calls.log" || die "self-test dump missing --databases"
+  grep -Fq 'aws [s3api] [head-object]' "$tmp/calls.log" || die "self-test did not call head-object"
+  ! grep -q 'ListBuckets' "$tmp/calls.log" || die "self-test observed ListBuckets"
+  ! grep -q 'self-test-secret' "$tmp/calls.log" || die "self-test exposed password in argv log"
+  assert_no_archives "$tmp/stage-success"
+
+  is_secure_env_metadata 0 600 || die "self-test rejected secure env metadata"
+  for metadata in '1000 600' '0 400' '0 500' '0 700' '0 640' '0 620' '0 606' '0 invalid'; do
+    read -r metadata_owner metadata_mode <<< "$metadata"
+    if is_secure_env_metadata "$metadata_owner" "$metadata_mode"; then
+      die "self-test accepted insecure env metadata: $metadata"
+    fi
+  done
+
+  env_file="$tmp/incomplete.env"
+  printf 'MYSQL_DATABASE=readle\n' > "$env_file"
+  if (
+    ENV_FILE="$env_file"
+    STAGE_DIR="$tmp/stage-ambient"
+    STATE_FILE="$tmp/state-ambient.env"
+    LOCK_FILE="$tmp/lock-ambient"
+    FLOCK="$bin/flock"
+    export READLE_STUB_LOG="$tmp/calls.log"
+    MYSQL_ROOT_PASSWORD="ambient-password"
+    AWS_REGION="ambient-region"
+    S3_BUCKET="ambient-bucket"
+    load_env_file
+    run_backup
+  ); then
+    die "self-test accepted ambient config for incomplete env file"
+  fi
+  grep -qx 'status=failure' "$tmp/state-ambient.env" ||
+    die "self-test ambient config failure state missing"
+
+  for mode in missing-env all-databases upload-fail head-fail mismatch dump-fail lock-fail; do
+    : > "$tmp/calls.log"
+    if "$script" --self-test-case "$mode" "$tmp" 2>/dev/null; then
+      die "self-test accepted failure mode: $mode"
+    fi
+    grep -qx 'status=failure' "$tmp/state-$mode.env" || die "self-test failure state missing: $mode"
+    assert_no_archives "$tmp/stage-$mode"
+  done
+
+  : > "$tmp/calls.log"
+  "$script" --self-test-case signal "$tmp" >/dev/null 2>&1 &
+  pid=$!
+  while ! grep -q '^podman' "$tmp/calls.log"; do sleep 0.01; done
+  kill -TERM "$pid"
+  if wait "$pid"; then
+    die "self-test accepted SIGTERM"
+  else
+    signal_status=$?
+  fi
+  [[ "$signal_status" -eq 143 ]] || die "self-test SIGTERM status mismatch: $signal_status"
+  assert_no_archives "$tmp/stage-signal"
+
+  log "self-test ok"
+}
+
+case "${1:-}" in
+  --self-test)
+    self_test
+    ;;
+  --self-test-case)
+    self_test_case "${2:?missing mode}" "${3:?missing root}"
+    ;;
+  "")
+    [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "must run as root"
+    validate_env_file
+    load_env_file
+    run_backup
+    ;;
+  *)
+    die "usage: $0 [--self-test]"
+    ;;
+esac
