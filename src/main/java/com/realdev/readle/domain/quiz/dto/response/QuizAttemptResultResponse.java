@@ -11,6 +11,7 @@ import lombok.Getter;
 @Getter
 @Builder
 public class QuizAttemptResultResponse {
+  private final Long reportId;
   private final Long quizSetId;
   private final Long attemptId;
   private final String title;
@@ -62,10 +63,12 @@ public class QuizAttemptResultResponse {
       String title,
       List<String> tags,
       Long quizSetId,
-      Long attemptId) {
+      Long attemptId,
+      Long reportId) {
     List<QuestionResult> resultList = answers.stream().map(QuestionResult::from).toList();
 
     return QuizAttemptResultResponse.builder()
+        .reportId(reportId)
         .quizSetId(quizSetId)
         .attemptId(attemptId)
         .title(title)

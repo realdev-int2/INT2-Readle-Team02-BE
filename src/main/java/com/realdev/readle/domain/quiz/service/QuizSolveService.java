@@ -351,7 +351,7 @@ public class QuizSolveService {
             .toList();
 
     return QuizAttemptResultResponse.from(
-        quizResult, quizAnswers, title, tags, quizSetId, attemptId);
+        quizResult, quizAnswers, title, tags, quizSetId, attemptId, quizResult.getId());
   }
 
   private boolean isStaticMatch(String correct, String submitted) {
