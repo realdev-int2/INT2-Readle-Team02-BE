@@ -3,7 +3,6 @@ package com.realdev.readle.domain.quiz.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
@@ -579,7 +578,7 @@ class QuizSolveServiceTest {
 
     given(quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(100L))
         .willReturn(List.of(mockAnswer));
-    given(quizChoiceRepository.findByQuizQuestionInAndIsCorrectTrue(anyList()))
+    given(quizChoiceRepository.findByQuizQuestionInAndIsCorrectTrue(List.of(question1)))
         .willReturn(List.of(choice1));
     given(choice1.getOrderNo()).willReturn(1);
     given(choice1.getChoiceText()).willReturn("정답 선택지 내용");
@@ -596,6 +595,7 @@ class QuizSolveServiceTest {
     assertThat(response.getResults().get(0).getSubmittedAnswer()).isEqualTo("test");
     assertThat(response.getResults().get(0).getCorrectChoiceNo()).isEqualTo(1);
     assertThat(response.getResults().get(0).getCorrectChoiceText()).isEqualTo("정답 선택지 내용");
+    verify(quizChoiceRepository, times(1)).findByQuizQuestionInAndIsCorrectTrue(List.of(question1));
   }
 
   @Test

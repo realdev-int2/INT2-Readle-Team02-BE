@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class QuizAttemptResultResponseTest {
 
@@ -52,13 +54,16 @@ class QuizAttemptResultResponseTest {
     assertThat(result.getCorrectChoiceText()).isEqualTo("하나의 인스턴스만 생성되어 공유된다");
   }
 
-  @Test
-  @DisplayName("주관식/코드빈칸 문항은 correctChoiceNo와 correctChoiceText가 null로 은닉된다")
-  void questionResult_ShortAnswer_KeepsCorrectAnswerHidden() {
+  @ParameterizedTest
+  @EnumSource(
+      value = QuestionType.class,
+      names = {"SHORT_ANSWER", "CODE_BLANK"})
+  @DisplayName("주관식 및 코드빈칸 문항은 correctChoiceNo와 correctChoiceText가 null로 은닉된다")
+  void questionResult_NonMultipleChoice_KeepsCorrectAnswerHidden(QuestionType type) {
     QuizQuestion question = mock(QuizQuestion.class);
     given(question.getId()).willReturn(11L);
     given(question.getOrderNo()).willReturn(2);
-    given(question.getQuestionType()).willReturn(QuestionType.SHORT_ANSWER);
+    given(question.getQuestionType()).willReturn(type);
     given(question.getQuestionText()).willReturn("스프링 빈 생성주기 콜백 메서드는?");
 
     QuizAnswer answer = mock(QuizAnswer.class);
@@ -72,7 +77,7 @@ class QuizAttemptResultResponseTest {
         QuizAttemptResultResponse.QuestionResult.from(answer, null);
 
     assertThat(result.getQuestionId()).isEqualTo(11L);
-    assertThat(result.getQuestionType()).isEqualTo("short_answer");
+    assertThat(result.getQuestionType()).isEqualTo(type.name().toLowerCase());
     assertThat(result.getSubmittedAnswer()).isEqualTo("@PostConstruct");
     assertThat(result.getIsCorrect()).isTrue();
     assertThat(result.getAiFeedback()).isEqualTo("정답입니다");
