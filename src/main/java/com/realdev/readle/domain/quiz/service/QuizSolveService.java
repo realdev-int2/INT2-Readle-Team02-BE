@@ -166,10 +166,7 @@ public class QuizSolveService {
         if (rawAnswerText == null || rawAnswerText.trim().isEmpty()) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
-        // 원문(raw) 길이 및 키워드 검증 (트랜잭션 시작 전 차단)
-        if (rawAnswerText.length() > 100) {
-          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
-        }
+        // 프롬프트 인젝션 키워드 검증 (트랜잭션 시작 전 차단)
         if (rawAnswerText.matches("(?is).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
@@ -207,8 +204,14 @@ public class QuizSolveService {
         staticAnswers.add(
             QuizAnswer.createForChoice(lockedAttempt, question, choice, choice.getIsCorrect()));
       } else {
-        String answerText = sanitizeAnswerText(answerReq.getSubmittedAnswerText());
-        if (isStaticMatch(question.getCorrectAnswer(), answerText)) {
+        String rawAnswerText = answerReq.getSubmittedAnswerText();
+        String answerText = sanitizeAnswerText(rawAnswerText);
+        if (rawAnswerText != null && rawAnswerText.length() > 100) {
+          // 100자 초과 답안: AI 호출 없이 즉시 오답 처리 (0ms)
+          staticAnswers.add(
+              QuizAnswer.createForWritten(
+                  lockedAttempt, question, answerText, false, "답안 길이가 100자를 초과하여 오답 처리되었습니다."));
+        } else if (isStaticMatch(question.getCorrectAnswer(), answerText)) {
           staticAnswers.add(
               QuizAnswer.createForWritten(lockedAttempt, question, answerText, true, null));
         } else {
@@ -224,18 +227,33 @@ public class QuizSolveService {
     // 2. Non-Transactional: 비동기 채점 대기
     List<QuizAnswer> aiAnswers = new ArrayList<>();
     if (!aiTasks.isEmpty()) {
-      CompletableFuture.allOf(
-              aiTasks.stream().map(WrittenAiTask::future).toArray(CompletableFuture[]::new))
-          .join();
-      for (WrittenAiTask task : aiTasks) {
-        QuizAiGradingService.AiEvaluationResult aiResult = task.future().join();
-        aiAnswers.add(
-            QuizAnswer.createForWritten(
-                lockedAttempt,
-                task.question(),
-                task.sanitizedAnswer(),
-                aiResult.isCorrect(),
-                aiResult.aiFeedback()));
+      try {
+        CompletableFuture.allOf(
+                aiTasks.stream().map(WrittenAiTask::future).toArray(CompletableFuture[]::new))
+            .join();
+        for (WrittenAiTask task : aiTasks) {
+          QuizAiGradingService.AiEvaluationResult aiResult = task.future().join();
+          aiAnswers.add(
+              QuizAnswer.createForWritten(
+                  lockedAttempt,
+                  task.question(),
+                  task.sanitizedAnswer(),
+                  aiResult.isCorrect(),
+                  aiResult.aiFeedback()));
+        }
+      } catch (Exception e) {
+        log.error("AI 채점 중 오류 발생. 풀이 상태를 IN_PROGRESS로 원복하고 502 에러를 던집니다.", e);
+        transactionTemplate.execute(
+            status -> {
+              QuizAttempt activeAttempt = quizAttemptRepository.findById(attemptId).orElseThrow();
+              activeAttempt.resetToInProgress();
+              return null;
+            });
+        Throwable cause = e.getCause();
+        if (cause instanceof CustomException ce) {
+          throw ce;
+        }
+        throw new CustomException(QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 처리 중 오류가 발생했습니다.");
       }
     }
 

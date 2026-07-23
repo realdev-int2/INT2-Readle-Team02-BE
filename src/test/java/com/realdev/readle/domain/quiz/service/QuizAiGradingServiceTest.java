@@ -101,7 +101,7 @@ class QuizAiGradingServiceTest {
   }
 
   @Test
-  @DisplayName("재시도까지 실패 시 Fallback 결과 반환")
+  @DisplayName("재시도까지 실패 시 QUIZ_GRADING_FAILED 예외를 발생시킨다")
   void gradeAnswerAsync_Fallback() throws Exception {
     // given
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
@@ -110,19 +110,17 @@ class QuizAiGradingServiceTest {
     given(claudeClient.getGradingGeneratedText(any(), any()))
         .willThrow(new RuntimeException("API Error"));
 
-    // when
+    // when & then
     CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
         quizAiGradingService.gradeAnswerAsync(question, "오답", "본문 텍스트");
-    QuizAiGradingService.AiEvaluationResult result = future.join();
-
-    // then
-    assertThat(result.isCorrect()).isFalse(); // Fallback 처리됨
-    assertThat(result.aiFeedback()).contains("연결이 원활하지 않아");
+    org.assertj.core.api.Assertions.assertThatThrownBy(future::join)
+        .isInstanceOf(java.util.concurrent.CompletionException.class)
+        .hasCauseInstanceOf(com.realdev.readle.global.exception.CustomException.class);
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any()); // 최초 + 1회 재시도 = 2번 호출
   }
 
   @Test
-  @DisplayName("isCorrect 누락 시 1회 재시도 후 Fallback 결과 반환")
+  @DisplayName("isCorrect 누락 시 1회 재시도 후 QUIZ_GRADING_FAILED 예외를 발생시킨다")
   void gradeAnswerAsync_MissingIsCorrect_Fallback() throws Exception {
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
 
@@ -130,19 +128,16 @@ class QuizAiGradingServiceTest {
     given(claudeClient.getGradingGeneratedText(any(), any()))
         .willReturn("{\"aiFeedback\": \"어쩌구저쩌구\"}");
 
-    // No need to stub ObjectMapper
-
     CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
         quizAiGradingService.gradeAnswerAsync(question, "오답", "본문 텍스트");
-    QuizAiGradingService.AiEvaluationResult result = future.join();
-
-    assertThat(result.isCorrect()).isFalse(); // Fallback
-    assertThat(result.aiFeedback()).contains("연결이 원활하지 않아");
+    org.assertj.core.api.Assertions.assertThatThrownBy(future::join)
+        .isInstanceOf(java.util.concurrent.CompletionException.class)
+        .hasCauseInstanceOf(com.realdev.readle.global.exception.CustomException.class);
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
   }
 
   @Test
-  @DisplayName("AI 응답이 3초를 초과할 경우 타임아웃 발생 및 Fallback 처리")
+  @DisplayName("AI 응답이 3초를 초과할 경우 타임아웃 발생 및 QUIZ_GRADING_FAILED 예외 발생")
   void gradeAnswerAsync_Timeout() throws Exception {
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
 
@@ -155,10 +150,9 @@ class QuizAiGradingServiceTest {
 
     CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
         quizAiGradingService.gradeAnswerAsync(question, "지연 응답", "본문 텍스트");
-    QuizAiGradingService.AiEvaluationResult result = future.join();
-
-    assertThat(result.isCorrect()).isFalse(); // 타임아웃으로 인한 Fallback
-    assertThat(result.aiFeedback()).contains("연결이 원활하지 않아");
+    org.assertj.core.api.Assertions.assertThatThrownBy(future::join)
+        .isInstanceOf(java.util.concurrent.CompletionException.class)
+        .hasCauseInstanceOf(com.realdev.readle.global.exception.CustomException.class);
 
     // 첫 호출에서 타임아웃나면 재시도 1번 더 하므로 2번 호출됨 (재시도도 타임아웃 남)
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());

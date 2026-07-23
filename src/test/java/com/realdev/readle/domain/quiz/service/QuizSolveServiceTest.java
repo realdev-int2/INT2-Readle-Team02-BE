@@ -258,8 +258,11 @@ class QuizSolveServiceTest {
   }
 
   @Test
-  @DisplayName("100자를 초과하는 주관식 답안 제출 시 즉시 INVALID_ANSWER_FORMAT 예외가 발생한다")
+  @DisplayName("100자를 초과하는 주관식 답안 제출 시 AI 호출 없이 백엔드에서 즉시 오답(isCorrect=false) 처리한다")
   void submitAnswers_Guardrail_Length() {
+    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(quizAttempt));
     given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
         .willReturn(List.of(question1, question2));
     given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
@@ -274,15 +277,15 @@ class QuizSolveServiceTest {
     ReflectionTestUtils.setField(ans2, "submittedAnswerText", "a".repeat(101));
 
     ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
+    lenient().when(quizAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
 
-    assertThatThrownBy(() -> quizSolveService.submitAnswers(200L, "test-uuid", request))
-        .isInstanceOf(CustomException.class)
-        .extracting("errorCode")
-        .isEqualTo(QuizErrorCode.INVALID_ANSWER_FORMAT);
+    QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
 
-    assertThat(quizAttempt.getStatus()).isEqualTo(AttemptStatus.IN_PROGRESS);
-    verify(quizAttempt, times(0)).markAsGrading();
-    verify(quizAttemptRepository, times(0)).findByIdForUpdate(any());
+    assertThat(response.getTotalCount()).isEqualTo(2);
+    // 선택지(1번)는 정답(1), 주관식 101자(2번)는 즉시 오답(0) -> 총 정답 1개
+    assertThat(response.getCorrectCount()).isEqualTo(1);
+    // AI 호출 0회 검증
+    verify(quizAiGradingService, times(0)).gradeAnswerAsync(any(), any(), any());
   }
 
   @Test
@@ -350,6 +353,42 @@ class QuizSolveServiceTest {
     assertThat(response.getCorrectCount()).isEqualTo(2);
     // AI 호출 0회 검증 (정적 매칭 성공)
     verify(quizAiGradingService, times(0)).gradeAnswerAsync(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("AI 채점 실패 시 All-or-Nothing 롤백 및 풀이 상태가 IN_PROGRESS로 원복되고 502 에러를 던진다")
+  void submitAnswers_AiGradingFailed_Rollback() {
+    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
+        .willReturn(List.of(question1, question2));
+    given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
+
+    QuizSubmitRequest request = new QuizSubmitRequest();
+    QuizSubmitRequest.AnswerRequest ans1 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans1, "questionId", 10L);
+    ReflectionTestUtils.setField(ans1, "submittedChoiceId", 50L);
+
+    QuizSubmitRequest.AnswerRequest ans2 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans2, "questionId", 11L);
+    ReflectionTestUtils.setField(ans2, "submittedAnswerText", "주관식 답안");
+
+    ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
+
+    java.util.concurrent.CompletableFuture<QuizAiGradingService.AiEvaluationResult> failedFuture =
+        new java.util.concurrent.CompletableFuture<>();
+    failedFuture.completeExceptionally(
+        new CustomException(QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 서비스 연동 중 오류가 발생했습니다."));
+
+    given(quizAiGradingService.gradeAnswerAsync(any(), any(), any())).willReturn(failedFuture);
+
+    assertThatThrownBy(() -> quizSolveService.submitAnswers(200L, "test-uuid", request))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.QUIZ_GRADING_FAILED);
+
+    // attempt 상태가 IN_PROGRESS로 원복(resetToInProgress) 되었는지 검증
+    verify(quizAttempt).resetToInProgress();
   }
 
   @Test

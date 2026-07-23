@@ -69,6 +69,10 @@ public class QuizAttempt {
     this.status = AttemptStatus.GRADING;
   }
 
+  public void resetToInProgress() {
+    this.status = AttemptStatus.IN_PROGRESS;
+  }
+
   public void submit() {
     if (this.status != AttemptStatus.IN_PROGRESS && this.status != AttemptStatus.GRADING) {
       throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
