@@ -50,11 +50,35 @@ class JsonExtractorTest {
   }
 
   @Test
-  @DisplayName("마크다운 태그 없이 일반 서론 텍스트 후 JSON이 등장해도 정확히 추출한다")
-  void extractJson_plainTextPrefix() {
-    String input = "생성 결과: {\"isCorrect\": true, \"aiFeedback\": \"좋습니다\"}";
+  @DisplayName("주의 [참고] 등 텍스트 내 괄호가 앞서 등장해도 올바른 JSON 영역만 균형 있게 추출한다")
+  void extractJson_surroundingBracketsInText() {
+    String input = "주의 [참고] 결과입니다: {\"tags\": [\"Java\"]}";
     String result = JsonExtractor.extractJson(input);
-    assertThat(result).isEqualTo("{\"isCorrect\": true, \"aiFeedback\": \"좋습니다\"}");
+    assertThat(result).isEqualTo("{\"tags\": [\"Java\"]}");
+  }
+
+  @Test
+  @DisplayName("JSON 뒤에 불필요한 닫는 괄호 ] 가 덧붙어도 유효한 JSON 객체만 추출한다")
+  void extractJson_trailingBracketAfterJson() {
+    String input = "{\"id\": 1}]";
+    String result = JsonExtractor.extractJson(input);
+    assertThat(result).isEqualTo("{\"id\": 1}");
+  }
+
+  @Test
+  @DisplayName("JSON 문자열 값 내부에 괄호가 포함되어 있어도 정상적으로 전체 JSON을 추출한다")
+  void extractJson_bracketsInsideJsonStrings() {
+    String input = "결과: {\"description\": \"[안내] Spring Boot 가이드\"}";
+    String result = JsonExtractor.extractJson(input);
+    assertThat(result).isEqualTo("{\"description\": \"[안내] Spring Boot 가이드\"}");
+  }
+
+  @Test
+  @DisplayName("미완성된 마크다운 코드 펜스의 경우 파싱 실패 시 원문 텍스트를 유지한다")
+  void extractJson_unterminatedMarkdownFence() {
+    String input = "```json\n{\n  \"tags\": [\"Spring\"]";
+    String result = JsonExtractor.extractJson(input);
+    assertThat(result).isEqualTo("{\n  \"tags\": [\"Spring\"]");
   }
 
   @ParameterizedTest

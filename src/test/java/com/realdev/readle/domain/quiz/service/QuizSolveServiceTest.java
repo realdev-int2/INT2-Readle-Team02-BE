@@ -286,6 +286,73 @@ class QuizSolveServiceTest {
   }
 
   @Test
+  @DisplayName("원문 경계값 검증: 원문 100자 이하(꺾쇠 포함 시 치환후 100자 초과)는 성공한다")
+  void submitAnswers_Guardrail_RawLengthBoundary_Success() {
+    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
+        .willReturn(List.of(question1, question2));
+    given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
+
+    QuizSubmitRequest request = new QuizSubmitRequest();
+    QuizSubmitRequest.AnswerRequest ans1 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans1, "questionId", 10L);
+    ReflectionTestUtils.setField(ans1, "submittedChoiceId", 50L);
+
+    // 원문 98자 (꺾쇠 '<', '>' 2개 포함 -> 치환후 104자이지만 원문 검증으로 통과)
+    String raw98CharsWithBrackets = "<" + "a".repeat(96) + ">";
+    QuizSubmitRequest.AnswerRequest ans2 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans2, "questionId", 11L);
+    ReflectionTestUtils.setField(ans2, "submittedAnswerText", raw98CharsWithBrackets);
+
+    ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
+    lenient().when(quizAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
+
+    java.util.concurrent.CompletableFuture<QuizAiGradingService.AiEvaluationResult> future1 =
+        java.util.concurrent.CompletableFuture.completedFuture(
+            new QuizAiGradingService.AiEvaluationResult(
+                question2, raw98CharsWithBrackets, true, "정답입니다."));
+    given(quizAiGradingService.gradeAnswerAsync(any(), any(), any())).willReturn(future1);
+
+    QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
+
+    assertThat(response.getTotalCount()).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("정적 매칭 시 꺾쇠가 포함된 정답과 제출값이 이스케이프되어 동일하게 정적 매칭된다")
+  void submitAnswers_SanitizedAngleBrackets_StaticMatch() {
+    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(quizAttempt));
+    given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
+        .willReturn(List.of(question1, question2));
+    given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
+
+    // question2의 정답을 "<script>"로 설정
+    given(question2.getCorrectAnswer()).willReturn("<script>");
+
+    QuizSubmitRequest request = new QuizSubmitRequest();
+    QuizSubmitRequest.AnswerRequest ans1 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans1, "questionId", 10L);
+    ReflectionTestUtils.setField(ans1, "submittedChoiceId", 50L);
+
+    QuizSubmitRequest.AnswerRequest ans2 = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(ans2, "questionId", 11L);
+    ReflectionTestUtils.setField(ans2, "submittedAnswerText", "<script>");
+
+    ReflectionTestUtils.setField(request, "answers", List.of(ans1, ans2));
+    lenient().when(quizAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
+
+    QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
+
+    assertThat(response.getCorrectCount()).isEqualTo(2);
+    // AI 호출 0회 검증 (정적 매칭 성공)
+    verify(quizAiGradingService, times(0)).gradeAnswerAsync(any(), any(), any());
+  }
+
+  @Test
   @DisplayName("비관적 락 동시성 테스트 시뮬레이션 (Race Condition 방어)")
   void submitAnswers_Concurrency() {
     given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))

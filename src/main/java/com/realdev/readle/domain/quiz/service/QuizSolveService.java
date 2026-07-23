@@ -166,12 +166,11 @@ public class QuizSolveService {
         if (rawAnswerText == null || rawAnswerText.trim().isEmpty()) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
-        String answerText = sanitizeAnswerText(rawAnswerText);
-        // 주관식/빈칸 답안 검증 (트랜잭션 시작 전 차단)
-        if (answerText.length() > 100) {
+        // 원문(raw) 길이 및 키워드 검증 (트랜잭션 시작 전 차단)
+        if (rawAnswerText.length() > 100) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
-        if (answerText.matches("(?is).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
+        if (rawAnswerText.matches("(?is).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
           throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
         }
       }
@@ -333,8 +332,10 @@ public class QuizSolveService {
     if (correct == null || submitted == null) {
       return false;
     }
-    String normalizedCorrect = correct.trim().toLowerCase().replaceAll("\\s+", " ");
-    String normalizedSubmitted = submitted.trim().toLowerCase().replaceAll("\\s+", " ");
+    String sanitizedCorrect = sanitizeAnswerText(correct);
+    String sanitizedSubmitted = sanitizeAnswerText(submitted);
+    String normalizedCorrect = sanitizedCorrect.trim().toLowerCase().replaceAll("\\s+", " ");
+    String normalizedSubmitted = sanitizedSubmitted.trim().toLowerCase().replaceAll("\\s+", " ");
     return normalizedCorrect.equals(normalizedSubmitted);
   }
 
