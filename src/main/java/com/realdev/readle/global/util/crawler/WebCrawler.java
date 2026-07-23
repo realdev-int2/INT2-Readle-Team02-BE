@@ -4,19 +4,20 @@ import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.global.exception.CustomException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.HttpURLConnection;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.net.ssl.HttpsURLConnection;
@@ -52,8 +53,7 @@ public class WebCrawler {
     log.info("[CRAWL_START] URL: {}", url);
     String currentUrl = url;
     int redirectCount = 0;
-    Map<String, String> cookieMap = new LinkedHashMap<>();
-    String cookieHeader = null; // 리다이렉트 시 쿠키 유지를 위한 변수
+    CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
 
     try {
       while (true) {
@@ -77,7 +77,7 @@ public class WebCrawler {
 
         try {
           // IP 주소 기반 직접 연결 요청 (2차 DNS 룩업 차단을 통한 Rebinding 방어)
-          Document doc = fetchHtml(currentUrl, host, safeAddress, cookieHeader);
+          Document doc = fetchHtml(currentUrl, host, safeAddress, cookieManager);
           CrawledDocument result = parse(doc);
           log.info("[CRAWL_SUCCESS] URL: {}", url);
           return result;
@@ -87,36 +87,7 @@ public class WebCrawler {
             throw new CustomException(ContentErrorCode.EXTRACT_FAILED, "리다이렉트 횟수가 초과되었습니다.");
           }
           currentUrl = getSafeRedirectLocation(e, currentUrl);
-
-          // 리다이렉트 시 Set-Cookie 헤더를 수집하여 다음 요청에 전달
-          if (e.getCookies() != null && !e.getCookies().isEmpty()) {
-            for (String cookie : e.getCookies()) {
-              int semicolonIdx = cookie.indexOf(';');
-              String keyValue = (semicolonIdx != -1) ? cookie.substring(0, semicolonIdx) : cookie;
-              int equalsIdx = keyValue.indexOf('=');
-              if (equalsIdx != -1) {
-                String key = keyValue.substring(0, equalsIdx).trim();
-                String value = keyValue.substring(equalsIdx + 1).trim();
-                cookieMap.put(key, value);
-              } else {
-                cookieMap.put(keyValue.trim(), "");
-              }
-            }
-            if (!cookieMap.isEmpty()) {
-              StringBuilder cookieBuilder = new StringBuilder();
-              for (Map.Entry<String, String> entry : cookieMap.entrySet()) {
-                if (cookieBuilder.length() > 0) cookieBuilder.append("; ");
-                cookieBuilder.append(entry.getKey());
-                if (!entry.getValue().isEmpty()) {
-                  cookieBuilder.append("=").append(entry.getValue());
-                }
-              }
-              cookieHeader = cookieBuilder.toString();
-            }
-          }
-
-          log.info(
-              "[CRAWL_REDIRECT] Target URL: {}, Cookies: {}", currentUrl, cookieHeader != null);
+          log.info("[CRAWL_REDIRECT] Target URL: {}", currentUrl);
 
         } catch (IllegalArgumentException | MalformedURLException e) {
           throw new CustomException(ContentErrorCode.INVALID_URL, e);
@@ -162,12 +133,16 @@ public class WebCrawler {
 
   // IP Pinning(DNS Rebinding 방어) 및 수동 리다이렉트 추적이 적용된 저수준 HTTP 통신 처리
   private Document fetchHtml(
-      String currentUrl, String host, InetAddress safeAddress, String cookieHeader)
+      String currentUrl, String host, InetAddress safeAddress, CookieManager cookieManager)
       throws IOException {
     HttpURLConnection conn = getHttpURLConnection(currentUrl, host, safeAddress);
 
-    if (cookieHeader != null && !cookieHeader.isEmpty()) {
-      conn.setRequestProperty("Cookie", cookieHeader);
+    // CookieManager를 통해 현재 URL에 맞는 쿠키를 요청 헤더에 설정
+    Map<String, List<String>> requestCookies =
+        cookieManager.get(URI.create(currentUrl), java.util.Collections.emptyMap());
+    List<String> cookiesList = requestCookies.get("Cookie");
+    if (cookiesList != null && !cookiesList.isEmpty()) {
+      conn.setRequestProperty("Cookie", String.join("; ", cookiesList));
     }
 
     // HTTPS인 경우 SNI 및 HostnameVerifier 수동 설정을 통한 IP 통신 지원
@@ -217,17 +192,14 @@ public class WebCrawler {
 
     int statusCode = conn.getResponseCode();
 
+    // 요청 후 받은 헤더(Set-Cookie 등)를 CookieManager에 저장
+    cookieManager.put(URI.create(currentUrl), conn.getHeaderFields());
+
     // 리다이렉트 발생 시 외부 루프로 위임하기 위한 커스텀 예외 발생
     if (statusCode >= 300 && statusCode < 400) {
       String location = conn.getHeaderField("Location");
-      List<String> cookies = new ArrayList<>();
-      for (Map.Entry<String, List<String>> entry : conn.getHeaderFields().entrySet()) {
-        if (entry.getKey() != null && "set-cookie".equalsIgnoreCase(entry.getKey())) {
-          cookies.addAll(entry.getValue());
-        }
-      }
       conn.disconnect();
-      throw new RedirectException(location, statusCode, cookies);
+      throw new RedirectException(location, statusCode);
     }
 
     if (statusCode == 200) {
@@ -560,12 +532,10 @@ public class WebCrawler {
   private static class RedirectException extends IOException {
     private final String location;
     private final int statusCode;
-    private final List<String> cookies;
 
-    public RedirectException(String location, int statusCode, List<String> cookies) {
+    public RedirectException(String location, int statusCode) {
       this.location = location;
       this.statusCode = statusCode;
-      this.cookies = cookies;
     }
   }
 

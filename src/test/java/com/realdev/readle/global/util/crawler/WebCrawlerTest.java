@@ -328,7 +328,9 @@ class WebCrawlerTest {
     when(firstConn.getHeaderField("Location")).thenReturn("/next");
     java.util.Map<String, List<String>> firstHeaders = new java.util.HashMap<>();
     // 대소문자 무관하게 Set-Cookie가 파싱되는지 확인 (소문자 set-cookie 사용)
-    firstHeaders.put("set-cookie", List.of("sessionid=old; Path=/", "track=123", "sessionid=new"));
+    firstHeaders.put(
+        "set-cookie",
+        List.of("sessionid=old; Path=/", "track=123", "sessionid=new", "delete_me=; Max-Age=0"));
     when(firstConn.getHeaderFields()).thenReturn(firstHeaders);
 
     HttpURLConnection secondConn = mock(HttpURLConnection.class);
@@ -366,7 +368,7 @@ class WebCrawlerTest {
           }
         };
 
-    WebCrawler.CrawledDocument result = testCrawler.crawl("https://public-site.com");
+    WebCrawler.CrawledDocument result = testCrawler.crawl("http://public-site.com");
 
     // 두 번째 연결 시 "Cookie" 헤더가 어떻게 설정되었는지 캡처
     org.mockito.Mockito.verify(secondConn)
@@ -376,6 +378,9 @@ class WebCrawlerTest {
     // sessionid=new 로 덮어씌워졌고, track=123 이 포함되어 있는지 확인
     assertThat(actualCookieHeader).contains("sessionid=new", "track=123");
     assertThat(actualCookieHeader).doesNotContain("sessionid=old");
+
+    // 만료된(Max-Age=0) delete_me 쿠키는 전달되지 않아야 함
+    assertThat(actualCookieHeader).doesNotContain("delete_me");
     assertThat(result.title()).isEqualTo("쿠키성공");
   }
 
@@ -626,10 +631,18 @@ class WebCrawlerTest {
 
     Method fetchHtmlMethod =
         WebCrawler.class.getDeclaredMethod(
-            "fetchHtml", String.class, String.class, InetAddress.class, String.class);
+            "fetchHtml",
+            String.class,
+            String.class,
+            InetAddress.class,
+            java.net.CookieManager.class);
     fetchHtmlMethod.setAccessible(true);
     fetchHtmlMethod.invoke(
-        testCrawler, "https://[::1]/", "[::1]", InetAddress.getByName("::1"), null);
+        testCrawler,
+        "https://[::1]/",
+        "[::1]",
+        InetAddress.getByName("::1"),
+        new java.net.CookieManager());
 
     HostnameVerifier verifier = verifierRef.get();
     assertThat(verifier).isNotNull();
@@ -654,7 +667,7 @@ class WebCrawlerTest {
         "https://example.com/",
         "example.com",
         InetAddress.getByName("127.0.0.1"),
-        null);
+        new java.net.CookieManager());
     HostnameVerifier domainVerifier = verifierRef.get();
 
     SSLSession session3 = mock(SSLSession.class);
