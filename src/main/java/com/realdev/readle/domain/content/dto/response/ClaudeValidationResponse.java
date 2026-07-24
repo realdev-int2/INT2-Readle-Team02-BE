@@ -18,10 +18,14 @@ public record ClaudeValidationResponse(
           "validationScore는 0에서 100 사이의 필수 정수입니다. 값: " + validationScore);
     }
 
+    if (status == null || status.isBlank()) {
+      throw new CustomException(ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE, "status는 필수값입니다.");
+    }
+
     ValidationStatus validationStatus;
     try {
       validationStatus = ValidationStatus.valueOf(status);
-    } catch (Exception e) {
+    } catch (IllegalArgumentException e) {
       throw new CustomException(
           ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE, "유효하지 않은 status 상태값입니다. 값: " + status);
     }
@@ -59,7 +63,7 @@ public record ClaudeValidationResponse(
       }
       try {
         RejectReasonCode.valueOf(rejectReasonCode);
-      } catch (Exception e) {
+      } catch (IllegalArgumentException e) {
         throw new CustomException(
             ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE,
             "유효하지 않은 rejectReasonCode입니다. 값: " + rejectReasonCode);

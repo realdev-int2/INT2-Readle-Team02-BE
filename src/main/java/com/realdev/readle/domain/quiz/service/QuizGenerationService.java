@@ -215,7 +215,7 @@ public class QuizGenerationService {
             return QuizCreateResponse.from(activeQuizSet);
           });
 
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       transactionTemplate.execute(
           status -> {
             QuizSet activeQuizSet = quizSetRepository.findById(quizSet.getId()).orElse(null);

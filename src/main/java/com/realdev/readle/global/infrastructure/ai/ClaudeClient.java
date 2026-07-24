@@ -160,7 +160,7 @@ public class ClaudeClient {
             e.getStatusCode(),
             errorType,
             errorMessage);
-      } catch (Exception parseEx) {
+      } catch (JsonProcessingException parseEx) {
         log.error(
             "[CLAUDE_API_ERROR] Claude API HTTP 오류: status={}, bodyLength={}",
             e.getStatusCode(),

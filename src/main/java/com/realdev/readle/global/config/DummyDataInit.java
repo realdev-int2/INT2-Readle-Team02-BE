@@ -6,6 +6,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @Slf4j
@@ -62,7 +63,7 @@ public class DummyDataInit {
 
         log.info("더미 데이터 초기화 완료! 이제 POST /api/quizzes API부터 바로 호출 가능합니다.");
       }
-    } catch (Exception e) {
+    } catch (DataAccessException e) {
       log.warn("더미 데이터 초기화 중 스킵 (테이블 미생성 상태 또는 이미 존재함): {}", e.getMessage());
     }
   }

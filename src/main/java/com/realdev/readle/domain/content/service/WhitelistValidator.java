@@ -4,6 +4,7 @@ import com.realdev.readle.domain.content.config.ContentValidationProperties;
 import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.content.entity.CrawlStatus;
 import java.net.URI;
+import java.net.URISyntaxException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -35,7 +36,7 @@ public class WhitelistValidator {
               domain ->
                   host.equalsIgnoreCase(domain)
                       || host.toLowerCase().endsWith("." + domain.toLowerCase()));
-    } catch (Exception e) {
+    } catch (URISyntaxException e) {
       return false;
     }
   }

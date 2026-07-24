@@ -1,5 +1,6 @@
 package com.realdev.readle.domain.content.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.domain.content.dto.response.ClaudeValidationResponse;
 import com.realdev.readle.domain.content.entity.*;
@@ -80,7 +81,7 @@ public class AiValidationTxHelper {
 
     try {
       return objectMapper.writeValueAsString(truncatedSnippets);
-    } catch (Exception e) {
+    } catch (JsonProcessingException e) {
       // evidence_snippets는 DB 스키마상 유효한 JSON 배열이어야 하므로,
       // 직렬화 실패 시 잘못된 형식(toString())을 저장하지 않고 null로 남긴 뒤 로그로 추적
       log.error("[AI_VALIDATION] evidenceSnippets 직렬화 실패. validationId={}", validationId, e);

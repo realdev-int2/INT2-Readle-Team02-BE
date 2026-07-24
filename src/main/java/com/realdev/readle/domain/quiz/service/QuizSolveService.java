@@ -243,7 +243,7 @@ public class QuizSolveService {
                   aiResult.aiFeedback()));
         }
       }
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       log.error("AI 채점 중 오류 발생. 풀이 상태를 IN_PROGRESS로 원복하고 502 에러를 던집니다.", e);
       transactionTemplate.execute(
           status -> {

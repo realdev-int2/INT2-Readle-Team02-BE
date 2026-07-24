@@ -12,8 +12,10 @@ import static org.mockito.Mockito.verify;
 import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.tag.entity.ContentTag;
 import com.realdev.readle.domain.tag.entity.Tag;
+import com.realdev.readle.domain.tag.exception.TagErrorCode;
 import com.realdev.readle.domain.tag.repository.ContentTagRepository;
 import com.realdev.readle.domain.tag.repository.TagRepository;
+import com.realdev.readle.global.exception.CustomException;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -69,12 +71,12 @@ class TagServiceTest {
   @DisplayName("태그명이 null이거나 비어 있으면 예외가 발생한다")
   void findOrCreateTag_InvalidInput() {
     assertThatThrownBy(() -> tagService.findOrCreateTag(null))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("태그 이름은 비어있을 수 없습니다");
+        .isInstanceOf(CustomException.class)
+        .hasFieldOrPropertyWithValue("errorCode", TagErrorCode.INVALID_TAG_NAME);
 
     assertThatThrownBy(() -> tagService.findOrCreateTag("   "))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("태그 이름은 비어있을 수 없습니다");
+        .isInstanceOf(CustomException.class)
+        .hasFieldOrPropertyWithValue("errorCode", TagErrorCode.INVALID_TAG_NAME);
   }
 
   @Test
@@ -107,8 +109,8 @@ class TagServiceTest {
 
     // When & Then
     assertThatThrownBy(() -> tagService.saveContentTags(content, rawTagNames))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("태그 개수는 1개 이상 3개 이하여야 합니다");
+        .isInstanceOf(CustomException.class)
+        .hasFieldOrPropertyWithValue("errorCode", TagErrorCode.INVALID_TAG_COUNT);
   }
 
   @Test
@@ -120,7 +122,7 @@ class TagServiceTest {
 
     // When & Then
     assertThatThrownBy(() -> tagService.saveContentTags(content, rawTagNames))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("태그 개수는 1개 이상 3개 이하여야 합니다");
+        .isInstanceOf(CustomException.class)
+        .hasFieldOrPropertyWithValue("errorCode", TagErrorCode.INVALID_TAG_COUNT);
   }
 }
