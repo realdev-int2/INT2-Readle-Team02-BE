@@ -342,6 +342,22 @@ public class QuizSolveService {
     List<QuizAnswer> quizAnswers =
         quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(attemptId);
 
+    List<QuizQuestion> mcQuestions =
+        quizAnswers.stream()
+            .map(QuizAnswer::getQuizQuestion)
+            .filter(q -> q.getQuestionType() == QuestionType.MULTIPLE_CHOICE)
+            .distinct()
+            .toList();
+
+    Map<Long, QuizChoice> correctChoiceMap = new HashMap<>();
+    if (!mcQuestions.isEmpty()) {
+      List<QuizChoice> correctChoices =
+          quizChoiceRepository.findByQuizQuestionInAndIsCorrectTrue(mcQuestions);
+      for (QuizChoice choice : correctChoices) {
+        correctChoiceMap.put(choice.getQuizQuestion().getId(), choice);
+      }
+    }
+
     Long quizSetId = quizAttempt.getQuizSet().getId();
     String title = quizAttempt.getQuizSet().getContent().getTitle();
     Long contentId = quizAttempt.getQuizSet().getContent().getId();
@@ -351,7 +367,14 @@ public class QuizSolveService {
             .toList();
 
     return QuizAttemptResultResponse.from(
-        quizResult, quizAnswers, title, tags, quizSetId, attemptId, quizResult.getId());
+        quizResult,
+        quizAnswers,
+        correctChoiceMap,
+        title,
+        tags,
+        quizSetId,
+        attemptId,
+        quizResult.getId());
   }
 
   private boolean isStaticMatch(String correct, String submitted) {

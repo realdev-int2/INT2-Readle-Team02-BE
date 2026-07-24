@@ -9,4 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface QuizChoiceRepository extends JpaRepository<QuizChoice, Long> {
   List<QuizChoice> findByQuizQuestionIn(List<QuizQuestion> questions);
+
+  List<QuizChoice> findByQuizQuestionInAndIsCorrectTrue(List<QuizQuestion> questions);
 }

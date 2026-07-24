@@ -48,7 +48,7 @@ public class ClaudeClient {
         claudeRestClient, properties.getModel(), systemPrompt, userPrompt);
   }
 
-  // 채점 전용 (3초 타임아웃 클라이언트 사용, 자체 재시도 없음)
+  // 채점 전용 (6초 타임아웃 클라이언트 사용, 자체 재시도 없음)
   private ClaudeResponse generateGradingMessage(String systemPrompt, String userPrompt) {
     return executeGenerateMessage(
         gradingClaudeRestClient, properties.getModel(), systemPrompt, userPrompt);
@@ -176,7 +176,7 @@ public class ClaudeClient {
     return extractTextFromResponse(response);
   }
 
-  // 채점 전용 오버로딩 (3초 타임아웃)
+  // 채점 전용 오버로딩 (6초 타임아웃)
   public String getGradingGeneratedText(String systemPrompt, String userPrompt) {
     ClaudeResponse response = generateGradingMessage(systemPrompt, userPrompt);
     return extractTextFromResponse(response);

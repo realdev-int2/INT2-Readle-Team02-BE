@@ -47,6 +47,10 @@ class QuizAiGradingServiceTest {
         "gradingExecutor",
         java.util.concurrent.Executors.newSingleThreadExecutor());
 
+    // Use a short 100ms timeout for deterministic fast testing
+    ReflectionTestUtils.setField(
+        quizAiGradingService, "timeoutDuration", java.time.Duration.ofMillis(100));
+
     question = mock(QuizQuestion.class);
     ReflectionTestUtils.setField(question, "id", 10L);
     given(question.getQuestionText()).willReturn("스프링 빈의 스코프 중 싱글톤은 무엇인가요?");
@@ -144,14 +148,14 @@ class QuizAiGradingServiceTest {
   }
 
   @Test
-  @DisplayName("AI 응답이 3초를 초과할 경우 타임아웃 발생 및 QUIZ_GRADING_FAILED 예외 발생")
+  @DisplayName("AI 응답이 설정된 타임아웃을 초과할 경우 타임아웃 발생 및 QUIZ_GRADING_FAILED 예외 발생")
   void gradeAnswerAsync_Timeout() throws Exception {
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
 
     given(claudeClient.getGradingGeneratedText(any(), any()))
         .willAnswer(
             invocation -> {
-              Thread.sleep(4000); // 3초 타임아웃 초과 시뮬레이션
+              Thread.sleep(200); // 100ms 타임아웃 초과 시뮬레이션
               return "{\"isCorrect\": true, \"aiFeedback\": \"정답\"}";
             });
 
