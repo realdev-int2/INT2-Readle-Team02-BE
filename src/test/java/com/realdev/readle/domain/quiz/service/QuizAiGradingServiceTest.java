@@ -41,11 +41,11 @@ class QuizAiGradingServiceTest {
     objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
     ReflectionTestUtils.setField(quizAiGradingService, "objectMapper", objectMapper);
 
-    // Use a real executor for timeout tests
+    // Use a multi-thread executor so retry tasks execute immediately without queueing delay
     ReflectionTestUtils.setField(
         quizAiGradingService,
         "gradingExecutor",
-        java.util.concurrent.Executors.newSingleThreadExecutor());
+        java.util.concurrent.Executors.newFixedThreadPool(2));
 
     // Use a short 100ms timeout for deterministic fast testing
     ReflectionTestUtils.setField(
@@ -155,7 +155,10 @@ class QuizAiGradingServiceTest {
     given(claudeClient.getGradingGeneratedText(any(), any()))
         .willAnswer(
             invocation -> {
-              Thread.sleep(200); // 100ms 타임아웃 초과 시뮬레이션
+              try {
+                Thread.sleep(200); // 100ms 타임아웃 초과 시뮬레이션
+              } catch (InterruptedException ignored) {
+              }
               return "{\"isCorrect\": true, \"aiFeedback\": \"정답\"}";
             });
 

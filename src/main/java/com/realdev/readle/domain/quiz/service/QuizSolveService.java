@@ -252,7 +252,10 @@ public class QuizSolveService {
             activeAttempt.resetToInProgress();
             return null;
           });
-      Throwable cause = e.getCause();
+      Throwable cause = e;
+      while (cause.getCause() != null && !(cause instanceof CustomException)) {
+        cause = cause.getCause();
+      }
       if (cause instanceof CustomException ce) {
         throw ce;
       }
