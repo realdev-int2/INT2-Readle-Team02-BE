@@ -18,6 +18,10 @@ public record ClaudeValidationResponse(
           "validationScore는 0에서 100 사이의 필수 정수입니다. 값: " + validationScore);
     }
 
+    if (status == null || status.isBlank()) {
+      throw new CustomException(ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE, "status는 필수값입니다.");
+    }
+
     ValidationStatus validationStatus;
     try {
       validationStatus = ValidationStatus.valueOf(status);
