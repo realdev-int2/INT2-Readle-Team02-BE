@@ -21,7 +21,7 @@ public record ClaudeValidationResponse(
     ValidationStatus validationStatus;
     try {
       validationStatus = ValidationStatus.valueOf(status);
-    } catch (Exception e) {
+    } catch (IllegalArgumentException e) {
       throw new CustomException(
           ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE, "유효하지 않은 status 상태값입니다. 값: " + status);
     }
@@ -59,7 +59,7 @@ public record ClaudeValidationResponse(
       }
       try {
         RejectReasonCode.valueOf(rejectReasonCode);
-      } catch (Exception e) {
+      } catch (IllegalArgumentException e) {
         throw new CustomException(
             ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE,
             "유효하지 않은 rejectReasonCode입니다. 값: " + rejectReasonCode);

@@ -91,7 +91,7 @@ public class AiValidationService {
             response.status());
         return;
 
-      } catch (Exception e) {
+      } catch (CustomException e) {
         log.warn(
             "[AI_VALIDATION] AI 검증 처리 실패 (시도: {}/{}). 사유: {}",
             attempt,
@@ -140,7 +140,7 @@ public class AiValidationService {
       Throwable cause = getThrowable(e);
       throw new CustomException(
           GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", cause);
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       throw new CustomException(GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", e);
     }
   }

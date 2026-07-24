@@ -20,7 +20,7 @@ public class ContentValidationService {
     ContentGuardrailService.GuardrailResult result;
     try {
       result = contentGuardrailService.evaluate(contentId);
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       log.error("[VALIDATION] 1,2차 가드레일/화이트리스트 평가 중 예외 발생. Content ID: {}", contentId, e);
       contentGuardrailService.markAsFailed(
           contentId, ValidationMethod.STATIC_GUARDRAIL, ErrorCode.UNKNOWN_ERROR);
@@ -31,7 +31,7 @@ public class ContentValidationService {
       log.info("[VALIDATION] 1,2차 통과. 3차 AI 검증으로 위임. Content ID: {}", contentId);
       try {
         aiValidationService.runAiValidation(result.content());
-      } catch (Exception e) {
+      } catch (RuntimeException e) {
         log.error("[VALIDATION] 3차 AI 검증 진행 중 예외 발생. Content ID: {}", contentId, e);
         contentGuardrailService.markAsFailed(
             contentId, ValidationMethod.AI, ErrorCode.UNKNOWN_ERROR);
