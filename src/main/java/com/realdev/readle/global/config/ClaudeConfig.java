@@ -37,11 +37,11 @@ public class ClaudeConfig {
   public RestClient gradingClaudeRestClient(
       RestClient.Builder restClientBuilder, ClaudeProperties properties) {
 
-    // 퀴즈 채점 전용: 스레드 고갈 방지를 위해 타이트한 타임아웃(7초) 적용 (Claude API 생성 응답 지연 고려)
-    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+    // 퀴즈 채점 전용: HTTP 통신 레벨에서 6초 readTimeout으로 먼저 소켓 연결을 종료하여 중복 소켓 점유를 방지한다
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
 
     JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-    requestFactory.setReadTimeout(Duration.ofSeconds(7));
+    requestFactory.setReadTimeout(Duration.ofSeconds(6));
 
     return restClientBuilder
         .clone()

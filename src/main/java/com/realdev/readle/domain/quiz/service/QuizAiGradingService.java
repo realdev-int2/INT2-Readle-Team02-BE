@@ -8,6 +8,7 @@ import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import com.realdev.readle.global.util.JsonExtractor;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -25,6 +26,7 @@ public class QuizAiGradingService {
   private final PromptLoader promptLoader;
   private final ObjectMapper objectMapper;
   private final Executor gradingExecutor;
+  private Duration timeoutDuration = Duration.ofSeconds(7);
 
   public record AiEvaluationResult(
       QuizQuestion question, String submittedAnswer, boolean isCorrect, String aiFeedback) {}
@@ -41,7 +43,7 @@ public class QuizAiGradingService {
             () -> doGrade(question, submittedAnswer, articleText, retriesLeft < 1),
             gradingExecutor);
 
-    return task.orTimeout(7, TimeUnit.SECONDS)
+    return task.orTimeout(timeoutDuration.toMillis(), TimeUnit.MILLISECONDS)
         .exceptionallyCompose(
             ex -> {
               task.cancel(true);
