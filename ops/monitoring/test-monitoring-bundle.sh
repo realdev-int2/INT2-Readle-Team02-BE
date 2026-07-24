@@ -65,6 +65,7 @@ grep -q 'serve_from_sub_path = true' "$ROOT/config/grafana/grafana.ini" || fail 
 grep -q 'allow_sign_up = false' "$ROOT/config/grafana/grafana.ini" || fail "Grafana sign-up enabled"
 grep -q 'enabled = false' "$ROOT/config/grafana/grafana.ini" || fail "Grafana anonymous auth not disabled"
 grep -Fq 'http_server_requests_seconds_count{job=\"backend\"' "$ROOT/config/grafana/dashboards/readle-overview.json" || fail "dashboard missing backend HTTP request panel"
+grep -Fq '"targets": [{"expr": "up{job=\"backend\"}", "instant": true}]' "$ROOT/config/grafana/dashboards/readle-overview.json" || fail "backend availability panel must use an instant query"
 grep -Fq 'jvm_memory_used_bytes{job=\"backend\",area=\"heap\"}' "$ROOT/config/grafana/dashboards/readle-overview.json" || fail "dashboard missing JVM heap panel"
 grep -Fq 'hikaricp_connections_active{job=\"backend\"}' "$ROOT/config/grafana/dashboards/readle-overview.json" || fail "dashboard missing DB pool panel"
 grep -Fq 'node_cpu_seconds_total{job=\"node\",mode=\"idle\"}' "$ROOT/config/grafana/dashboards/readle-overview.json" || fail "dashboard missing host CPU panel"
