@@ -321,7 +321,71 @@ class WebCrawlerTest {
   }
 
   @Test
-  @DisplayName("리다이렉트 횟수가 최대 제한(3회)을 초과하면 CustomException(EXTRACT_FAILED)이 발생한다")
+  @DisplayName("리다이렉트 시 Set-Cookie 헤더를 누적하고, 동일한 이름의 쿠키는 최신 값으로 덮어써서 다음 요청에 전달한다")
+  void redirectCookiesAreForwardedCorrectly() throws IOException {
+    HttpURLConnection firstConn = mock(HttpURLConnection.class);
+    when(firstConn.getResponseCode()).thenReturn(302);
+    when(firstConn.getHeaderField("Location")).thenReturn("/next");
+    java.util.Map<String, List<String>> firstHeaders = new java.util.HashMap<>();
+    // 대소문자 무관하게 Set-Cookie가 파싱되는지 확인 (소문자 set-cookie 사용)
+    firstHeaders.put(
+        "set-cookie",
+        List.of("sessionid=old; Path=/", "track=123", "sessionid=new", "delete_me=; Max-Age=0"));
+    when(firstConn.getHeaderFields()).thenReturn(firstHeaders);
+
+    HttpURLConnection secondConn = mock(HttpURLConnection.class);
+    when(secondConn.getResponseCode()).thenReturn(200);
+    byte[] mockHtml = "<html><head><title>쿠키성공</title></head><body>본문</body></html>".getBytes();
+    when(secondConn.getInputStream()).thenReturn(new java.io.ByteArrayInputStream(mockHtml));
+
+    // Cookie 헤더 설정을 캡처하기 위한 ArgumentCaptor
+    org.mockito.ArgumentCaptor<String> cookieCaptor =
+        org.mockito.ArgumentCaptor.forClass(String.class);
+
+    WebCrawler testCrawler =
+        new WebCrawler() {
+          private int callCount = 0;
+
+          @Override
+          @NonNull HttpURLConnection getHttpURLConnection(
+              String currentUrl, String host, InetAddress safeAddress) {
+            callCount++;
+            if (callCount == 1) {
+              return firstConn;
+            } else {
+              return secondConn;
+            }
+          }
+
+          @Override
+          InetAddress validateAndSelectSafeAddress(String host) {
+            if ("public-site.com".equals(host)) {
+              InetAddress mockAddr = mock(InetAddress.class);
+              when(mockAddr.getHostAddress()).thenReturn("8.8.8.8");
+              return mockAddr;
+            }
+            return super.validateAndSelectSafeAddress(host);
+          }
+        };
+
+    WebCrawler.CrawledDocument result = testCrawler.crawl("http://public-site.com");
+
+    // 두 번째 연결 시 "Cookie" 헤더가 어떻게 설정되었는지 캡처
+    org.mockito.Mockito.verify(secondConn)
+        .setRequestProperty(org.mockito.ArgumentMatchers.eq("Cookie"), cookieCaptor.capture());
+    String actualCookieHeader = cookieCaptor.getValue();
+
+    // sessionid=new 로 덮어씌워졌고, track=123 이 포함되어 있는지 확인
+    assertThat(actualCookieHeader).contains("sessionid=new", "track=123");
+    assertThat(actualCookieHeader).doesNotContain("sessionid=old");
+
+    // 만료된(Max-Age=0) delete_me 쿠키는 전달되지 않아야 함
+    assertThat(actualCookieHeader).doesNotContain("delete_me");
+    assertThat(result.title()).isEqualTo("쿠키성공");
+  }
+
+  @Test
+  @DisplayName("리다이렉트 횟수가 최대 제한(10회)을 초과하면 CustomException(EXTRACT_FAILED)이 발생한다")
   void redirectCountExceededThrowsExtractFailed() throws IOException {
     HttpURLConnection mockConn = mock(HttpURLConnection.class);
     when(mockConn.getResponseCode()).thenReturn(302);
@@ -509,7 +573,7 @@ class WebCrawlerTest {
           private int callCount = 0;
 
           @Override
-          HttpURLConnection getHttpURLConnection(
+          @NonNull HttpURLConnection getHttpURLConnection(
               String currentUrl, String host, InetAddress safeAddress) {
             requestedUrls.add(currentUrl);
             callCount++;
@@ -567,9 +631,18 @@ class WebCrawlerTest {
 
     Method fetchHtmlMethod =
         WebCrawler.class.getDeclaredMethod(
-            "fetchHtml", String.class, String.class, InetAddress.class);
+            "fetchHtml",
+            String.class,
+            String.class,
+            InetAddress.class,
+            java.net.CookieManager.class);
     fetchHtmlMethod.setAccessible(true);
-    fetchHtmlMethod.invoke(testCrawler, "https://[::1]/", "[::1]", InetAddress.getByName("::1"));
+    fetchHtmlMethod.invoke(
+        testCrawler,
+        "https://[::1]/",
+        "[::1]",
+        InetAddress.getByName("::1"),
+        new java.net.CookieManager());
 
     HostnameVerifier verifier = verifierRef.get();
     assertThat(verifier).isNotNull();
@@ -590,7 +663,11 @@ class WebCrawlerTest {
 
     // 3. 도메인 호스트인데 iPAddress(Type 7) SAN이 있는 경우 차단 (도메인은 Type 2만 허용해야 함)
     fetchHtmlMethod.invoke(
-        testCrawler, "https://example.com/", "example.com", InetAddress.getByName("127.0.0.1"));
+        testCrawler,
+        "https://example.com/",
+        "example.com",
+        InetAddress.getByName("127.0.0.1"),
+        new java.net.CookieManager());
     HostnameVerifier domainVerifier = verifierRef.get();
 
     SSLSession session3 = mock(SSLSession.class);
