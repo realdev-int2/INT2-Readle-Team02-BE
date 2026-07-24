@@ -3,8 +3,10 @@ package com.realdev.readle.domain.tag.service;
 import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.tag.entity.ContentTag;
 import com.realdev.readle.domain.tag.entity.Tag;
+import com.realdev.readle.domain.tag.exception.TagErrorCode;
 import com.realdev.readle.domain.tag.repository.ContentTagRepository;
 import com.realdev.readle.domain.tag.repository.TagRepository;
+import com.realdev.readle.global.exception.CustomException;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +24,7 @@ public class TagService {
   @Transactional
   public Tag findOrCreateTag(String name) {
     if (name == null || name.isBlank()) {
-      throw new IllegalArgumentException("태그 이름은 비어있을 수 없습니다.");
+      throw new CustomException(TagErrorCode.INVALID_TAG_NAME);
     }
     String normalized = name.trim().toLowerCase();
     return tagRepository
@@ -48,7 +50,7 @@ public class TagService {
 
     // 1개당 태그 1~3개 제한 검증
     if (uniqueNormalizedNames.isEmpty() || uniqueNormalizedNames.size() > 3) {
-      throw new IllegalArgumentException("태그 개수는 1개 이상 3개 이하여야 합니다.");
+      throw new CustomException(TagErrorCode.INVALID_TAG_COUNT);
     }
 
     for (String tagName : uniqueNormalizedNames) {
