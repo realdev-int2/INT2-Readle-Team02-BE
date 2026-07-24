@@ -43,6 +43,10 @@ security:
   state-minutes: 10
   backend-origin: http://localhost:8080
   allowed-return-paths: /
+  prometheus-metrics:
+    enabled: true
+    username: readle-monitor
+    root-password: test-prometheus-root-password
 
 content:
   validation:

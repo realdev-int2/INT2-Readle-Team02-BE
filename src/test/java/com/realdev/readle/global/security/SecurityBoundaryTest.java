@@ -17,7 +17,9 @@ import com.realdev.readle.domain.member.entity.OAuthProvider;
 import com.realdev.readle.domain.member.repository.MemberRefreshTokenRepository;
 import com.realdev.readle.domain.member.repository.MemberRepository;
 import jakarta.servlet.http.Cookie;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.Comparator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,8 @@ import org.springframework.test.web.servlet.MockMvc;
     classes = ReadleApplication.class,
     properties = {
       "management.endpoints.web.base-path=/api/actuator",
+      "management.endpoints.web.exposure.include=health,prometheus",
+      "management.prometheus.metrics.export.enabled=true",
       "management.endpoint.health.probes.enabled=true"
     })
 @AutoConfigureMockMvc
@@ -39,6 +43,8 @@ import org.springframework.test.web.servlet.MockMvc;
 class SecurityBoundaryTest {
 
   @Autowired private MockMvc mockMvc;
+
+  @Autowired private PrometheusMetricsProperties properties;
 
   @Autowired private MemberRepository memberRepository;
 
@@ -164,6 +170,34 @@ class SecurityBoundaryTest {
   @Test
   void permitsPrefixedActuatorHealthReadinessEndpoint() throws Exception {
     mockMvc.perform(get("/api/actuator/health/readiness")).andExpect(status().isOk());
+  }
+
+  @Test
+  void deniesAnonymousPrometheusMetrics() throws Exception {
+    mockMvc.perform(get("/api/actuator/prometheus")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void permitsExactPrometheusMetricsPathWithMonitorDeploymentCredential() throws Exception {
+    mockMvc
+        .perform(get("/api/actuator/prometheus").header("Authorization", basicMetricsAuth()))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void deniesPrometheusMetricsWithInvalidBasicCredentials() throws Exception {
+    mockMvc
+        .perform(
+            get("/api/actuator/prometheus")
+                .header("Authorization", basicAuth("readle-monitor", "invalid-password")))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void deniesPrometheusMonitorCredentialOnApiRoutes() throws Exception {
+    mockMvc
+        .perform(get("/api/private").header("Authorization", basicMetricsAuth()))
+        .andExpect(status().isUnauthorized());
   }
 
   @Test
@@ -311,5 +345,15 @@ class SecurityBoundaryTest {
                     new Cookie(RefreshTokenCookie.NAME, refreshToken))
                 .header("X-XSRF-TOKEN", token))
         .andExpect(status().isUnauthorized());
+  }
+
+  private String basicMetricsAuth() {
+    return basicAuth(properties.username(), properties.password());
+  }
+
+  private String basicAuth(String username, String password) {
+    return "Basic "
+        + Base64.getEncoder()
+            .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
   }
 }

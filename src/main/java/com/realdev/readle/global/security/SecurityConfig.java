@@ -6,17 +6,22 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
 @Configuration
-@EnableConfigurationProperties(SecurityProperties.class)
+@EnableConfigurationProperties({SecurityProperties.class, PrometheusMetricsProperties.class})
 public class SecurityConfig {
 
   @Bean
@@ -49,6 +54,37 @@ public class SecurityConfig {
 
   @Bean
   @Order(2)
+  public SecurityFilterChain prometheusMetricsSecurityFilterChain(
+      HttpSecurity http, PrometheusMetricsProperties properties) throws Exception {
+    return http.securityMatcher("/api/actuator/prometheus")
+        .sessionManagement(
+            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .csrf(AbstractHttpConfigurer::disable)
+        .formLogin(AbstractHttpConfigurer::disable)
+        .httpBasic(Customizer.withDefaults())
+        .authorizeHttpRequests(
+            auth -> {
+              if (properties.enabled()) {
+                auth.anyRequest().hasRole("PROMETHEUS_METRICS");
+              } else {
+                auth.anyRequest().denyAll();
+              }
+            })
+        .build();
+  }
+
+  @Bean
+  public UserDetailsService prometheusMetricsUserDetailsService(
+      PrometheusMetricsProperties properties) {
+    return new InMemoryUserDetailsManager(
+        User.withUsername(properties.username())
+            .password("{bcrypt}" + new BCryptPasswordEncoder().encode(properties.password()))
+            .roles("PROMETHEUS_METRICS")
+            .build());
+  }
+
+  @Bean
+  @Order(3)
   public SecurityFilterChain apiSecurityFilterChain(
       HttpSecurity http, JwtService jwtService, SecurityErrorResponseWriter errorResponseWriter)
       throws Exception {
@@ -65,7 +101,7 @@ public class SecurityConfig {
   }
 
   @Bean
-  @Order(3)
+  @Order(4)
   public SecurityFilterChain fallbackSecurityFilterChain(
       HttpSecurity http, JwtService jwtService, SecurityErrorResponseWriter errorResponseWriter)
       throws Exception {
