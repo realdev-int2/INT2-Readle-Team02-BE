@@ -560,6 +560,9 @@ deploy() {
   old_previous_ref="$previous_ref"
 
   if [[ "$last_good_ref" == "$image_ref" && "$last_good_revision" == "$expected_sha" ]] && edge_smoke; then
+    if ! write_prometheus_file_sd_active_target "$active_slot"; then
+      log "warning: Prometheus file-SD publish failed; preserving healthy backend"
+    fi
     log "requested revision already live and healthy"
     return
   fi
@@ -881,7 +884,10 @@ self_test() {
   }
   edge_smoke() { return 0; }
   flock() { return 0; }
+  write_prometheus_file_sd_active_target "$SLOT_B"
   deploy "$good_ref" "$good_sha"
+  prometheus_file_sd_matches_slot "$SLOT_A" ||
+    die "self-test did not restore drifted Prometheus file-SD target on no-op deploy"
   assert_no_glob_matches "$state_dir/.readle-backend-upstream.conf.backup.*"
   assert_not_grep "^pull " "$log_file"
 
