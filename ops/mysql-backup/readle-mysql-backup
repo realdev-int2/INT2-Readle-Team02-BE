@@ -129,6 +129,7 @@ fail_run() {
 }
 
 term_run() {
+  write_state failure "interrupted by signal" || log "error: failed to write failure state"
   write_metric 0 || log "error: failed to write failure metric"
   cleanup
   exit 143
@@ -456,6 +457,10 @@ STUB
     signal_status=$?
   fi
   [[ "$signal_status" -eq 143 ]] || die "self-test SIGTERM status mismatch: $signal_status"
+  grep -qx 'status=failure' "$tmp/state-signal.env" ||
+    die "self-test SIGTERM failure state missing"
+  grep -qx 'error=interrupted by signal' "$tmp/state-signal.env" ||
+    die "self-test SIGTERM failure reason missing"
   grep -qx 'readle_mysql_backup_success 0' "$tmp/metrics-signal/readle_mysql_backup.prom" ||
     die "self-test SIGTERM failure metric missing"
   assert_no_archives "$tmp/stage-signal"
