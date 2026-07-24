@@ -176,7 +176,7 @@ public class ClaudeClient {
     return extractTextFromResponse(response);
   }
 
-  // 채점 전용 오버로딩 (3초 타임아웃)
+  // 채점 전용 오버로딩 (6초 타임아웃)
   public String getGradingGeneratedText(String systemPrompt, String userPrompt) {
     ClaudeResponse response = generateGradingMessage(systemPrompt, userPrompt);
     return extractTextFromResponse(response);
