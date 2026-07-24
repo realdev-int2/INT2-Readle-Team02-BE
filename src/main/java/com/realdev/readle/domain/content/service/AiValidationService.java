@@ -91,7 +91,7 @@ public class AiValidationService {
             response.status());
         return;
 
-      } catch (CustomException e) {
+      } catch (RuntimeException e) {
         log.warn(
             "[AI_VALIDATION] AI 검증 처리 실패 (시도: {}/{}). 사유: {}",
             attempt,
