@@ -27,15 +27,15 @@ import org.springframework.test.web.servlet.MockMvc;
 class PrometheusMetricsDisabledTest {
 
   @Autowired private MockMvc mockMvc;
+  @Autowired private PrometheusMetricsProperties properties;
 
   @Test
-  void disabledMonitoringDoesNotAcceptRootMetricsCredentials() throws Exception {
+  void disabledMonitoringForbidsConfiguredMetricsCredentials() throws Exception {
     mockMvc
         .perform(
             get("/api/actuator/prometheus")
-                .header(
-                    "Authorization", basicAuth("readle-monitor", "test-prometheus-root-password")))
-        .andExpect(status().isUnauthorized());
+                .header("Authorization", basicAuth(properties.username(), properties.password())))
+        .andExpect(status().isForbidden());
   }
 
   private String basicAuth(String username, String password) {

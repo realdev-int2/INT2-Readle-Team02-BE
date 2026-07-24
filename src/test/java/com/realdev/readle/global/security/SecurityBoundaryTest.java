@@ -183,6 +183,15 @@ class SecurityBoundaryTest {
   }
 
   @Test
+  void deniesPrometheusMetricsWithInvalidBasicCredentials() throws Exception {
+    mockMvc
+        .perform(
+            get("/api/actuator/prometheus")
+                .header("Authorization", basicAuth("readle-monitor", "invalid-password")))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
   void deniesPrometheusMonitorCredentialOnApiRoutes() throws Exception {
     mockMvc
         .perform(get("/api/private").header("Authorization", basicMetricsAuth()))
@@ -337,9 +346,12 @@ class SecurityBoundaryTest {
   }
 
   private String basicMetricsAuth() {
+    return basicAuth("readle-monitor", "test-prometheus-root-password");
+  }
+
+  private String basicAuth(String username, String password) {
     return "Basic "
         + Base64.getEncoder()
-            .encodeToString(
-                "readle-monitor:test-prometheus-root-password".getBytes(StandardCharsets.UTF_8));
+            .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
   }
 }
