@@ -44,6 +44,8 @@ class SecurityBoundaryTest {
 
   @Autowired private MockMvc mockMvc;
 
+  @Autowired private PrometheusMetricsProperties properties;
+
   @Autowired private MemberRepository memberRepository;
 
   @Autowired private RefreshTokenService refreshTokenService;
@@ -346,7 +348,7 @@ class SecurityBoundaryTest {
   }
 
   private String basicMetricsAuth() {
-    return basicAuth("readle-monitor", "test-prometheus-root-password");
+    return basicAuth(properties.username(), properties.password());
   }
 
   private String basicAuth(String username, String password) {
