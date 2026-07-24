@@ -13,6 +13,7 @@ network, production port는 수정하지 않는다.
 | Timer | `/etc/systemd/system/readle-mysql-backup.timer` |
 | State/staging dir | `/var/lib/readle/mysql-backup` |
 | State file | `/var/lib/readle/mysql-backup/readle-mysql-backup.state` |
+| node_exporter textfile metric | `/var/lib/node_exporter/textfile_collector/readle_mysql_backup.prom` |
 
 Helper는 staging dir 아래에 임시 `.sql.gz` 파일을 `0600`으로 만들고, 성공과 실패를
 포함한 모든 종료 경로에서 삭제한다.
@@ -44,6 +45,12 @@ sudo grep -E '^(MYSQL_DATABASE|MYSQL_ROOT_PASSWORD|AWS_REGION|S3_BUCKET)=' /etc/
 | `AWS_REGION` | S3 API region |
 | `S3_BUCKET` | 업로드 대상 bucket. bucket discovery를 하지 않는다. |
 
+`READLE_MYSQL_BACKUP_METRIC_FILE`로 node_exporter textfile metric 경로를 바꿀 수
+있다. 경로는 절대 경로, `.prom` 파일명, root 소유의 기존 디렉터리 아래여야 한다.
+Helper는 metric write 실패를 log에만 남기고 backup 성공/실패 판정을 바꾸지 않는다.
+Monitoring installer는 기본 textfile collector directory
+`/var/lib/node_exporter/textfile_collector`를 만들고 node_exporter에 read-only mount한다.
+
 S3 go-live 전 infra owner가 다음을 확인해야 한다.
 
 - 현재 configured `S3_BUCKET`/`AWS_REGION`을 사용한다. `ListBuckets`는 필요하지 않고
@@ -54,6 +61,23 @@ S3 go-live 전 infra owner가 다음을 확인해야 한다.
   Infra owner가 lifecycle 보관 기간 최소 7일, 권장 14일 이상을 확인한다.
 - Versioned bucket이면 noncurrent object expiry도 확인한다.
 - PublicAccessBlock이 켜져 있는지 확인한다.
+
+MySQL exporter는 application/root credential을 재사용하지 않는다. Infra owner는
+`backend/ops/monitoring/sql/mysqld-exporter-grants.sql.template`의 password placeholder를
+운영 secret으로 바꿔 `readle-mysql`에 적용한 뒤, 같은 credential을
+`/etc/readle/monitoring/mysqld-exporter.cnf`에 준비해야 한다. Monitoring installer는
+exporter read access를 위해 파일을 `root:65534` 소유와 `0640` mode로 보정한다.
+
+```sh
+sudo install -d -o root -g root -m 0700 /etc/readle/monitoring
+sudo install -o root -g 65534 -m 0640 backend/ops/monitoring/secrets/mysqld-exporter.cnf.example \
+  /etc/readle/monitoring/mysqld-exporter.cnf
+sudo stat -c '%U:%G %a %n' /etc/readle/monitoring/mysqld-exporter.cnf
+```
+
+Monitoring `install`은 credential file 존재를 요구하고 `root:65534` ownership과 `0640`
+mode를 적용한다. SQL template은 전용 exporter 계정을 `MAX_USER_CONNECTIONS 3`으로
+제한하고 `PROCESS`, `REPLICATION CLIENT`, `SELECT`만 부여한다.
 
 ## 설치
 
@@ -115,6 +139,9 @@ sudo journalctl -u readle-mysql-backup.service --utc --no-pager -n 100
 - `HeadObject`의 `ContentLength`가 local byte count와 정확히 일치한다.
 - `/var/lib/readle/mysql-backup/readle-mysql-backup.state`에 `status=success`가
   `0600` state file로 기록된다.
+- `/var/lib/node_exporter/textfile_collector/readle_mysql_backup.prom`에
+  `readle_mysql_backup_success`와
+  `readle_mysql_backup_last_success_timestamp_seconds`만 기록된다.
 - staged `.sql.gz` 파일은 성공 후에도 남지 않는다.
 
 Journal과 state file은 운영 증거일 뿐이다. Monitoring alert consumer 연결은 아직

@@ -5,6 +5,7 @@ ENV_FILE="/etc/readle/backend.env"
 MYSQL_CONTAINER="readle-mysql"
 STAGE_DIR="${READLE_MYSQL_BACKUP_STAGE_DIR:-/var/lib/readle/mysql-backup}"
 STATE_FILE="${READLE_MYSQL_BACKUP_STATE_FILE:-/var/lib/readle/mysql-backup/readle-mysql-backup.state}"
+METRIC_FILE="${READLE_MYSQL_BACKUP_METRIC_FILE:-/var/lib/node_exporter/textfile_collector/readle_mysql_backup.prom}"
 LOCK_FILE="${READLE_MYSQL_BACKUP_LOCK_FILE:-/run/lock/readle-mysql-backup.lock}"
 PODMAN="${READLE_PODMAN:-podman}"
 AWS="${READLE_AWS:-aws}"
@@ -34,10 +35,12 @@ is_secure_env_metadata() {
 
 validate_env_file() {
   local owner mode
-  [[ -f "$ENV_FILE" && -r "$ENV_FILE" ]] || die "missing env file: $ENV_FILE"
-  read -r owner mode < <(file_owner_and_mode "$ENV_FILE") || die "cannot inspect env file: $ENV_FILE"
+  [[ -f "$ENV_FILE" && -r "$ENV_FILE" ]] || { fail_run "missing env file: $ENV_FILE"; exit 1; }
+  read -r owner mode < <(file_owner_and_mode "$ENV_FILE") || {
+    fail_run "cannot inspect env file: $ENV_FILE"; exit 1;
+  }
   is_secure_env_metadata "$owner" "$mode" ||
-    die "env file must be root-owned with no group/world access: $ENV_FILE"
+    { fail_run "env file must be root-owned with no group/world access: $ENV_FILE"; exit 1; }
 }
 
 load_env_file() {
@@ -71,11 +74,64 @@ write_state() {
   mv -f "$temp" "$STATE_FILE"
 }
 
+valid_metric_path() {
+  local metric_dir metric_base owner mode
+  [[ "$METRIC_FILE" == /* && "$METRIC_FILE" != *$'\n'* && "$METRIC_FILE" != *$'\r'* ]] || return 1
+  metric_dir="$(dirname "$METRIC_FILE")"
+  metric_base="$(basename "$METRIC_FILE")"
+  [[ "$metric_base" == *.prom && "$metric_base" != .* && "$metric_base" != *"/"* ]] || return 1
+  [[ -d "$metric_dir" && -w "$metric_dir" ]] || return 1
+  [[ ! -d "$METRIC_FILE" ]] || return 1
+  read -r owner mode < <(file_owner_and_mode "$metric_dir") || return 1
+  [[ "$owner" == "${EUID:-$(id -u)}" ]] || return 1
+  [[ -e "$METRIC_FILE" ]] || return 0
+  read -r owner mode < <(file_owner_and_mode "$METRIC_FILE") || return 1
+  [[ "$owner" == "${EUID:-$(id -u)}" ]]
+}
+
+last_success_metric_timestamp() {
+  local name value
+  [[ -f "$METRIC_FILE" ]] || { printf '0\n'; return 0; }
+  while read -r name value _; do
+    if [[ "$name" == "readle_mysql_backup_last_success_timestamp_seconds" &&
+      "$value" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  done < "$METRIC_FILE"
+  printf '0\n'
+}
+
+write_metric() {
+  local success="$1" last_success metric_dir temp
+  valid_metric_path || return 1
+  metric_dir="$(dirname "$METRIC_FILE")"
+  if [[ "$success" == "1" ]]; then
+    last_success="$(date -u +%s)"
+  else
+    last_success="$(last_success_metric_timestamp)"
+  fi
+  temp="$(mktemp "$metric_dir/.readle_mysql_backup.XXXXXX.prom")" || return 1
+  {
+    printf 'readle_mysql_backup_success %s\n' "$success"
+    printf 'readle_mysql_backup_last_success_timestamp_seconds %s\n' "$last_success"
+  } > "$temp" || { rm -f "$temp"; return 1; }
+  chmod 0644 "$temp" || { rm -f "$temp"; return 1; }
+  mv -f "$temp" "$METRIC_FILE"
+}
+
 fail_run() {
   local reason="$1"
   write_state failure "$reason" || log "error: failed to write failure state"
+  write_metric 0 || log "error: failed to write failure metric"
   log "backup failed: $reason"
   return 1
+}
+
+term_run() {
+  write_metric 0 || log "error: failed to write failure metric"
+  cleanup
+  exit 143
 }
 
 validate_name() {
@@ -135,7 +191,7 @@ run_backup_locked() {
     exit 1
   }
   trap cleanup EXIT
-  trap 'cleanup; exit 143' INT TERM
+  trap term_run INT TERM
   chmod 600 "$TMP_ARCHIVE" || {
     fail_run "chmod failed"
     exit 1
@@ -184,6 +240,7 @@ run_backup_locked() {
     fail_run "state write failed"
     exit 1
   }
+  write_metric 1 || log "error: failed to write success metric"
   log "backup ok: key=$OBJECT_KEY bytes=$LOCAL_BYTES"
 }
 
@@ -208,9 +265,12 @@ self_test_case() {
   export READLE_FLOCK="$root/bin/flock"
   export READLE_MYSQL_BACKUP_STAGE_DIR="$root/stage-$mode"
   export READLE_MYSQL_BACKUP_STATE_FILE="$root/state-$mode.env"
+  export READLE_MYSQL_BACKUP_METRIC_FILE="$root/metrics-$mode/readle_mysql_backup.prom"
   export READLE_MYSQL_BACKUP_LOCK_FILE="$root/lock-$mode"
+  mkdir -p "$root/metrics-$mode"
   STAGE_DIR="$READLE_MYSQL_BACKUP_STAGE_DIR"
   STATE_FILE="$READLE_MYSQL_BACKUP_STATE_FILE"
+  METRIC_FILE="$READLE_MYSQL_BACKUP_METRIC_FILE"
   LOCK_FILE="$READLE_MYSQL_BACKUP_LOCK_FILE"
   PODMAN="$READLE_PODMAN"
   AWS="$READLE_AWS"
@@ -232,7 +292,7 @@ assert_no_archives() {
 }
 
 self_test() {
-  local tmp bin script mode state metadata metadata_owner metadata_mode env_file pid signal_status
+  local tmp bin script mode state metric metric_ts metadata metadata_owner metadata_mode env_file pid signal_status bad_path
   tmp="$(mktemp -d)"
   bin="$tmp/bin"
   mkdir -p "$bin"
@@ -299,7 +359,15 @@ STUB
   : > "$tmp/calls.log"
   "$script" --self-test-case success "$tmp"
   state="$tmp/state-success.env"
+  metric="$tmp/metrics-success/readle_mysql_backup.prom"
   grep -qx 'status=success' "$state" || die "self-test success state missing"
+  grep -qx 'readle_mysql_backup_success 1' "$metric" ||
+    die "self-test success metric missing"
+  metric_ts="$(sed -n 's/^readle_mysql_backup_last_success_timestamp_seconds //p' "$metric")"
+  [[ "$metric_ts" =~ ^[0-9]+$ && "$metric_ts" -gt 0 ]] ||
+    die "self-test success metric timestamp invalid"
+  ! grep -Eq 'readle-backups|backups/mysql|self-test-secret|error' "$metric" ||
+    die "self-test metric exposed forbidden fields"
   grep -q 'key=backups/mysql/.*[.]sql[.]gz' "$state" || die "self-test success key missing"
   grep -Fq -- '--databases' "$tmp/calls.log" || die "self-test dump missing --databases"
   grep -Fq 'aws [s3api] [head-object]' "$tmp/calls.log" || die "self-test did not call head-object"
@@ -317,10 +385,12 @@ STUB
 
   env_file="$tmp/incomplete.env"
   printf 'MYSQL_DATABASE=readle\n' > "$env_file"
+  mkdir -p "$tmp/metrics-ambient"
   if (
     ENV_FILE="$env_file"
     STAGE_DIR="$tmp/stage-ambient"
     STATE_FILE="$tmp/state-ambient.env"
+    METRIC_FILE="$tmp/metrics-ambient/readle_mysql_backup.prom"
     LOCK_FILE="$tmp/lock-ambient"
     FLOCK="$bin/flock"
     export READLE_STUB_LOG="$tmp/calls.log"
@@ -334,6 +404,8 @@ STUB
   fi
   grep -qx 'status=failure' "$tmp/state-ambient.env" ||
     die "self-test ambient config failure state missing"
+  grep -qx 'readle_mysql_backup_success 0' "$tmp/metrics-ambient/readle_mysql_backup.prom" ||
+    die "self-test ambient config failure metric missing"
 
   for mode in missing-env all-databases upload-fail head-fail mismatch dump-fail lock-fail; do
     : > "$tmp/calls.log"
@@ -341,7 +413,36 @@ STUB
       die "self-test accepted failure mode: $mode"
     fi
     grep -qx 'status=failure' "$tmp/state-$mode.env" || die "self-test failure state missing: $mode"
+    metric="$tmp/metrics-$mode/readle_mysql_backup.prom"
+    grep -qx 'readle_mysql_backup_success 0' "$metric" ||
+      die "self-test failure metric missing: $mode"
+    grep -qx 'readle_mysql_backup_last_success_timestamp_seconds 0' "$metric" ||
+      die "self-test failure metric timestamp invalid: $mode"
     assert_no_archives "$tmp/stage-$mode"
+  done
+
+  metric="$tmp/metrics-preserve/readle_mysql_backup.prom"
+  mkdir -p "$(dirname "$metric")"
+  printf 'readle_mysql_backup_success 1\nreadle_mysql_backup_last_success_timestamp_seconds 123\n' > "$metric"
+  METRIC_FILE="$metric"
+  write_metric 0 || die "self-test rejected preserved metric path"
+  grep -qx 'readle_mysql_backup_success 0' "$metric" ||
+    die "self-test did not write preserved failure metric"
+  grep -qx 'readle_mysql_backup_last_success_timestamp_seconds 123' "$metric" ||
+    die "self-test did not preserve last success timestamp"
+
+  for bad_path in \
+    "relative.prom" \
+    "$tmp/missing/readle_mysql_backup.prom" \
+    "$tmp/metrics-success/readle_mysql_backup.txt" \
+    "$tmp/metrics-success/.hidden.prom" \
+    "$tmp/metrics-success/bad"$'\n'".prom" \
+    "$tmp/metrics-success"
+  do
+    METRIC_FILE="$bad_path"
+    if write_metric 1 2>/dev/null; then
+      die "self-test accepted malformed metric path: $bad_path"
+    fi
   done
 
   : > "$tmp/calls.log"
@@ -355,6 +456,8 @@ STUB
     signal_status=$?
   fi
   [[ "$signal_status" -eq 143 ]] || die "self-test SIGTERM status mismatch: $signal_status"
+  grep -qx 'readle_mysql_backup_success 0' "$tmp/metrics-signal/readle_mysql_backup.prom" ||
+    die "self-test SIGTERM failure metric missing"
   assert_no_archives "$tmp/stage-signal"
 
   log "self-test ok"
