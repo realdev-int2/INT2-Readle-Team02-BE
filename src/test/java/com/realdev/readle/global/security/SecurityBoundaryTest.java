@@ -25,20 +25,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest(
-    classes = {ReadleApplication.class, SecurityBoundaryTest.PrometheusMetricsTestConfig.class},
+    classes = ReadleApplication.class,
     properties = {
       "management.endpoints.web.base-path=/api/actuator",
       "management.endpoints.web.exposure.include=health,prometheus",
+      "management.prometheus.metrics.export.enabled=true",
       "management.endpoint.health.probes.enabled=true"
     })
 @AutoConfigureMockMvc
@@ -344,23 +341,5 @@ class SecurityBoundaryTest {
         + Base64.getEncoder()
             .encodeToString(
                 "readle-monitor:test-prometheus-root-password".getBytes(StandardCharsets.UTF_8));
-  }
-
-  @TestConfiguration
-  static class PrometheusMetricsTestConfig {
-
-    @Bean
-    PrometheusMetricsTestController prometheusMetricsTestController() {
-      return new PrometheusMetricsTestController();
-    }
-  }
-
-  @RestController
-  static class PrometheusMetricsTestController {
-
-    @GetMapping("/api/actuator/prometheus")
-    String prometheus() {
-      return "readle_test_metric 1";
-    }
   }
 }
