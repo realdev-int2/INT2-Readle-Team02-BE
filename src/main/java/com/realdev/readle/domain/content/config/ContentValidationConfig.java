@@ -4,6 +4,7 @@ import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.vane.badwordfiltering.BadWordFiltering;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -54,11 +55,8 @@ public class ContentValidationConfig {
                 + ".");
       }
 
-    } catch (Exception e) {
+    } catch (IOException e) {
       log.error("[VALIDATION_CONFIG] badwords.data 사전 적재 중 예외 발생.", e);
-      if (e instanceof CustomException) {
-        throw (CustomException) e;
-      }
       throw new CustomException(
           GlobalErrorCode.SERVER_ERROR, "[VALIDATION_CONFIG] badwords.data 사전 적재 중 오류가 발생했습니다.", e);
     }
@@ -92,11 +90,8 @@ public class ContentValidationConfig {
                 + properties.safewordsPath()
                 + ".");
       }
-    } catch (Exception e) {
+    } catch (IOException e) {
       log.error("[VALIDATION_CONFIG] safewords.data 사전 적재 중 예외 발생.", e);
-      if (e instanceof CustomException) {
-        throw (CustomException) e;
-      }
       throw new CustomException(
           GlobalErrorCode.SERVER_ERROR,
           "[VALIDATION_CONFIG] safewords.data 사전 적재 중 오류가 발생했습니다.",

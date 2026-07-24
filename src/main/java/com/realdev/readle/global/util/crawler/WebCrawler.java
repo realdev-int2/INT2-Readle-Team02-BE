@@ -24,6 +24,7 @@ import java.util.Map;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import lombok.Getter;
@@ -184,7 +185,7 @@ public class WebCrawler {
                   }
                 }
               }
-            } catch (CertificateParsingException e) {
+            } catch (CertificateParsingException | SSLPeerUnverifiedException e) {
               log.error("SSL 호스트명 검증에 실패했습니다. 대상 호스트: {}", host, e);
             }
             return false;
