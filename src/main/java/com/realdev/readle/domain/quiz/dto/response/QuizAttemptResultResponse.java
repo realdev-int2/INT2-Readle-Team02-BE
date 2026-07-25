@@ -18,6 +18,7 @@ public class QuizAttemptResultResponse {
   private final Long quizSetId;
   private final Long attemptId;
   private final String title;
+  private final String sourceUrl;
   private final List<String> tags;
   private final BigDecimal accuracyRate;
   private final Integer correctCount;
@@ -82,6 +83,7 @@ public class QuizAttemptResultResponse {
       List<QuizAnswer> answers,
       Map<Long, QuizChoice> correctChoiceMap,
       String title,
+      String sourceUrl,
       List<String> tags,
       Long quizSetId,
       Long attemptId,
@@ -102,6 +104,7 @@ public class QuizAttemptResultResponse {
         .quizSetId(quizSetId)
         .attemptId(attemptId)
         .title(title)
+        .sourceUrl(sourceUrl)
         .tags(tags != null ? tags : List.of())
         .accuracyRate(result.getAccuracyRate())
         .correctCount(result.getCorrectCount())
@@ -116,10 +119,11 @@ public class QuizAttemptResultResponse {
       QuizResult result,
       List<QuizAnswer> answers,
       String title,
+      String sourceUrl,
       List<String> tags,
       Long quizSetId,
       Long attemptId,
       Long reportId) {
-    return from(result, answers, Map.of(), title, tags, quizSetId, attemptId, reportId);
+    return from(result, answers, Map.of(), title, sourceUrl, tags, quizSetId, attemptId, reportId);
   }
 }

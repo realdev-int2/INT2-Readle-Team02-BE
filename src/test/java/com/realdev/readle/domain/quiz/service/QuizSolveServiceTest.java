@@ -644,6 +644,7 @@ class QuizSolveServiceTest {
 
     com.realdev.readle.domain.content.entity.Content content = quizSet.getContent();
     given(content.getTitle()).willReturn("Spring @Transactional 심층 이해");
+    given(content.getOriginalUrl()).willReturn("https://example.com/article");
     given(content.getId()).willReturn(50L);
     given(contentTagRepository.findByContentIdWithTag(50L)).willReturn(List.of());
     given(quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(200L))
@@ -654,6 +655,7 @@ class QuizSolveServiceTest {
     assertThat(response.getAttemptId()).isEqualTo(200L);
     assertThat(response.getQuizSetId()).isEqualTo(100L);
     assertThat(response.getTitle()).isEqualTo("Spring @Transactional 심층 이해");
+    assertThat(response.getSourceUrl()).isEqualTo("https://example.com/article");
   }
 
   @Test

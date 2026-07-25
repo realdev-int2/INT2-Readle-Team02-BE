@@ -113,14 +113,29 @@ class QuizAttemptResultResponseTest {
             List.of(answer),
             Map.of(10L, correctChoice),
             "제목",
+            "https://example.com/article",
             List.of("태그1"),
             100L,
             200L,
             300L);
 
     assertThat(response.getReportId()).isEqualTo(300L);
+    assertThat(response.getSourceUrl()).isEqualTo("https://example.com/article");
     assertThat(response.getResults()).hasSize(1);
     assertThat(response.getResults().get(0).getCorrectChoiceNo()).isEqualTo(3);
     assertThat(response.getResults().get(0).getCorrectChoiceText()).isEqualTo("정답 선택지");
+  }
+
+  @Test
+  @DisplayName("직접 입력 콘텐츠는 sourceUrl이 null인 결과 리포트 응답을 생성한다")
+  void from_TextContent_KeepsSourceUrlNull() {
+    QuizResult result = mock(QuizResult.class);
+    given(result.getCompletedAt()).willReturn(LocalDateTime.now());
+
+    QuizAttemptResultResponse response =
+        QuizAttemptResultResponse.from(
+            result, List.of(), Map.of(), "직접 입력 콘텐츠", null, List.of(), 100L, 200L, 300L);
+
+    assertThat(response.getSourceUrl()).isNull();
   }
 }

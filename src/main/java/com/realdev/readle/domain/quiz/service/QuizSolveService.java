@@ -1,5 +1,6 @@
 package com.realdev.readle.domain.quiz.service;
 
+import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.member.repository.MemberRepository;
 import com.realdev.readle.domain.quiz.dto.request.QuizSubmitRequest;
@@ -362,8 +363,10 @@ public class QuizSolveService {
     }
 
     Long quizSetId = quizAttempt.getQuizSet().getId();
-    String title = quizAttempt.getQuizSet().getContent().getTitle();
-    Long contentId = quizAttempt.getQuizSet().getContent().getId();
+    Content content = quizAttempt.getQuizSet().getContent();
+    String title = content.getTitle();
+    String sourceUrl = content.getOriginalUrl();
+    Long contentId = content.getId();
     List<String> tags =
         contentTagRepository.findByContentIdWithTag(contentId).stream()
             .map(ct -> ct.getTag().getName())
@@ -374,6 +377,7 @@ public class QuizSolveService {
         quizAnswers,
         correctChoiceMap,
         title,
+        sourceUrl,
         tags,
         quizSetId,
         attemptId,

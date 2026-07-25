@@ -150,6 +150,7 @@ class ResultReportControllerTest {
             .quizSetId(201L)
             .attemptId(601L)
             .title("Spring 학습 결과")
+            .sourceUrl("https://example.com/article")
             .tags(List.of("spring"))
             .accuracyRate(new BigDecimal("80.00"))
             .correctCount(4)
@@ -165,7 +166,8 @@ class ResultReportControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.quizSetId").value(201))
         .andExpect(jsonPath("$.attemptId").value(601))
-        .andExpect(jsonPath("$.title").value("Spring 학습 결과"));
+        .andExpect(jsonPath("$.title").value("Spring 학습 결과"))
+        .andExpect(jsonPath("$.sourceUrl").value("https://example.com/article"));
 
     then(quizSolveService).should().getResultReport(memberUuid, 701L);
   }
