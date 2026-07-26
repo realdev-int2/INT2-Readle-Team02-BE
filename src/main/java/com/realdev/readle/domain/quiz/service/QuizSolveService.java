@@ -180,6 +180,7 @@ public class QuizSolveService {
     }
 
     Timer.Sample sample = Timer.start(meterRegistry);
+    String outcome = "failure";
     try {
       // 1. Transaction 1: 비관적 락 획득 및 GRADING 상태 변경 (Race Condition 차단)
       QuizAttempt lockedAttempt =
@@ -302,14 +303,13 @@ public class QuizSolveService {
 
                   return QuizSubmitResponse.from(result, staticAnswers, aiAnswers);
                 });
-        sample.stop(Timer.builder(QUIZ_GRADING).tag("outcome", "success").register(meterRegistry));
+        outcome = "success";
         return response;
       } catch (DataIntegrityViolationException e) {
         throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
       }
-    } catch (RuntimeException e) {
-      sample.stop(Timer.builder(QUIZ_GRADING).tag("outcome", "failure").register(meterRegistry));
-      throw e;
+    } finally {
+      sample.stop(Timer.builder(QUIZ_GRADING).tag("outcome", outcome).register(meterRegistry));
     }
   }
 

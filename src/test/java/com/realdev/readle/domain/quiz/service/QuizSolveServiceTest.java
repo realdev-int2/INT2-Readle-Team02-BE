@@ -414,6 +414,8 @@ class QuizSolveServiceTest {
     // AI 채점 실패 시 saveAll 및 save가 결코 호출되지 않고 All-or-Nothing 롤백되었음을 검증
     verify(quizAnswerRepository, times(0)).saveAll(any());
     verify(quizResultRepository, times(0)).save(any());
+    assertThat(meterRegistry.get("readle.quiz.grading").tag("outcome", "failure").timer().count())
+        .isEqualTo(1);
   }
 
   @Test

@@ -17,6 +17,8 @@ import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -202,5 +204,46 @@ class QuizAiGradingServiceTest {
 
     // 첫 호출에서 타임아웃나면 재시도 1번 더 하므로 2번 호출됨 (재시도도 타임아웃 남)
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "quiz_grading", "outcome", "timeout")
+                .timer()
+                .count())
+        .isEqualTo(2);
+  }
+
+  @Test
+  void gradeAnswerAsync_ExecutorSaturationDuringRetry() {
+    given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
+    given(claudeClient.getGradingGeneratedText(any(), any()))
+        .willThrow(new RuntimeException("API Error"));
+    AtomicInteger submissions = new AtomicInteger();
+    ReflectionTestUtils.setField(
+        quizAiGradingService,
+        "gradingExecutor",
+        (java.util.concurrent.Executor)
+            command -> {
+              if (submissions.incrementAndGet() == 1) {
+                command.run();
+                return;
+              }
+              throw new RejectedExecutionException("saturated");
+            });
+
+    CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
+        quizAiGradingService.gradeAnswerAsync(question, "오답", "본문 텍스트");
+
+    assertThatThrownBy(future::join)
+        .isInstanceOf(java.util.concurrent.CompletionException.class)
+        .hasCauseInstanceOf(com.realdev.readle.global.exception.CustomException.class);
+    verify(claudeClient).getGradingGeneratedText(any(), any());
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "quiz_grading", "outcome", "failure")
+                .timer()
+                .count())
+        .isEqualTo(2);
   }
 }

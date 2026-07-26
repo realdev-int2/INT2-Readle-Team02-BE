@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
@@ -48,13 +49,19 @@ public class QuizAiGradingService {
   private CompletableFuture<AiEvaluationResult> executeWithTimeoutAndRetry(
       QuizQuestion question, String submittedAnswer, String articleText, int retriesLeft) {
     Timer.Sample sample = Timer.start(meterRegistry);
-    CompletableFuture<AiEvaluationResult> task =
-        CompletableFuture.supplyAsync(
-            () -> doGrade(question, submittedAnswer, articleText, retriesLeft < 1),
-            gradingExecutor);
+    CompletableFuture<AiEvaluationResult> task;
+    try {
+      task =
+          CompletableFuture.supplyAsync(
+              () -> doGrade(question, submittedAnswer, articleText, retriesLeft < 1),
+              gradingExecutor);
+    } catch (RejectedExecutionException e) {
+      task = CompletableFuture.failedFuture(e);
+    }
 
+    CompletableFuture<AiEvaluationResult> submittedTask = task;
     CompletableFuture<AiEvaluationResult> timedTask =
-        task.orTimeout(timeoutDuration.toMillis(), TimeUnit.MILLISECONDS);
+        submittedTask.orTimeout(timeoutDuration.toMillis(), TimeUnit.MILLISECONDS);
     timedTask.whenComplete(
         (result, error) ->
             sample.stop(
@@ -68,7 +75,7 @@ public class QuizAiGradingService {
 
     return timedTask.exceptionallyCompose(
         ex -> {
-          task.cancel(true);
+          submittedTask.cancel(true);
           if (retriesLeft > 0) {
             Counter.builder(AI_RETRIES)
                 .tag("purpose", QUIZ_GRADING)
