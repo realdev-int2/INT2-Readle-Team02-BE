@@ -8,11 +8,15 @@ import com.realdev.readle.domain.content.config.ContentValidationProperties;
 import com.realdev.readle.domain.content.dto.response.ClaudeValidationResponse;
 import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.content.entity.ErrorCode;
+import com.realdev.readle.domain.content.entity.ValidationStatus;
 import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.util.Objects;
@@ -31,10 +35,15 @@ import org.springframework.web.client.RestClientResponseException;
 @Service
 public class AiValidationService {
 
+  private static final String AI_REQUESTS = "readle.ai.client.requests";
+  private static final String AI_RETRIES = "readle.ai.client.retries";
+  private static final String CONTENT_VALIDATION = "content_validation";
+
   private final AiValidationTxHelper txHelper;
   private final ClaudeClient claudeClient;
   private final ObjectMapper objectMapper;
   private final ContentValidationProperties properties;
+  private final MeterRegistry meterRegistry;
 
   private final Executor claudeCallExecutor;
 
@@ -43,22 +52,24 @@ public class AiValidationService {
       ClaudeClient claudeClient,
       ObjectMapper objectMapper,
       ContentValidationProperties properties,
+      MeterRegistry meterRegistry,
       @Qualifier("claudeCallExecutor") Executor claudeCallExecutor) {
     this.txHelper = txHelper;
     this.claudeClient = claudeClient;
     this.objectMapper = objectMapper;
     this.properties = properties;
+    this.meterRegistry = meterRegistry;
     this.claudeCallExecutor = claudeCallExecutor;
   }
 
-  public void runAiValidation(Content content) {
+  public ValidationStatus runAiValidation(Content content) {
     Long validationId = txHelper.createPendingValidation(content.getId());
     log.info("[AI_VALIDATION] PENDING Row 생성 완료. Validation ID: {}", validationId);
 
-    executeClaudeValidationWithRetry(content, validationId);
+    return executeClaudeValidationWithRetry(content, validationId);
   }
 
-  private void executeClaudeValidationWithRetry(Content content, Long validationId) {
+  private ValidationStatus executeClaudeValidationWithRetry(Content content, Long validationId) {
     // ContentService/StaticGuardrailValidator와 동일하게 extractedText 우선, 없으면 rawText
     String textContent =
         content.getExtractedText() != null ? content.getExtractedText() : content.getRawText();
@@ -89,7 +100,7 @@ public class AiValidationService {
             "[AI_VALIDATION] AI 검증 최종 확정 완료. Validation ID: {}, 판정: {}",
             validationId,
             response.status());
-        return;
+        return ValidationStatus.valueOf(response.status());
 
       } catch (RuntimeException e) {
         log.warn(
@@ -100,6 +111,10 @@ public class AiValidationService {
         lastException = e;
 
         if (attempt < properties.maxAttempts()) {
+          Counter.builder(AI_RETRIES)
+              .tag("purpose", CONTENT_VALIDATION)
+              .register(meterRegistry)
+              .increment();
           sleepBeforeRetry();
         }
       }
@@ -112,21 +127,26 @@ public class AiValidationService {
         validationId,
         errorCode,
         lastException);
+    return ValidationStatus.FAILED;
   }
 
   private String callClaudeWithTimeout(String systemPrompt, String userPrompt, Long validationId) {
-    CompletableFuture<String> future =
-        CompletableFuture.supplyAsync(
-            () -> {
-              ClaudeResponse response =
-                  claudeClient.generateValidationMessage(systemPrompt, userPrompt);
-              logTokenUsage(validationId, response);
-              return extractText(response);
-            },
-            claudeCallExecutor);
-
+    Timer.Sample sample = Timer.start(meterRegistry);
+    String outcome = "failure";
+    CompletableFuture<String> future = null;
     try {
-      return future.get(properties.callTimeoutSeconds(), TimeUnit.SECONDS);
+      future =
+          CompletableFuture.supplyAsync(
+              () -> {
+                ClaudeResponse response =
+                    claudeClient.generateValidationMessage(systemPrompt, userPrompt);
+                logTokenUsage(validationId, response);
+                return extractText(response);
+              },
+              claudeCallExecutor);
+      String rawText = future.get(properties.callTimeoutSeconds(), TimeUnit.SECONDS);
+      outcome = "success";
+      return rawText;
     } catch (InterruptedException e) {
       future.cancel(true);
       Thread.currentThread().interrupt();
@@ -134,15 +154,37 @@ public class AiValidationService {
           ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude 호출 중 인터럽트가 발생했습니다.", e);
     } catch (TimeoutException e) {
       future.cancel(true);
+      outcome = "timeout";
       throw new CustomException(
           ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 호출 시간이 초과되었습니다.", e);
     } catch (ExecutionException e) {
-      Throwable cause = getThrowable(e);
+      Throwable cause = e.getCause();
+      if (isTimeout(cause)) {
+        outcome = "timeout";
+      }
       throw new CustomException(
-          GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", cause);
+          GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", getThrowable(e));
     } catch (RuntimeException e) {
       throw new CustomException(GlobalErrorCode.SERVER_ERROR, "Claude 호출 중 알 수 없는 오류가 발생했습니다.", e);
+    } finally {
+      sample.stop(
+          Timer.builder(AI_REQUESTS)
+              .tags("purpose", CONTENT_VALIDATION, "outcome", outcome)
+              .register(meterRegistry));
     }
+  }
+
+  private boolean isTimeout(Throwable throwable) {
+    if (throwable instanceof CustomException ce) {
+      return ce.getErrorCode() == ContentErrorCode.AI_VALIDATION_TIMEOUT;
+    }
+    if (throwable instanceof ResourceAccessException rae) {
+      return rae.getCause() instanceof SocketTimeoutException
+          || rae.getCause() instanceof HttpTimeoutException;
+    }
+    return throwable instanceof SocketTimeoutException
+        || throwable instanceof HttpTimeoutException
+        || throwable instanceof TimeoutException;
   }
 
   private static Throwable getThrowable(ExecutionException e) {

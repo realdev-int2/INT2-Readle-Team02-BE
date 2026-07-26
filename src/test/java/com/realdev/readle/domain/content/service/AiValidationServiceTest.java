@@ -10,10 +10,12 @@ import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.content.entity.ErrorCode;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ class AiValidationServiceTest {
   private AiValidationTxHelper txHelper;
   private ClaudeClient claudeClient;
   private AiValidationService aiValidationService;
+  private SimpleMeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() {
@@ -40,9 +43,11 @@ class AiValidationServiceTest {
 
     // 동기식 실행을 보장하여 비동기 스레드 풀 모킹
     Executor syncExecutor = Runnable::run;
+    meterRegistry = new SimpleMeterRegistry();
 
     aiValidationService =
-        new AiValidationService(txHelper, claudeClient, objectMapper, properties, syncExecutor);
+        new AiValidationService(
+            txHelper, claudeClient, objectMapper, properties, meterRegistry, syncExecutor);
   }
 
   // =========================================================================
@@ -94,6 +99,13 @@ class AiValidationServiceTest {
     ClaudeValidationResponse captured = responseCaptor.getValue();
     assertThat(captured.validationScore()).isEqualTo(85);
     assertThat(captured.status()).isEqualTo("PASSED");
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "content_validation", "outcome", "success")
+                .timer()
+                .count())
+        .isEqualTo(1);
   }
 
   @Test
@@ -204,6 +216,47 @@ class AiValidationServiceTest {
     // then
     verify(claudeClient, times(2)).generateValidationMessage(anyString(), anyString());
     verify(txHelper).updateValidationSuccess(eq(200L), any());
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.retries")
+                .tag("purpose", "content_validation")
+                .counter()
+                .count())
+        .isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("Claude executor가 포화되면 각 실패 시도를 AI 호출 failure metric으로 기록한다")
+  void runAiValidation_rejectedExecutor_recordsFailureMetric() {
+    ContentValidationProperties properties = mock(ContentValidationProperties.class);
+    when(properties.maxAttempts()).thenReturn(2);
+    when(properties.retryDelayMs()).thenReturn(0L);
+    when(properties.callTimeoutSeconds()).thenReturn(5L);
+    Executor rejectingExecutor =
+        command -> {
+          throw new RejectedExecutionException("saturated");
+        };
+    AiValidationService rejectingService =
+        new AiValidationService(
+            txHelper,
+            claudeClient,
+            new ObjectMapper(),
+            properties,
+            meterRegistry,
+            rejectingExecutor);
+    Content content = Content.fromText(null, "제목", "가".repeat(350));
+    when(txHelper.createPendingValidation(content.getId())).thenReturn(250L);
+
+    rejectingService.runAiValidation(content);
+
+    verify(claudeClient, never()).generateValidationMessage(anyString(), anyString());
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "content_validation", "outcome", "failure")
+                .timer()
+                .count())
+        .isEqualTo(2);
   }
 
   // =========================================================================
@@ -344,6 +397,20 @@ class AiValidationServiceTest {
     // then
     verify(claudeClient, times(2)).generateValidationMessage(anyString(), anyString());
     verify(txHelper).updateValidationFailed(eq(401L), eq(ErrorCode.TIMEOUT));
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "content_validation", "outcome", "timeout")
+                .timer()
+                .count())
+        .isEqualTo(2);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.retries")
+                .tag("purpose", "content_validation")
+                .counter()
+                .count())
+        .isEqualTo(1);
   }
 
   @Test
