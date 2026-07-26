@@ -54,64 +54,72 @@ public class QuizGenerationService {
   private final TransactionTemplate transactionTemplate;
 
   public QuizCreateResponse createQuizSet(Long sourceValidationId) {
-    ContentValidation validation =
-        contentValidationRepository
-            .findByIdWithContent(sourceValidationId)
-            .orElseThrow(
-                () ->
-                    new CustomException(
-                        QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
+    Timer.Sample sample = Timer.start(meterRegistry);
+    ContentValidation validation;
+    QuizSetStart quizSetStart;
+    try {
+      validation =
+          contentValidationRepository
+              .findByIdWithContent(sourceValidationId)
+              .orElseThrow(
+                  () ->
+                      new CustomException(
+                          QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
 
-    // 1. 초기 QuizSet 레코드 생성 및 저장 (Transaction 분리)
-    QuizSetStart quizSetStart =
-        transactionTemplate.execute(
-            status -> {
-              QuizSet existing =
-                  quizSetRepository.findBySourceValidationId(sourceValidationId).orElse(null);
-              if (existing != null) {
-                if (existing.getStatus() == QuizSetStatus.FAILED) {
-                  existing.retry();
-                  return new QuizSetStart(quizSetRepository.saveAndFlush(existing), true);
-                } else {
+      // 1. 초기 QuizSet 레코드 생성 및 저장 (Transaction 분리)
+      quizSetStart =
+          transactionTemplate.execute(
+              status -> {
+                QuizSet existing =
+                    quizSetRepository.findBySourceValidationId(sourceValidationId).orElse(null);
+                if (existing != null) {
+                  if (existing.getStatus() == QuizSetStatus.FAILED) {
+                    existing.retry();
+                    return new QuizSetStart(quizSetRepository.saveAndFlush(existing), true);
+                  } else {
+                    throw new CustomException(
+                        QuizErrorCode.QUIZ_GENERATION_FAILED,
+                        "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.");
+                  }
+                }
+
+                // Detached 객체 대신 Managed 객체를 재조회하여 사용
+                ContentValidation managedValidation =
+                    contentValidationRepository
+                        .findByIdWithContent(sourceValidationId)
+                        .orElseThrow(
+                            () ->
+                                new CustomException(
+                                    QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND,
+                                    "존재하지 않는 검증 ID입니다."));
+
+                boolean bypassAvailable =
+                    managedValidation.getStatus() == ValidationStatus.REJECTED
+                        && managedValidation.getValidationMethod() == ValidationMethod.AI;
+
+                // Validation 상태 분기: PASSED 또는 bypassAvailable 허용
+                if (managedValidation.getStatus() != ValidationStatus.PASSED && !bypassAvailable) {
+                  throw new CustomException(QuizErrorCode.VALIDATION_NOT_PASSED);
+                }
+                boolean isBypassed = bypassAvailable;
+
+                QuizSet newQuizSet;
+                try {
+                  newQuizSet =
+                      QuizSet.create(managedValidation.getContent(), managedValidation, isBypassed);
+                  return new QuizSetStart(quizSetRepository.saveAndFlush(newQuizSet), false);
+                } catch (DataIntegrityViolationException e) {
                   throw new CustomException(
                       QuizErrorCode.QUIZ_GENERATION_FAILED,
-                      "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.");
+                      "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.",
+                      e);
                 }
-              }
-
-              // Detached 객체 대신 Managed 객체를 재조회하여 사용
-              ContentValidation managedValidation =
-                  contentValidationRepository
-                      .findByIdWithContent(sourceValidationId)
-                      .orElseThrow(
-                          () ->
-                              new CustomException(
-                                  QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
-
-              boolean bypassAvailable =
-                  managedValidation.getStatus() == ValidationStatus.REJECTED
-                      && managedValidation.getValidationMethod() == ValidationMethod.AI;
-
-              // Validation 상태 분기: PASSED 또는 bypassAvailable 허용
-              if (managedValidation.getStatus() != ValidationStatus.PASSED && !bypassAvailable) {
-                throw new CustomException(QuizErrorCode.VALIDATION_NOT_PASSED);
-              }
-              boolean isBypassed = bypassAvailable;
-
-              QuizSet newQuizSet;
-              try {
-                newQuizSet =
-                    QuizSet.create(managedValidation.getContent(), managedValidation, isBypassed);
-                return new QuizSetStart(quizSetRepository.saveAndFlush(newQuizSet), false);
-              } catch (DataIntegrityViolationException e) {
-                throw new CustomException(
-                    QuizErrorCode.QUIZ_GENERATION_FAILED,
-                    "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.",
-                    e);
-              }
-            });
+              });
+    } catch (RuntimeException e) {
+      sample.stop(Timer.builder(QUIZ_GENERATION).tag("outcome", "failure").register(meterRegistry));
+      throw e;
+    }
     QuizSet quizSet = quizSetStart.quizSet();
-    Timer.Sample sample = Timer.start(meterRegistry);
     if (quizSetStart.retry()) {
       Counter.builder(QUIZ_GENERATION_RETRIES).register(meterRegistry).increment();
     }

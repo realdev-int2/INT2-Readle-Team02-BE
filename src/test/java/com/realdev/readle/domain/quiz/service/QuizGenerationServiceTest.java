@@ -57,6 +57,7 @@ class QuizGenerationServiceTest {
 
   @BeforeEach
   void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
     quizGenerationService =
         new QuizGenerationService(
             contentValidationRepository,
@@ -67,7 +68,7 @@ class QuizGenerationServiceTest {
             promptLoader,
             objectMapper,
             tagService,
-            meterRegistry = new SimpleMeterRegistry(),
+            meterRegistry,
             transactionTemplate);
 
     member = org.mockito.Mockito.mock(Member.class);
@@ -303,6 +304,9 @@ class QuizGenerationServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.VALIDATION_NOT_PASSED);
+    assertThat(
+            meterRegistry.get("readle.quiz.generation").tag("outcome", "failure").timer().count())
+        .isEqualTo(1);
   }
 
   @Test
