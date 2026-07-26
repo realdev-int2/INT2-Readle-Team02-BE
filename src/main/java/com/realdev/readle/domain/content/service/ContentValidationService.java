@@ -6,6 +6,7 @@ import com.realdev.readle.domain.content.entity.ValidationStatus;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,8 +22,7 @@ public class ContentValidationService {
 
   // 트랜잭션을 열지 않음. 1,2차 방어선(짧은 트랜잭션)이 완전히 커밋된 뒤에만
   // AI 호출(트랜잭션 없이 진행)로 넘어가도록 하여, AI 호출 동안 DB 커넥션을 점유하지 않는다.
-  public void validateContent(Long contentId) {
-    Timer.Sample sample = Timer.start(meterRegistry);
+  public void validateContent(Long contentId, long requestedAtNanos) {
     ValidationStatus status = ValidationStatus.FAILED;
     ValidationMethod method = ValidationMethod.STATIC_GUARDRAIL;
     try {
@@ -53,12 +53,12 @@ public class ContentValidationService {
         method = result.validationMethod();
       }
     } finally {
-      sample.stop(
-          Timer.builder("readle.content.validation")
-              .tags(
-                  "status", status.name().toLowerCase(Locale.ROOT),
-                  "method", method.name().toLowerCase(Locale.ROOT))
-              .register(meterRegistry));
+      Timer.builder("readle.content.validation")
+          .tags(
+              "status", status.name().toLowerCase(Locale.ROOT),
+              "method", method.name().toLowerCase(Locale.ROOT))
+          .register(meterRegistry)
+          .record(System.nanoTime() - requestedAtNanos, TimeUnit.NANOSECONDS);
     }
   }
 }

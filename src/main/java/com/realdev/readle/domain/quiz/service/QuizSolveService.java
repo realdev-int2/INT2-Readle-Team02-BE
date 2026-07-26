@@ -103,83 +103,101 @@ public class QuizSolveService {
 
   public QuizSubmitResponse submitAnswers(
       Long attemptId, String memberUuid, QuizSubmitRequest request) {
-
-    // [가드레일 선행 검증] 비관적 락 및 상태 전이(GRADING) 트랜잭션 전에 입력값 유효성 전면 검사
-    QuizAttempt preAttempt =
-        quizAttemptRepository
-            .findWithDetailsById(attemptId)
-            .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
-
-    if (!preAttempt.getMember().getUuid().equals(memberUuid)) {
-      throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 풀이 정보에 대한 권한이 없습니다.");
-    }
-
-    if (preAttempt.getStatus() != com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS) {
-      throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
-    }
-
-    List<QuizQuestion> questions =
-        quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(preAttempt.getQuizSet());
-
-    if (questions.size() != request.getAnswers().size()) {
-      throw new CustomException(QuizErrorCode.INVALID_ANSWER_COUNT);
-    }
-
-    Map<Long, QuizSubmitRequest.AnswerRequest> answerMap = new HashMap<>();
-    for (QuizSubmitRequest.AnswerRequest a : request.getAnswers()) {
-      if (answerMap.containsKey(a.getQuestionId())) {
-        throw new CustomException(
-            GlobalErrorCode.INVALID_INPUT, "중복된 문제 ID가 존재합니다: " + a.getQuestionId());
-      }
-      answerMap.put(a.getQuestionId(), a);
-    }
-
-    // 주관식/빈칸용 본문 텍스트 확인 (트랜잭션 시작 전 차단)
-    String articleText = "";
-    if (questions.stream().anyMatch(q -> q.getQuestionType() != QuestionType.MULTIPLE_CHOICE)) {
-      String raw = preAttempt.getQuizSet().getContent().getRawText();
-      String extracted = preAttempt.getQuizSet().getContent().getExtractedText();
-      articleText = raw != null ? raw : (extracted != null ? extracted : "");
-
-      if (articleText.isBlank()) {
-        throw new CustomException(QuizErrorCode.EMPTY_ARTICLE_TEXT);
-      }
-    }
-
-    // 선택지 조회 및 주관식 가드레일 사전 검증 수행
-    Map<Long, QuizChoice> choiceMap = new HashMap<>();
-    for (QuizQuestion question : questions) {
-      QuizSubmitRequest.AnswerRequest answerReq = answerMap.get(question.getId());
-      if (answerReq == null) {
-        throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
-      }
-
-      if (question.getQuestionType() == QuestionType.MULTIPLE_CHOICE) {
-        if (answerReq.getSubmittedChoiceId() == null) {
-          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
-        }
-        QuizChoice choice =
-            quizChoiceRepository
-                .findById(answerReq.getSubmittedChoiceId())
-                .orElseThrow(
-                    () -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 선택지입니다."));
-        if (!choice.getQuizQuestion().getId().equals(question.getId())) {
-          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
-        }
-        choiceMap.put(question.getId(), choice);
-      } else {
-        String rawAnswerText = answerReq.getSubmittedAnswerText();
-        if (rawAnswerText == null || rawAnswerText.trim().isEmpty()) {
-          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
-        }
-        // 프롬프트 인젝션 키워드 검증 (트랜잭션 시작 전 차단)
-        if (rawAnswerText.matches("(?is).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
-          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
-        }
-      }
-    }
-
     Timer.Sample sample = Timer.start(meterRegistry);
+    List<QuizQuestion> questions;
+    Map<Long, QuizSubmitRequest.AnswerRequest> answerMap = new HashMap<>();
+    Map<Long, QuizChoice> choiceMap = new HashMap<>();
+    String articleText = "";
+
+    try {
+      // [가드레일 선행 검증] 비관적 락 및 상태 전이(GRADING) 트랜잭션 전에 입력값 유효성 전면 검사
+      QuizAttempt preAttempt =
+          quizAttemptRepository
+              .findWithDetailsById(attemptId)
+              .orElseThrow(() -> new CustomException(QuizErrorCode.ATTEMPT_NOT_FOUND));
+
+      if (!preAttempt.getMember().getUuid().equals(memberUuid)) {
+        throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 풀이 정보에 대한 권한이 없습니다.");
+      }
+
+      if (preAttempt.getStatus()
+          != com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS) {
+        throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+      }
+
+      questions = quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(preAttempt.getQuizSet());
+
+      if (questions.size() != request.getAnswers().size()) {
+        throw new CustomException(QuizErrorCode.INVALID_ANSWER_COUNT);
+      }
+
+      for (QuizSubmitRequest.AnswerRequest answer : request.getAnswers()) {
+        if (answerMap.containsKey(answer.getQuestionId())) {
+          throw new CustomException(
+              GlobalErrorCode.INVALID_INPUT, "중복된 문제 ID가 존재합니다: " + answer.getQuestionId());
+        }
+        answerMap.put(answer.getQuestionId(), answer);
+      }
+
+      // 주관식/빈칸용 본문 텍스트 확인 (트랜잭션 시작 전 차단)
+      if (questions.stream().anyMatch(q -> q.getQuestionType() != QuestionType.MULTIPLE_CHOICE)) {
+        String raw = preAttempt.getQuizSet().getContent().getRawText();
+        String extracted = preAttempt.getQuizSet().getContent().getExtractedText();
+        articleText = raw != null ? raw : (extracted != null ? extracted : "");
+
+        if (articleText.isBlank()) {
+          throw new CustomException(QuizErrorCode.EMPTY_ARTICLE_TEXT);
+        }
+      }
+
+      // 선택지 조회 및 주관식 가드레일 사전 검증 수행
+      for (QuizQuestion question : questions) {
+        QuizSubmitRequest.AnswerRequest answerReq = answerMap.get(question.getId());
+        if (answerReq == null) {
+          throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
+        }
+
+        if (question.getQuestionType() == QuestionType.MULTIPLE_CHOICE) {
+          if (answerReq.getSubmittedChoiceId() == null) {
+            throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
+          }
+          QuizChoice choice =
+              quizChoiceRepository
+                  .findById(answerReq.getSubmittedChoiceId())
+                  .orElseThrow(
+                      () -> new CustomException(GlobalErrorCode.NOT_FOUND, "존재하지 않는 선택지입니다."));
+          if (!choice.getQuizQuestion().getId().equals(question.getId())) {
+            throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
+          }
+          choiceMap.put(question.getId(), choice);
+        } else {
+          String rawAnswerText = answerReq.getSubmittedAnswerText();
+          if (rawAnswerText == null || rawAnswerText.trim().isEmpty()) {
+            throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
+          }
+          // 프롬프트 인젝션 키워드 검증 (트랜잭션 시작 전 차단)
+          if (rawAnswerText.matches("(?is).*(이전 지시 무시|시스템 프롬프트|system prompt|ignore previous).*")) {
+            throw new CustomException(QuizErrorCode.INVALID_ANSWER_FORMAT);
+          }
+        }
+      }
+    } catch (RuntimeException e) {
+      sample.stop(Timer.builder(QUIZ_GRADING).tag("outcome", "failure").register(meterRegistry));
+      throw e;
+    }
+
+    return submitValidatedAnswers(
+        attemptId, memberUuid, questions, answerMap, choiceMap, articleText, sample);
+  }
+
+  private QuizSubmitResponse submitValidatedAnswers(
+      Long attemptId,
+      String memberUuid,
+      List<QuizQuestion> questions,
+      Map<Long, QuizSubmitRequest.AnswerRequest> answerMap,
+      Map<Long, QuizChoice> choiceMap,
+      String articleText,
+      Timer.Sample sample) {
     String outcome = "failure";
     try {
       // 1. Transaction 1: 비관적 락 획득 및 GRADING 상태 변경 (Race Condition 차단)

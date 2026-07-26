@@ -33,7 +33,7 @@ class ContentValidationServiceTest {
             ContentGuardrailService.GuardrailResult.done(
                 ValidationStatus.PASSED, ValidationMethod.WHITELIST));
 
-    contentValidationService.validateContent(1L);
+    contentValidationService.validateContent(1L, System.nanoTime());
 
     assertThat(
             meterRegistry
@@ -51,7 +51,7 @@ class ContentValidationServiceTest {
         .willReturn(ContentGuardrailService.GuardrailResult.needsAi(content));
     given(aiValidationService.runAiValidation(content)).willReturn(ValidationStatus.REJECTED);
 
-    contentValidationService.validateContent(2L);
+    contentValidationService.validateContent(2L, System.nanoTime());
 
     assertThat(
             meterRegistry
@@ -67,7 +67,8 @@ class ContentValidationServiceTest {
     RuntimeException exception = new RuntimeException("guardrail failure");
     given(contentGuardrailService.evaluate(3L)).willThrow(exception);
 
-    assertThatThrownBy(() -> contentValidationService.validateContent(3L)).isSameAs(exception);
+    assertThatThrownBy(() -> contentValidationService.validateContent(3L, System.nanoTime()))
+        .isSameAs(exception);
 
     verify(contentGuardrailService)
         .markAsFailed(3L, ValidationMethod.STATIC_GUARDRAIL, ErrorCode.UNKNOWN_ERROR);
@@ -88,7 +89,8 @@ class ContentValidationServiceTest {
         .willReturn(ContentGuardrailService.GuardrailResult.needsAi(content));
     given(aiValidationService.runAiValidation(content)).willThrow(exception);
 
-    assertThatThrownBy(() -> contentValidationService.validateContent(4L)).isSameAs(exception);
+    assertThatThrownBy(() -> contentValidationService.validateContent(4L, System.nanoTime()))
+        .isSameAs(exception);
 
     verify(contentGuardrailService).markAsFailed(4L, ValidationMethod.AI, ErrorCode.UNKNOWN_ERROR);
     assertThat(

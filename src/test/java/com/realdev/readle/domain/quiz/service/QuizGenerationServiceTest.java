@@ -285,7 +285,7 @@ class QuizGenerationServiceTest {
     assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
         .isInstanceOf(CustomException.class);
 
-    assertThat(meterRegistry.find("readle.quiz.generation.bypasses").counter()).isNull();
+    assertThat(meterRegistry.find("readle.content.validation.bypasses").counter()).isNull();
   }
 
   @Test

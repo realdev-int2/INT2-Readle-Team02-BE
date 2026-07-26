@@ -39,7 +39,7 @@ public class QuizGenerationService {
 
   private static final String QUIZ_GENERATION = "readle.quiz.generation";
   private static final String QUIZ_GENERATION_RETRIES = "readle.quiz.generation.retries";
-  private static final String QUIZ_GENERATION_BYPASSES = "readle.quiz.generation.bypasses";
+  private static final String CONTENT_VALIDATION_BYPASSES = "readle.content.validation.bypasses";
 
   private final ContentValidationRepository contentValidationRepository;
   private final QuizSetRepository quizSetRepository;
@@ -239,7 +239,7 @@ public class QuizGenerationService {
               });
       outcome = "success";
       if (Boolean.TRUE.equals(quizSet.getIsBypassed())) {
-        Counter.builder(QUIZ_GENERATION_BYPASSES).register(meterRegistry).increment();
+        Counter.builder(CONTENT_VALIDATION_BYPASSES).register(meterRegistry).increment();
       }
       return response;
 

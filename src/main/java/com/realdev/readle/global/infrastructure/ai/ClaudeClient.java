@@ -30,6 +30,7 @@ public class ClaudeClient {
   private static final String AI_REQUESTS = "readle.ai.client.requests";
   private static final String AI_RETRIES = "readle.ai.client.retries";
   private static final String AI_TOKENS = "readle.ai.client.tokens";
+  private static final String AI_TOTAL_TOKENS = "readle.ai.client.tokens.all";
   private static final String QUIZ_GENERATION = "quiz_generation";
   private static final String QUIZ_GRADING = "quiz_grading";
   private static final String CONTENT_VALIDATION = "content_validation";
@@ -244,6 +245,7 @@ public class ClaudeClient {
           .tags("purpose", purpose, "type", type)
           .register(meterRegistry)
           .increment(tokens);
+      Counter.builder(AI_TOTAL_TOKENS).tag("type", type).register(meterRegistry).increment(tokens);
     }
   }
 

@@ -243,7 +243,12 @@ class ContentServiceTest {
 
     assertThat(response.contentId()).isEqualTo(42L);
     assertThat(response.validationStatus()).isEqualTo(ValidationStatus.PENDING);
-    verify(eventPublisher).publishEvent(new ContentCreatedEvent(42L, memberUuid));
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    ContentCreatedEvent event = (ContentCreatedEvent) eventCaptor.getValue();
+    assertThat(event.contentId()).isEqualTo(42L);
+    assertThat(event.memberUuid()).isEqualTo(memberUuid);
+    assertThat(event.requestedAtNanos()).isPositive();
   }
 
   @Test
@@ -789,6 +794,11 @@ class ContentServiceTest {
     ContentValidationResponse response = contentService.retryValidation(1L, memberUuid);
 
     assertThat(response.status()).isEqualTo(ValidationStatus.PENDING);
-    verify(eventPublisher).publishEvent(new ContentCreatedEvent(1L, memberUuid));
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    ContentCreatedEvent event = (ContentCreatedEvent) eventCaptor.getValue();
+    assertThat(event.contentId()).isEqualTo(1L);
+    assertThat(event.memberUuid()).isEqualTo(memberUuid);
+    assertThat(event.requestedAtNanos()).isPositive();
   }
 }

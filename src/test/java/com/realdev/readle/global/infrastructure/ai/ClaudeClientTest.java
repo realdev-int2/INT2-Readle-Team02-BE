@@ -113,6 +113,20 @@ class ClaudeClientTest {
                 .counter()
                 .count())
         .isEqualTo(200);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.tokens.all")
+                .tag("type", "input_tokens")
+                .counter()
+                .count())
+        .isEqualTo(100);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.tokens.all")
+                .tag("type", "output_tokens")
+                .counter()
+                .count())
+        .isEqualTo(200);
     server.verify();
   }
 
