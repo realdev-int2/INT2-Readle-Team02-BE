@@ -23,6 +23,7 @@ import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +49,7 @@ class QuizGenerationServiceTest {
   @Mock private com.realdev.readle.domain.tag.service.TagService tagService;
 
   private ObjectMapper objectMapper = new ObjectMapper();
+  private SimpleMeterRegistry meterRegistry;
 
   private ContentValidation validation;
   private Content content;
@@ -65,6 +67,7 @@ class QuizGenerationServiceTest {
             promptLoader,
             objectMapper,
             tagService,
+            meterRegistry = new SimpleMeterRegistry(),
             transactionTemplate);
 
     member = org.mockito.Mockito.mock(Member.class);
@@ -131,6 +134,9 @@ class QuizGenerationServiceTest {
     assertThat(response).isNotNull();
     assertThat(response.getQuizId()).isEqualTo(200L);
     assertThat(response.getQuestionCount()).isEqualTo(1);
+    assertThat(
+            meterRegistry.get("readle.quiz.generation").tag("outcome", "success").timer().count())
+        .isEqualTo(1);
     assertThat(response.getStatus()).isEqualTo("completed");
 
     org.mockito.Mockito.verify(quizQuestionRepository, org.mockito.Mockito.times(1)).save(any());
@@ -257,6 +263,28 @@ class QuizGenerationServiceTest {
 
     // delete는 호출되지 않아야 함
     org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.never()).delete(any());
+  }
+
+  @Test
+  @DisplayName("bypass 퀴즈 생성이 실패하면 bypass 완료 횟수를 증가시키지 않는다")
+  void createQuizSet_BypassedGenerationFails_DoesNotCountBypass() {
+    given(validation.getStatus()).willReturn(ValidationStatus.REJECTED);
+    given(validation.getValidationMethod()).willReturn(ValidationMethod.AI);
+    given(contentValidationRepository.findByIdWithContent(100L))
+        .willReturn(Optional.of(validation));
+
+    QuizSet bypassedQuizSet = QuizSet.create(content, validation, true);
+    ReflectionTestUtils.setField(bypassedQuizSet, "id", 400L);
+    given(quizSetRepository.saveAndFlush(any(QuizSet.class))).willReturn(bypassedQuizSet);
+    given(quizSetRepository.findById(400L)).willReturn(Optional.of(bypassedQuizSet));
+    given(promptLoader.loadPrompt(anyString(), any())).willReturn("system prompt");
+    given(claudeClient.getGeneratedText(anyString(), anyString()))
+        .willThrow(new CustomException(QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 지연"));
+
+    assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
+        .isInstanceOf(CustomException.class);
+
+    assertThat(meterRegistry.find("readle.quiz.generation.bypasses").counter()).isNull();
   }
 
   @Test

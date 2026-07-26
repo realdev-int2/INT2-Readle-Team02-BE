@@ -22,6 +22,9 @@ import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import com.realdev.readle.global.util.JsonExtractor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +37,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class QuizGenerationService {
 
+  private static final String QUIZ_GENERATION = "readle.quiz.generation";
+  private static final String QUIZ_GENERATION_RETRIES = "readle.quiz.generation.retries";
+  private static final String QUIZ_GENERATION_BYPASSES = "readle.quiz.generation.bypasses";
+
   private final ContentValidationRepository contentValidationRepository;
   private final QuizSetRepository quizSetRepository;
   private final QuizQuestionRepository quizQuestionRepository;
@@ -42,6 +49,7 @@ public class QuizGenerationService {
   private final PromptLoader promptLoader;
   private final ObjectMapper objectMapper;
   private final TagService tagService;
+  private final MeterRegistry meterRegistry;
 
   private final TransactionTemplate transactionTemplate;
 
@@ -55,7 +63,7 @@ public class QuizGenerationService {
                         QuizErrorCode.SOURCE_VALIDATION_NOT_FOUND, "존재하지 않는 검증 ID입니다."));
 
     // 1. 초기 QuizSet 레코드 생성 및 저장 (Transaction 분리)
-    QuizSet quizSet =
+    QuizSetStart quizSetStart =
         transactionTemplate.execute(
             status -> {
               QuizSet existing =
@@ -63,7 +71,7 @@ public class QuizGenerationService {
               if (existing != null) {
                 if (existing.getStatus() == QuizSetStatus.FAILED) {
                   existing.retry();
-                  return quizSetRepository.saveAndFlush(existing);
+                  return new QuizSetStart(quizSetRepository.saveAndFlush(existing), true);
                 } else {
                   throw new CustomException(
                       QuizErrorCode.QUIZ_GENERATION_FAILED,
@@ -94,7 +102,7 @@ public class QuizGenerationService {
               try {
                 newQuizSet =
                     QuizSet.create(managedValidation.getContent(), managedValidation, isBypassed);
-                return quizSetRepository.saveAndFlush(newQuizSet);
+                return new QuizSetStart(quizSetRepository.saveAndFlush(newQuizSet), false);
               } catch (DataIntegrityViolationException e) {
                 throw new CustomException(
                     QuizErrorCode.QUIZ_GENERATION_FAILED,
@@ -102,7 +110,12 @@ public class QuizGenerationService {
                     e);
               }
             });
-
+    QuizSet quizSet = quizSetStart.quizSet();
+    Timer.Sample sample = Timer.start(meterRegistry);
+    if (quizSetStart.retry()) {
+      Counter.builder(QUIZ_GENERATION_RETRIES).register(meterRegistry).increment();
+    }
+    String outcome = "failure";
     try {
       // 2. AI Prompt 생성 및 호출 (Non-Transactional)
       // Fetch Join으로 가져온 validation에서 지연 로딩 예외 없이 본문 조회
@@ -139,81 +152,88 @@ public class QuizGenerationService {
       ClaudeQuizResponseDto parsedResponse = parseAndValidate(jsonResponse);
 
       // 3. 문제 및 선택지 엔티티 저장 및 완료 (Transaction 분리)
-      return transactionTemplate.execute(
-          status -> {
-            QuizSet activeQuizSet = quizSetRepository.findById(quizSet.getId()).orElseThrow();
+      QuizCreateResponse response =
+          transactionTemplate.execute(
+              status -> {
+                QuizSet activeQuizSet = quizSetRepository.findById(quizSet.getId()).orElseThrow();
 
-            int orderNo = 1;
-            for (ClaudeQuizResponseDto.ClaudeQuizDto quizDto : parsedResponse.getQuizzes()) {
-              QuestionType type;
-              try {
-                type = QuestionType.valueOf(quizDto.getType().toUpperCase());
-              } catch (IllegalArgumentException e) {
-                throw new CustomException(
-                    QuizErrorCode.QUIZ_GENERATION_FAILED,
-                    "알 수 없는 문제 유형입니다: " + quizDto.getType(),
-                    e);
-              }
+                int orderNo = 1;
+                for (ClaudeQuizResponseDto.ClaudeQuizDto quizDto : parsedResponse.getQuizzes()) {
+                  QuestionType type;
+                  try {
+                    type = QuestionType.valueOf(quizDto.getType().toUpperCase());
+                  } catch (IllegalArgumentException e) {
+                    throw new CustomException(
+                        QuizErrorCode.QUIZ_GENERATION_FAILED,
+                        "알 수 없는 문제 유형입니다: " + quizDto.getType(),
+                        e);
+                  }
 
-              // 사후 검증: 본문에 코드가 없는데 CODE_BLANK 유형의 문제가 생성된 경우 건너뜀
-              if (!hasCode && type == QuestionType.CODE_BLANK) {
-                log.warn("본문에 코드가 없으므로 CODE_BLANK 유형의 문제를 스킵합니다: {}", quizDto.getQuestion());
-                continue;
-              }
+                  // 사후 검증: 본문에 코드가 없는데 CODE_BLANK 유형의 문제가 생성된 경우 건너뜀
+                  if (!hasCode && type == QuestionType.CODE_BLANK) {
+                    log.warn("본문에 코드가 없으므로 CODE_BLANK 유형의 문제를 스킵합니다: {}", quizDto.getQuestion());
+                    continue;
+                  }
 
-              // SHORT_ANSWER / CODE_BLANK는 정답이 null이거나 공백이면 거부
-              if (type != QuestionType.MULTIPLE_CHOICE) {
-                if (quizDto.getAnswer() == null || quizDto.getAnswer().isBlank()) {
+                  // SHORT_ANSWER / CODE_BLANK는 정답이 null이거나 공백이면 거부
+                  if (type != QuestionType.MULTIPLE_CHOICE) {
+                    if (quizDto.getAnswer() == null || quizDto.getAnswer().isBlank()) {
+                      throw new CustomException(
+                          QuizErrorCode.QUIZ_GENERATION_FAILED,
+                          type.name() + " 문제의 정답(answer)이 비어있습니다.");
+                    }
+                  }
+
+                  QuizQuestion question =
+                      QuizQuestion.create(
+                          activeQuizSet,
+                          orderNo++,
+                          type,
+                          quizDto.getQuestion(),
+                          quizDto.getCodeSnippet(),
+                          type == QuestionType.MULTIPLE_CHOICE ? null : quizDto.getAnswer(),
+                          null,
+                          null);
+                  quizQuestionRepository.save(question);
+
+                  if (type == QuestionType.MULTIPLE_CHOICE) {
+                    if (quizDto.getOptions() == null || quizDto.getOptions().isEmpty()) {
+                      throw new CustomException(
+                          QuizErrorCode.QUIZ_GENERATION_FAILED, "객관식 문제에 선택지가 없습니다.");
+                    }
+
+                    int correctChoiceCount = 0;
+                    int choiceOrderNo = 1;
+                    for (String optionText : quizDto.getOptions()) {
+                      boolean isCorrect =
+                          String.valueOf(choiceOrderNo - 1).equals(quizDto.getAnswer());
+                      if (isCorrect) correctChoiceCount++;
+                      QuizChoice choice =
+                          QuizChoice.create(question, choiceOrderNo++, optionText, isCorrect);
+                      quizChoiceRepository.save(choice);
+                    }
+                    if (correctChoiceCount != 1) {
+                      throw new CustomException(
+                          QuizErrorCode.QUIZ_GENERATION_FAILED, "객관식 문제의 정답 개수가 1개가 아닙니다.");
+                    }
+                  }
+                }
+
+                int generatedQuestionCount = orderNo - 1;
+                if (generatedQuestionCount < 1) {
                   throw new CustomException(
-                      QuizErrorCode.QUIZ_GENERATION_FAILED,
-                      type.name() + " 문제의 정답(answer)이 비어있습니다.");
+                      QuizErrorCode.QUIZ_GENERATION_FAILED, "AI가 생성한 퀴즈 문항이 없습니다.");
                 }
-              }
+                activeQuizSet.complete(generatedQuestionCount);
+                tagService.saveContentTags(activeQuizSet.getContent(), parsedResponse.getTags());
 
-              QuizQuestion question =
-                  QuizQuestion.create(
-                      activeQuizSet,
-                      orderNo++,
-                      type,
-                      quizDto.getQuestion(),
-                      quizDto.getCodeSnippet(),
-                      type == QuestionType.MULTIPLE_CHOICE ? null : quizDto.getAnswer(),
-                      null,
-                      null);
-              quizQuestionRepository.save(question);
-
-              if (type == QuestionType.MULTIPLE_CHOICE) {
-                if (quizDto.getOptions() == null || quizDto.getOptions().isEmpty()) {
-                  throw new CustomException(
-                      QuizErrorCode.QUIZ_GENERATION_FAILED, "객관식 문제에 선택지가 없습니다.");
-                }
-
-                int correctChoiceCount = 0;
-                int choiceOrderNo = 1;
-                for (String optionText : quizDto.getOptions()) {
-                  boolean isCorrect = String.valueOf(choiceOrderNo - 1).equals(quizDto.getAnswer());
-                  if (isCorrect) correctChoiceCount++;
-                  QuizChoice choice =
-                      QuizChoice.create(question, choiceOrderNo++, optionText, isCorrect);
-                  quizChoiceRepository.save(choice);
-                }
-                if (correctChoiceCount != 1) {
-                  throw new CustomException(
-                      QuizErrorCode.QUIZ_GENERATION_FAILED, "객관식 문제의 정답 개수가 1개가 아닙니다.");
-                }
-              }
-            }
-
-            int generatedQuestionCount = orderNo - 1;
-            if (generatedQuestionCount < 1) {
-              throw new CustomException(
-                  QuizErrorCode.QUIZ_GENERATION_FAILED, "AI가 생성한 퀴즈 문항이 없습니다.");
-            }
-            activeQuizSet.complete(generatedQuestionCount);
-            tagService.saveContentTags(activeQuizSet.getContent(), parsedResponse.getTags());
-
-            return QuizCreateResponse.from(activeQuizSet);
-          });
+                return QuizCreateResponse.from(activeQuizSet);
+              });
+      outcome = "success";
+      if (Boolean.TRUE.equals(quizSet.getIsBypassed())) {
+        Counter.builder(QUIZ_GENERATION_BYPASSES).register(meterRegistry).increment();
+      }
+      return response;
 
     } catch (RuntimeException e) {
       transactionTemplate.execute(
@@ -230,8 +250,12 @@ public class QuizGenerationService {
         throw (CustomException) e;
       }
       throw new CustomException(QuizErrorCode.QUIZ_GENERATION_FAILED, "퀴즈 생성 중 오류가 발생했습니다.", e);
+    } finally {
+      sample.stop(Timer.builder(QUIZ_GENERATION).tag("outcome", outcome).register(meterRegistry));
     }
   }
+
+  private record QuizSetStart(QuizSet quizSet, boolean retry) {}
 
   private ClaudeQuizResponseDto parseAndValidate(String jsonResponse) {
     try {
