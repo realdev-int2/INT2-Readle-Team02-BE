@@ -5,6 +5,7 @@ import com.realdev.readle.domain.quiz.dto.ClaudeGradingResponseDto;
 import com.realdev.readle.domain.quiz.entity.QuizQuestion;
 import com.realdev.readle.domain.quiz.exception.QuizErrorCode;
 import com.realdev.readle.global.exception.CustomException;
+import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.ai.ClaudeTemplate;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
@@ -65,30 +66,34 @@ public class QuizAiGradingService {
               return claudeClient.getGradingGeneratedText(systemPrompt, userPrompt);
             },
             ClaudeGradingResponseDto.class,
+            dto -> {
+              if (dto.getIsCorrect() == null) {
+                throw new CustomException(
+                    QuizErrorCode.QUIZ_GRADING_FAILED, "AI 응답에 isCorrect 필드가 누락되었습니다.");
+              }
+            },
             1, // retriesLeft
             timeoutDuration,
             gradingExecutor,
             QUIZ_GRADING,
             ex -> {
+              if (ex instanceof CustomException customEx) {
+                if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
+                  return new CustomException(
+                      QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 응답 JSON 파싱에 실패했습니다.", ex);
+                }
+                return customEx;
+              }
               if (ex instanceof JsonProcessingException) {
                 return new CustomException(
                     QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 응답 JSON 파싱에 실패했습니다.", ex);
-              }
-              if (ex instanceof CustomException) {
-                return (CustomException) ex;
               }
               return new CustomException(
                   QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 서비스 연동 중 오류가 발생했습니다.", ex);
             })
         .thenApply(
-            dto -> {
-              if (dto.getIsCorrect() == null) {
-                throw new CustomException(
-                    com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED,
-                    "AI 응답에 isCorrect 필드가 누락되었습니다.");
-              }
-              return new AiEvaluationResult(
-                  question, submittedAnswer, dto.getIsCorrect(), dto.getAiFeedback());
-            });
+            dto ->
+                new AiEvaluationResult(
+                    question, submittedAnswer, dto.getIsCorrect(), dto.getAiFeedback()));
   }
 }

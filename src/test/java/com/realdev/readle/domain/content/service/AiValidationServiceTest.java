@@ -304,7 +304,7 @@ class AiValidationServiceTest {
     aiValidationService.runAiValidation(content);
 
     // then
-    verify(claudeClient, times(1)).generateValidationMessage(anyString(), anyString());
+    verify(claudeClient, times(2)).generateValidationMessage(anyString(), anyString());
     verify(txHelper).updateValidationFailed(eq(301L), eq(ErrorCode.SCHEMA_INVALID));
   }
 

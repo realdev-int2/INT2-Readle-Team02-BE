@@ -177,7 +177,7 @@ class QuizAiGradingServiceTest {
         .extracting(Throwable::getCause)
         .extracting("errorCode")
         .isEqualTo(com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED);
-    verify(claudeClient, times(1)).getGradingGeneratedText(any(), any());
+    verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
   }
 
   @Test

@@ -1,8 +1,9 @@
 package com.realdev.readle.global.infrastructure.ai;
 
-import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.realdev.readle.global.exception.CustomException;
+import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.util.JsonExtractor;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -11,11 +12,13 @@ import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -37,10 +40,13 @@ public class ClaudeTemplate {
   public <T> T executeSync(
       Supplier<String> apiCall,
       Class<T> responseType,
+      Consumer<T> responseValidator,
       Function<Throwable, RuntimeException> errorMapper) {
     try {
       String rawResponse = apiCall.get();
-      return parseResponse(rawResponse, responseType, errorMapper);
+      T response = parseResponse(rawResponse, responseType, errorMapper);
+      responseValidator.accept(response);
+      return response;
     } catch (RuntimeException e) {
       throw errorMapper.apply(e);
     }
@@ -50,12 +56,17 @@ public class ClaudeTemplate {
   public <T> T executeWithSyncRetry(
       Supplier<String> apiCall,
       Class<T> responseType,
+      Consumer<T> responseValidator,
       int maxAttempts,
       long retryDelayMs,
       long timeoutSeconds,
       Executor executor,
       String purpose,
       Function<Throwable, RuntimeException> errorMapper) {
+
+    if (maxAttempts <= 0) {
+      throw errorMapper.apply(new IllegalArgumentException("maxAttempts는 0보다 커야 합니다."));
+    }
 
     Throwable lastException = null;
 
@@ -64,7 +75,9 @@ public class ClaudeTemplate {
         log.info("[AI_TEMPLATE] AI 호출 시도 ({}/{}) - purpose: {}", attempt, maxAttempts, purpose);
 
         String rawText = callWithTimeout(apiCall, timeoutSeconds, executor, purpose);
-        return parseResponse(rawText, responseType, errorMapper);
+        T response = parseResponse(rawText, responseType, errorMapper);
+        responseValidator.accept(response);
+        return response;
 
       } catch (RuntimeException e) {
         log.warn(
@@ -86,6 +99,7 @@ public class ClaudeTemplate {
   public <T> CompletableFuture<T> executeAsyncWithRetry(
       Supplier<String> apiCall,
       Class<T> responseType,
+      Consumer<T> responseValidator,
       int retriesLeft,
       Duration timeout,
       Executor executor,
@@ -100,7 +114,9 @@ public class ClaudeTemplate {
           CompletableFuture.supplyAsync(
               () -> {
                 String rawResponse = apiCall.get();
-                return parseResponse(rawResponse, responseType, errorMapper);
+                T response = parseResponse(rawResponse, responseType, errorMapper);
+                responseValidator.accept(response);
+                return response;
               },
               executor);
     } catch (RejectedExecutionException e) {
@@ -129,11 +145,20 @@ public class ClaudeTemplate {
             Counter.builder(AI_RETRIES).tag("purpose", purpose).register(meterRegistry).increment();
             log.warn("[AI_TEMPLATE] AI 비동기 호출 실패. 재시도를 진행합니다. 남은 횟수: {}", retriesLeft, ex);
             return executeAsyncWithRetry(
-                apiCall, responseType, retriesLeft - 1, timeout, executor, purpose, errorMapper);
+                apiCall,
+                responseType,
+                responseValidator,
+                retriesLeft - 1,
+                timeout,
+                executor,
+                purpose,
+                errorMapper);
           } else {
             log.error("[AI_TEMPLATE] AI 비동기 호출 최종 실패.", ex);
+            Throwable actualError =
+                (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
             CompletableFuture<T> failedFuture = new CompletableFuture<>();
-            failedFuture.completeExceptionally(errorMapper.apply(ex));
+            failedFuture.completeExceptionally(errorMapper.apply(actualError));
             return failedFuture;
           }
         });
@@ -157,11 +182,12 @@ public class ClaudeTemplate {
     } catch (TimeoutException e) {
       if (future != null) future.cancel(true);
       outcome = "timeout";
-      throw new RuntimeException("AI 호출 시간이 초과되었습니다.", e);
+      throw new CustomException(GlobalErrorCode.AI_TIMEOUT, "AI 호출 시간이 초과되었습니다.", e);
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
       if (isTimeout(cause)) {
         outcome = "timeout";
+        throw new CustomException(GlobalErrorCode.AI_TIMEOUT, "AI 호출 시간이 초과되었습니다.", cause);
       }
       if (cause instanceof RuntimeException) {
         throw (RuntimeException) cause;
@@ -184,7 +210,7 @@ public class ClaudeTemplate {
     try {
       String cleanJson = JsonExtractor.extractJson(rawResponse);
       if (cleanJson == null || cleanJson.isEmpty()) {
-        throw new JsonParseException(null, "AI 응답에서 유효한 JSON을 찾을 수 없습니다.");
+        throw new CustomException(GlobalErrorCode.AI_PARSING_ERROR, "AI 응답에서 유효한 JSON을 찾을 수 없습니다.");
       }
       return objectMapper.readValue(cleanJson, responseType);
     } catch (JsonProcessingException e) {

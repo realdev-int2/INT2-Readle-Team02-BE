@@ -15,8 +15,6 @@ import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.ai.ClaudeTemplate;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
-import java.net.SocketTimeoutException;
-import java.net.http.HttpTimeoutException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -78,37 +76,34 @@ public class AiValidationService {
                 return extractText(rawResponse);
               },
               ClaudeValidationResponse.class,
+              res -> res.validateSchema(),
               properties.maxAttempts(),
               properties.retryDelayMs(),
               properties.callTimeoutSeconds(),
               claudeCallExecutor,
               CONTENT_VALIDATION,
               e -> {
-                if (e.getMessage() != null && e.getMessage().contains("시간이 초과")) {
-                  return new CustomException(
-                      ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 호출 시간 초과", e);
-                }
-                if (e instanceof ResourceAccessException) {
-                  if (e.getCause() instanceof SocketTimeoutException
-                      || e.getCause() instanceof HttpTimeoutException
-                      || (e.getMessage() != null && e.getMessage().contains("timed out"))) {
+                if (e instanceof CustomException customEx) {
+                  if (customEx.getErrorCode() == GlobalErrorCode.AI_TIMEOUT) {
                     return new CustomException(
-                        ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 호출 시간 초과", e);
+                        ContentErrorCode.AI_VALIDATION_TIMEOUT, "Claude API 호출 시간이 초과되었습니다.", e);
                   }
-                  return new CustomException(
-                      ContentErrorCode.AI_VALIDATION_SERVICE_ERROR,
-                      "Claude API 호출 중 오류가 발생했습니다.",
-                      e);
-                }
-                if (e instanceof RestClientResponseException) {
-                  return new CustomException(
-                      ContentErrorCode.AI_VALIDATION_SERVICE_ERROR,
-                      "Claude API 호출 중 오류가 발생했습니다.",
-                      e);
+                  if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
+                    return new CustomException(
+                        ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE, "AI 응답 파싱 실패", e);
+                  }
+                  return customEx;
                 }
                 if (e instanceof JsonProcessingException) {
                   return new CustomException(
                       ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE, "AI 응답 파싱 실패", e);
+                }
+                if (e instanceof ResourceAccessException
+                    || e instanceof RestClientResponseException) {
+                  return new CustomException(
+                      ContentErrorCode.AI_VALIDATION_SERVICE_ERROR,
+                      "Claude API 호출 중 오류가 발생했습니다.",
+                      e);
                 }
                 if (e instanceof CustomException) {
                   return (CustomException) e;
@@ -116,7 +111,6 @@ public class AiValidationService {
                 return new CustomException(GlobalErrorCode.SERVER_ERROR, "AI 호출 중 오류가 발생했습니다.", e);
               });
 
-      response.validateSchema();
       txHelper.updateValidationSuccess(validationId, response);
       log.info(
           "[AI_VALIDATION] AI 검증 최종 확정 완료. Validation ID: {}, 판정: {}",

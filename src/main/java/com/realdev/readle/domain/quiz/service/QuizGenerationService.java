@@ -18,6 +18,7 @@ import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
 import com.realdev.readle.domain.tag.service.TagService;
 import com.realdev.readle.global.exception.CustomException;
+import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.ai.ClaudeTemplate;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
@@ -159,19 +160,22 @@ public class QuizGenerationService {
           claudeTemplate.executeSync(
               () -> claudeClient.getGeneratedText(systemPrompt, userPrompt),
               ClaudeQuizResponseDto.class,
+              res -> validateGeneratedQuizRules(res),
               e -> {
+                if (e instanceof CustomException customEx) {
+                  if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
+                    return new CustomException(
+                        QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", e);
+                  }
+                  return customEx;
+                }
                 if (e instanceof JsonProcessingException) {
                   return new CustomException(
                       QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", e);
                 }
-                if (e instanceof CustomException) {
-                  return (CustomException) e;
-                }
                 return new CustomException(
                     QuizErrorCode.QUIZ_GENERATION_FAILED, "퀴즈 생성 중 오류가 발생했습니다.", e);
               });
-
-      validateGeneratedQuizRules(parsedResponse);
 
       // 3. 문제 및 선택지 엔티티 저장 및 완료 (Transaction 분리)
       QuizCreateResponse response =
