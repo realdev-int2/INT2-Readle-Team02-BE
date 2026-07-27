@@ -130,8 +130,16 @@ public class ClaudeTemplate {
     }
 
     CompletableFuture<T> submittedTask = task;
-    CompletableFuture<T> timedTask =
-        submittedTask.orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    CompletableFuture<T> timedTask = new CompletableFuture<>();
+    submittedTask.whenComplete(
+        (res, ex) -> {
+          if (ex != null) {
+            timedTask.completeExceptionally(ex);
+          } else {
+            timedTask.complete(res);
+          }
+        });
+    timedTask.orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
     timedTask.whenComplete(
         (result, error) ->
