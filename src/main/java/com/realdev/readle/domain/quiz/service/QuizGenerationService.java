@@ -28,9 +28,9 @@ import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeoutException;
-import org.springframework.beans.factory.annotation.Qualifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -55,9 +55,9 @@ public class QuizGenerationService {
   private final MeterRegistry meterRegistry;
 
   private final TransactionTemplate transactionTemplate;
-  @Qualifier("claudeCallExecutor")
-  private final Executor claudeCallExecutor;
-  
+
+  @Qualifier("claudeCallExecutor") private final Executor claudeCallExecutor;
+
   public QuizCreateResponse createQuizSet(Long sourceValidationId) {
     Timer.Sample sample = Timer.start(meterRegistry);
     ContentValidation validation;
@@ -297,7 +297,9 @@ public class QuizGenerationService {
     if (response.getQuizzes().size() > 5) {
       throw new CustomException(QuizErrorCode.QUIZ_GENERATION_FAILED, "생성된 문제 수가 1~5개 범위를 벗어납니다.");
     }
-    if (response.getTags() == null || response.getTags().isEmpty() || response.getTags().size() > 3) {
+    if (response.getTags() == null
+        || response.getTags().isEmpty()
+        || response.getTags().size() > 3) {
       throw new CustomException(
           QuizErrorCode.QUIZ_GENERATION_FAILED, "생성된 태그 수가 1~3개 범위를 벗어나거나 비어있습니다.");
     }
