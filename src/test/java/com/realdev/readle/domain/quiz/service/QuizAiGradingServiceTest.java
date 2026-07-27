@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.domain.quiz.entity.QuizQuestion;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
+import com.realdev.readle.global.infrastructure.ai.ClaudeTemplate;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -36,16 +37,17 @@ class QuizAiGradingServiceTest {
 
   @Mock private ClaudeClient claudeClient;
   @Mock private PromptLoader promptLoader;
-  @Mock private ObjectMapper objectMapper;
+  private ClaudeTemplate claudeTemplate;
   @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   private QuizQuestion question;
+  private ObjectMapper objectMapper;
 
   @BeforeEach
   void setUp() {
-    // We inject a real ObjectMapper to test Jackson annotations (@JsonIgnoreProperties etc)
     objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-    ReflectionTestUtils.setField(quizAiGradingService, "objectMapper", objectMapper);
+    claudeTemplate = new ClaudeTemplate(objectMapper, meterRegistry);
+    ReflectionTestUtils.setField(quizAiGradingService, "claudeTemplate", claudeTemplate);
 
     // Use a multi-thread executor so retry tasks execute immediately without queueing delay
     ReflectionTestUtils.setField(
@@ -175,7 +177,7 @@ class QuizAiGradingServiceTest {
         .extracting(Throwable::getCause)
         .extracting("errorCode")
         .isEqualTo(com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED);
-    verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
+    verify(claudeClient, times(1)).getGradingGeneratedText(any(), any());
   }
 
   @Test

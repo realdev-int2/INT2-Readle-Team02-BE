@@ -9,7 +9,9 @@ import com.realdev.readle.domain.content.dto.response.ClaudeValidationResponse;
 import com.realdev.readle.domain.content.entity.Content;
 import com.realdev.readle.domain.content.entity.ErrorCode;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
+import com.realdev.readle.global.infrastructure.ai.ClaudeTemplate;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
+import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -40,14 +42,19 @@ class AiValidationServiceTest {
     when(properties.retryDelayMs()).thenReturn(100L);
     when(properties.callTimeoutSeconds()).thenReturn(5L);
     ObjectMapper objectMapper = new ObjectMapper();
+    meterRegistry = new SimpleMeterRegistry();
+    ClaudeTemplate claudeTemplate = new ClaudeTemplate(objectMapper, meterRegistry);
+    PromptLoader promptLoader = mock(PromptLoader.class);
+    when(promptLoader.loadPrompt(
+            org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyMap()))
+        .thenReturn("Test system prompt");
 
     // 동기식 실행을 보장하여 비동기 스레드 풀 모킹
     Executor syncExecutor = Runnable::run;
-    meterRegistry = new SimpleMeterRegistry();
 
     aiValidationService =
         new AiValidationService(
-            txHelper, claudeClient, objectMapper, properties, meterRegistry, syncExecutor);
+            txHelper, claudeClient, claudeTemplate, promptLoader, properties, syncExecutor);
   }
 
   // =========================================================================
@@ -236,14 +243,14 @@ class AiValidationServiceTest {
         command -> {
           throw new RejectedExecutionException("saturated");
         };
+    ClaudeTemplate claudeTemplate = new ClaudeTemplate(new ObjectMapper(), meterRegistry);
+    PromptLoader promptLoader = mock(PromptLoader.class);
+    when(promptLoader.loadPrompt(
+            org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyMap()))
+        .thenReturn("Test system prompt");
     AiValidationService rejectingService =
         new AiValidationService(
-            txHelper,
-            claudeClient,
-            new ObjectMapper(),
-            properties,
-            meterRegistry,
-            rejectingExecutor);
+            txHelper, claudeClient, claudeTemplate, promptLoader, properties, rejectingExecutor);
     Content content = Content.fromText(null, "제목", "가".repeat(350));
     when(txHelper.createPendingValidation(content.getId())).thenReturn(250L);
 
@@ -297,7 +304,7 @@ class AiValidationServiceTest {
     aiValidationService.runAiValidation(content);
 
     // then
-    verify(claudeClient, times(2)).generateValidationMessage(anyString(), anyString());
+    verify(claudeClient, times(1)).generateValidationMessage(anyString(), anyString());
     verify(txHelper).updateValidationFailed(eq(301L), eq(ErrorCode.SCHEMA_INVALID));
   }
 
