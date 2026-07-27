@@ -28,10 +28,10 @@ import com.realdev.readle.global.exception.GlobalErrorCode;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
-import java.util.Optional;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -123,6 +123,9 @@ public class QuizSolveService {
 
       if (preAttempt.getStatus()
           != com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS) {
+        if (preAttempt.getStatus() == com.realdev.readle.domain.quiz.entity.AttemptStatus.GRADING) {
+          throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+        }
         Optional<QuizResult> existingResult = quizResultRepository.findByQuizAttemptId(attemptId);
         if (existingResult.isPresent()) {
           throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
@@ -219,6 +222,10 @@ public class QuizSolveService {
 
                 if (attempt.getStatus()
                     != com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS) {
+                  if (attempt.getStatus()
+                      == com.realdev.readle.domain.quiz.entity.AttemptStatus.GRADING) {
+                    throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+                  }
                   Optional<QuizResult> existingResult =
                       quizResultRepository.findByQuizAttemptId(attemptId);
                   if (existingResult.isPresent()) {

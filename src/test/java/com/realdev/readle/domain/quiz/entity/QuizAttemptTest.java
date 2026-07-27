@@ -1,12 +1,9 @@
 package com.realdev.readle.domain.quiz.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import com.realdev.readle.domain.member.entity.Member;
-import com.realdev.readle.domain.quiz.exception.QuizErrorCode;
-import com.realdev.readle.global.exception.CustomException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

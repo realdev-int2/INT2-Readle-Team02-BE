@@ -235,7 +235,8 @@ class QuizSolveServiceTest {
     lenient().when(submittedAttempt.getMember()).thenReturn(member);
     lenient().when(submittedAttempt.getStatus()).thenReturn(AttemptStatus.SUBMITTED);
 
-    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(submittedAttempt));
+    given(quizAttemptRepository.findWithDetailsById(200L))
+        .willReturn(Optional.of(submittedAttempt));
     given(quizResultRepository.findByQuizAttemptId(200L))
         .willReturn(Optional.of(mock(QuizResult.class)));
 
@@ -255,10 +256,13 @@ class QuizSolveServiceTest {
     lenient().when(submittedAttempt.getQuizSet()).thenReturn(quizSet);
     lenient().when(submittedAttempt.getMember()).thenReturn(member);
     lenient().when(submittedAttempt.getStatus()).thenReturn(AttemptStatus.SUBMITTED);
-    lenient().when(submittedAttempt.getStartedAt()).thenReturn(java.time.LocalDateTime.now().minusMinutes(5));
+    lenient()
+        .when(submittedAttempt.getStartedAt())
+        .thenReturn(java.time.LocalDateTime.now().minusMinutes(5));
     lenient().when(submittedAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
 
-    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(submittedAttempt));
+    given(quizAttemptRepository.findWithDetailsById(200L))
+        .willReturn(Optional.of(submittedAttempt));
     given(quizResultRepository.findByQuizAttemptId(200L)).willReturn(Optional.empty());
     given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
         .willReturn(List.of(question1));
@@ -277,6 +281,29 @@ class QuizSolveServiceTest {
 
     assertThat(response).isNotNull();
     verify(submittedAttempt).resetToInProgress();
+
+    org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(quizAnswerRepository);
+    inOrder.verify(quizAnswerRepository).deleteByQuizAttemptId(200L);
+    inOrder.verify(quizAnswerRepository, times(2)).saveAll(any());
+  }
+
+  @Test
+  @DisplayName("Attempt 상태가 GRADING인 진행 중 시도 재제출 시 ATTEMPT_ALREADY_SUBMITTED 발생 및 AI 서비스 미호출")
+  void submitAnswers_GradingStatus_RejectsWithoutAiCall() {
+    QuizAttempt gradingAttempt = mock(QuizAttempt.class);
+    lenient().when(gradingAttempt.getMember()).thenReturn(member);
+    lenient().when(gradingAttempt.getStatus()).thenReturn(AttemptStatus.GRADING);
+
+    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(gradingAttempt));
+
+    QuizSubmitRequest request = new QuizSubmitRequest();
+
+    assertThatThrownBy(() -> quizSolveService.submitAnswers(200L, "test-uuid", request))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+
+    verify(quizAiGradingService, times(0)).gradeAnswerAsync(any(), any(), any());
   }
 
   @Test
@@ -684,6 +711,22 @@ class QuizSolveServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.ATTEMPT_NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName(
+      "getAttemptResult 실패 - SUBMITTED 시도는 존재하지만 연결된 QuizResult가 없으면 RESULT_REPORT_NOT_FOUND 발생")
+  void getAttemptResult_SubmittedWithoutQuizResult_ThrowsNotFound() {
+    QuizAttempt submittedAttempt = mock(QuizAttempt.class);
+    lenient().when(submittedAttempt.getMember()).thenReturn(member);
+    lenient().when(submittedAttempt.getStatus()).thenReturn(AttemptStatus.SUBMITTED);
+    given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(submittedAttempt));
+    given(quizResultRepository.findByQuizAttemptId(200L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> quizSolveService.getAttemptResult("test-uuid", 200L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.RESULT_REPORT_NOT_FOUND);
   }
 
   @Test
