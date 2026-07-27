@@ -12,6 +12,7 @@ import com.realdev.readle.global.security.SecurityProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -59,7 +60,7 @@ public class AuthController {
     try {
       AuthService.StartResult result = authService.start(provider, returnTo);
       return ResponseEntity.status(HttpStatus.FOUND)
-          .location(java.net.URI.create(result.authorizationUrl()))
+          .location(URI.create(result.authorizationUrl()))
           .header(
               HttpHeaders.SET_COOKIE,
               OAuthStateCookie.create(result.state(), properties.stateMinutes()).toString())
@@ -94,7 +95,7 @@ public class AuthController {
     try {
       AuthService.CallbackResult result = authService.callback(provider, code, state);
       return ResponseEntity.status(HttpStatus.FOUND)
-          .location(java.net.URI.create(result.returnTo()))
+          .location(URI.create(result.returnTo()))
           .header(
               HttpHeaders.SET_COOKIE,
               RefreshTokenCookie.create(result.refreshToken(), properties.refreshTokenDays())
@@ -162,7 +163,7 @@ public class AuthController {
       location += "&returnTo=" + URLEncoder.encode(returnTo, StandardCharsets.UTF_8);
     }
     return ResponseEntity.status(HttpStatus.FOUND)
-        .location(java.net.URI.create(location))
+        .location(URI.create(location))
         .header(HttpHeaders.SET_COOKIE, OAuthStateCookie.delete().toString())
         .build();
   }

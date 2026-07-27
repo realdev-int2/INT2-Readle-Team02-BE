@@ -45,6 +45,9 @@ class QuizAiGradingServiceTest {
 
   @BeforeEach
   void setUp() {
+    meterRegistry = new SimpleMeterRegistry();
+
+    // We inject a real ObjectMapper to test Jackson annotations (@JsonIgnoreProperties etc)
     objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
     claudeTemplate = new ClaudeTemplate(objectMapper, meterRegistry);
     ReflectionTestUtils.setField(quizAiGradingService, "claudeTemplate", claudeTemplate);
