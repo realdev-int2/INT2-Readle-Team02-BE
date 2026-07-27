@@ -125,7 +125,11 @@ class QuizConcurrencyTest {
               quizGenerationService.createQuizSet(validationId);
               successCount.incrementAndGet();
             } catch (CustomException e) {
-              failCount.incrementAndGet();
+              if (e.getErrorCode()
+                  == com.realdev.readle.domain.quiz.exception.QuizErrorCode
+                      .QUIZ_GENERATION_IN_PROGRESS) {
+                failCount.incrementAndGet();
+              }
             } finally {
               latch.countDown();
             }

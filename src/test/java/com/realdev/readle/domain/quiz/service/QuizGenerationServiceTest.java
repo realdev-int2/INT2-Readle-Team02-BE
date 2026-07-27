@@ -205,6 +205,26 @@ class QuizGenerationServiceTest {
   }
 
   @Test
+  @DisplayName(
+      "기존에 COMPLETED 또는 GENERATING 상태인 퀴즈 세트가 존재하면 QUIZ_GENERATION_IN_PROGRESS 예외(HTTP 409)가"
+          + " 발생한다")
+  void createQuizSet_ThrowsQuizGenerationInProgress_WhenQuizSetAlreadyExistsAndNotFailed() {
+    lenient().when(validation.getStatus()).thenReturn(ValidationStatus.PASSED);
+    lenient()
+        .when(contentValidationRepository.findByIdWithContent(100L))
+        .thenReturn(Optional.of(validation));
+
+    QuizSet existingQuizSet = QuizSet.create(content, validation, false);
+    given(quizSetRepository.findForUpdateBySourceValidationId(100L))
+        .willReturn(Optional.of(existingQuizSet));
+
+    assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS);
+  }
+
+  @Test
   @DisplayName("기존에 FAILED 상태인 퀴즈 세트 재시도 중 AI 호출에 실패하면, retry() 후 다시 FAILED로 상태가 복구된다")
   void createQuizSet_ReusesFailedQuizSet_AndFailsAgain() {
     lenient().when(validation.getStatus()).thenReturn(ValidationStatus.PASSED);

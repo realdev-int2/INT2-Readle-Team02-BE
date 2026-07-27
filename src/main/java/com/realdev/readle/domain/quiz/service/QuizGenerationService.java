@@ -70,10 +70,19 @@ public class QuizGenerationService {
       quizSetStart =
           transactionTemplate.execute(
               status -> {
-                QuizSet existing =
-                    quizSetRepository
-                        .findForUpdateBySourceValidationId(sourceValidationId)
-                        .orElse(null);
+                QuizSet existing;
+                try {
+                  existing =
+                      quizSetRepository
+                          .findForUpdateBySourceValidationId(sourceValidationId)
+                          .orElse(null);
+                } catch (org.springframework.dao.PessimisticLockingFailureException e) {
+                  throw new CustomException(
+                      QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS,
+                      "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.",
+                      e);
+                }
+
                 if (existing != null) {
                   if (existing.getStatus() == QuizSetStatus.FAILED) {
                     existing.retry();
@@ -82,7 +91,7 @@ public class QuizGenerationService {
                     return new QuizSetStart(quizSetRepository.saveAndFlush(existing), true);
                   } else {
                     throw new CustomException(
-                        QuizErrorCode.QUIZ_GENERATION_FAILED,
+                        QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS,
                         "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.");
                   }
                 }
@@ -114,7 +123,7 @@ public class QuizGenerationService {
                   return new QuizSetStart(quizSetRepository.saveAndFlush(newQuizSet), false);
                 } catch (DataIntegrityViolationException e) {
                   throw new CustomException(
-                      QuizErrorCode.QUIZ_GENERATION_FAILED,
+                      QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS,
                       "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.",
                       e);
                 }
