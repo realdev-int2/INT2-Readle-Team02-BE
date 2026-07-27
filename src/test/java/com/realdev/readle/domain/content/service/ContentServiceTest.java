@@ -239,11 +239,18 @@ class ContentServiceTest {
     when(memberRepository.findByUuid(memberUuid)).thenReturn(Optional.of(mockMember));
     when(contentRepository.save(any(Content.class))).thenReturn(savedContent);
 
+    long beforeRequest = System.nanoTime();
     ContentCreateResponse response = contentService.createContent(request, memberUuid);
+    long afterRequest = System.nanoTime();
 
     assertThat(response.contentId()).isEqualTo(42L);
     assertThat(response.validationStatus()).isEqualTo(ValidationStatus.PENDING);
-    verify(eventPublisher).publishEvent(new ContentCreatedEvent(42L, memberUuid));
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    ContentCreatedEvent event = (ContentCreatedEvent) eventCaptor.getValue();
+    assertThat(event.contentId()).isEqualTo(42L);
+    assertThat(event.memberUuid()).isEqualTo(memberUuid);
+    assertThat(event.requestedAtNanos()).isBetween(beforeRequest, afterRequest);
   }
 
   @Test
@@ -786,9 +793,16 @@ class ContentServiceTest {
     when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
         .thenReturn(Optional.of(validation));
 
+    long beforeRequest = System.nanoTime();
     ContentValidationResponse response = contentService.retryValidation(1L, memberUuid);
+    long afterRequest = System.nanoTime();
 
     assertThat(response.status()).isEqualTo(ValidationStatus.PENDING);
-    verify(eventPublisher).publishEvent(new ContentCreatedEvent(1L, memberUuid));
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    ContentCreatedEvent event = (ContentCreatedEvent) eventCaptor.getValue();
+    assertThat(event.contentId()).isEqualTo(1L);
+    assertThat(event.memberUuid()).isEqualTo(memberUuid);
+    assertThat(event.requestedAtNanos()).isBetween(beforeRequest, afterRequest);
   }
 }

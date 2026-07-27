@@ -46,6 +46,7 @@ public class ContentService {
 
   @Transactional
   public ContentCreateResponse createContent(ContentCreateRequest request, String memberUuid) {
+    long requestedAtNanos = System.nanoTime();
     validateAuthentication(memberUuid);
     validateCreateRequest(request);
 
@@ -59,7 +60,8 @@ public class ContentService {
     Content content = buildContent(request, member);
     Content saved = contentRepository.save(content);
 
-    eventPublisher.publishEvent(new ContentCreatedEvent(saved.getId(), memberUuid));
+    eventPublisher.publishEvent(
+        new ContentCreatedEvent(saved.getId(), memberUuid, requestedAtNanos));
 
     return new ContentCreateResponse(saved.getId(), ValidationStatus.PENDING);
   }
@@ -101,6 +103,7 @@ public class ContentService {
 
   @Transactional
   public ContentValidationResponse retryValidation(Long contentId, String memberUuid) {
+    long requestedAtNanos = System.nanoTime();
     validateAuthentication(memberUuid);
     Content content = getOwnedContentWithLock(contentId, memberUuid);
 
@@ -124,7 +127,7 @@ public class ContentService {
     contentValidationRepository.save(pendingValidation);
 
     // 비동기 검증 파이프라인 재트리거 (실제 가드레일 -> AI 로직 수행)
-    eventPublisher.publishEvent(new ContentCreatedEvent(contentId, memberUuid));
+    eventPublisher.publishEvent(new ContentCreatedEvent(contentId, memberUuid, requestedAtNanos));
 
     return new ContentValidationResponse(
         contentId,

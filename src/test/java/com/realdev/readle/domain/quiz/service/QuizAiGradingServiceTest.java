@@ -14,13 +14,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.domain.quiz.entity.QuizQuestion;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -32,6 +37,7 @@ class QuizAiGradingServiceTest {
   @Mock private ClaudeClient claudeClient;
   @Mock private PromptLoader promptLoader;
   @Mock private ObjectMapper objectMapper;
+  @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   private QuizQuestion question;
 
@@ -103,6 +109,31 @@ class QuizAiGradingServiceTest {
     assertThat(result.aiFeedback()).isEqualTo("틀림");
     // getGradingGeneratedText가 재시도 포함 총 2회 호출되어야 함
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
+    assertThat(
+            meterRegistry
+                .find("readle.ai.client.requests")
+                .tags("purpose", "quiz_grading", "outcome", "success")
+                .timers()
+                .stream()
+                .mapToLong(io.micrometer.core.instrument.Timer::count)
+                .sum())
+        .isEqualTo(1);
+    assertThat(
+            meterRegistry
+                .find("readle.ai.client.requests")
+                .tags("purpose", "quiz_grading", "outcome", "failure")
+                .timers()
+                .stream()
+                .mapToLong(io.micrometer.core.instrument.Timer::count)
+                .sum())
+        .isEqualTo(1);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.retries")
+                .tag("purpose", "quiz_grading")
+                .counter()
+                .count())
+        .isEqualTo(1);
   }
 
   @Test
@@ -173,5 +204,46 @@ class QuizAiGradingServiceTest {
 
     // 첫 호출에서 타임아웃나면 재시도 1번 더 하므로 2번 호출됨 (재시도도 타임아웃 남)
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "quiz_grading", "outcome", "timeout")
+                .timer()
+                .count())
+        .isEqualTo(2);
+  }
+
+  @Test
+  void gradeAnswerAsync_ExecutorSaturationDuringRetry() {
+    given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
+    given(claudeClient.getGradingGeneratedText(any(), any()))
+        .willThrow(new RuntimeException("API Error"));
+    AtomicInteger submissions = new AtomicInteger();
+    ReflectionTestUtils.setField(
+        quizAiGradingService,
+        "gradingExecutor",
+        (java.util.concurrent.Executor)
+            command -> {
+              if (submissions.incrementAndGet() == 1) {
+                command.run();
+                return;
+              }
+              throw new RejectedExecutionException("saturated");
+            });
+
+    CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
+        quizAiGradingService.gradeAnswerAsync(question, "오답", "본문 텍스트");
+
+    assertThatThrownBy(future::join)
+        .isInstanceOf(java.util.concurrent.CompletionException.class)
+        .hasCauseInstanceOf(com.realdev.readle.global.exception.CustomException.class);
+    verify(claudeClient).getGradingGeneratedText(any(), any());
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "quiz_grading", "outcome", "failure")
+                .timer()
+                .count())
+        .isEqualTo(2);
   }
 }

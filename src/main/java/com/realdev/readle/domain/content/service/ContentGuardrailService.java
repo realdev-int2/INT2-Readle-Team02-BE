@@ -33,12 +33,12 @@ public class ContentGuardrailService {
     Optional<RejectReasonCode> rejectReasonCode = staticGuardrailValidator.validate(content);
     if (rejectReasonCode.isPresent()) {
       saveStaticGuardrailResult(content, rejectReasonCode.get());
-      return GuardrailResult.done();
+      return GuardrailResult.done(ValidationStatus.REJECTED, ValidationMethod.STATIC_GUARDRAIL);
     }
 
     if (whitelistValidator.isEligibleForWhitelist(content)) {
       saveWhitelistResult(content);
-      return GuardrailResult.done();
+      return GuardrailResult.done(ValidationStatus.PASSED, ValidationMethod.WHITELIST);
     }
 
     return GuardrailResult.needsAi(content);
@@ -91,13 +91,17 @@ public class ContentGuardrailService {
             () -> log.warn("[GUARDRAIL] 검증 실패 기록 중 컨텐츠 조회 실패. contentId={}", contentId));
   }
 
-  public record GuardrailResult(boolean needsAiValidation, Content content) {
-    static GuardrailResult done() {
-      return new GuardrailResult(false, null);
+  public record GuardrailResult(
+      boolean needsAiValidation,
+      Content content,
+      ValidationStatus status,
+      ValidationMethod validationMethod) {
+    static GuardrailResult done(ValidationStatus status, ValidationMethod validationMethod) {
+      return new GuardrailResult(false, null, status, validationMethod);
     }
 
     static GuardrailResult needsAi(Content content) {
-      return new GuardrailResult(true, content);
+      return new GuardrailResult(true, content, null, null);
     }
   }
 }

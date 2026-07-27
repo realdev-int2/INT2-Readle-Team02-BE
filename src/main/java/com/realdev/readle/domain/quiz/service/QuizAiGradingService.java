@@ -8,11 +8,16 @@ import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import com.realdev.readle.global.util.JsonExtractor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,10 +27,15 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class QuizAiGradingService {
 
+  private static final String AI_REQUESTS = "readle.ai.client.requests";
+  private static final String AI_RETRIES = "readle.ai.client.retries";
+  private static final String QUIZ_GRADING = "quiz_grading";
+
   private final ClaudeClient claudeClient;
   private final PromptLoader promptLoader;
   private final ObjectMapper objectMapper;
   private final Executor gradingExecutor;
+  private final MeterRegistry meterRegistry;
   private Duration timeoutDuration = Duration.ofSeconds(7);
 
   public record AiEvaluationResult(
@@ -38,29 +48,62 @@ public class QuizAiGradingService {
 
   private CompletableFuture<AiEvaluationResult> executeWithTimeoutAndRetry(
       QuizQuestion question, String submittedAnswer, String articleText, int retriesLeft) {
-    CompletableFuture<AiEvaluationResult> task =
-        CompletableFuture.supplyAsync(
-            () -> doGrade(question, submittedAnswer, articleText, retriesLeft < 1),
-            gradingExecutor);
+    Timer.Sample sample = Timer.start(meterRegistry);
+    CompletableFuture<AiEvaluationResult> task;
+    try {
+      task =
+          CompletableFuture.supplyAsync(
+              () -> doGrade(question, submittedAnswer, articleText, retriesLeft < 1),
+              gradingExecutor);
+    } catch (RejectedExecutionException e) {
+      task = CompletableFuture.failedFuture(e);
+    }
 
-    return task.orTimeout(timeoutDuration.toMillis(), TimeUnit.MILLISECONDS)
-        .exceptionallyCompose(
-            ex -> {
-              task.cancel(true);
-              if (retriesLeft > 0) {
-                log.warn("AI 채점 실패(타임아웃 또는 오류). 재시도를 진행합니다. 남은 횟수: {}", retriesLeft, ex);
-                return executeWithTimeoutAndRetry(
-                    question, submittedAnswer, articleText, retriesLeft - 1);
-              } else {
-                log.error("AI 채점 최종 실패. 예외를 전파하여 전체 롤백 처리합니다.", ex);
-                CompletableFuture<AiEvaluationResult> failedFuture = new CompletableFuture<>();
-                failedFuture.completeExceptionally(
-                    new CustomException(
-                        com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED,
-                        "AI 채점 서비스 연동 중 오류가 발생했습니다."));
-                return failedFuture;
-              }
-            });
+    CompletableFuture<AiEvaluationResult> submittedTask = task;
+    CompletableFuture<AiEvaluationResult> timedTask =
+        submittedTask.orTimeout(timeoutDuration.toMillis(), TimeUnit.MILLISECONDS);
+    timedTask.whenComplete(
+        (result, error) ->
+            sample.stop(
+                Timer.builder(AI_REQUESTS)
+                    .tags(
+                        "purpose",
+                        QUIZ_GRADING,
+                        "outcome",
+                        error == null ? "success" : (isTimeout(error) ? "timeout" : "failure"))
+                    .register(meterRegistry)));
+
+    return timedTask.exceptionallyCompose(
+        ex -> {
+          submittedTask.cancel(true);
+          if (retriesLeft > 0) {
+            Counter.builder(AI_RETRIES)
+                .tag("purpose", QUIZ_GRADING)
+                .register(meterRegistry)
+                .increment();
+            log.warn("AI 채점 실패(타임아웃 또는 오류). 재시도를 진행합니다. 남은 횟수: {}", retriesLeft, ex);
+            return executeWithTimeoutAndRetry(
+                question, submittedAnswer, articleText, retriesLeft - 1);
+          } else {
+            log.error("AI 채점 최종 실패. 예외를 전파하여 전체 롤백 처리합니다.", ex);
+            CompletableFuture<AiEvaluationResult> failedFuture = new CompletableFuture<>();
+            failedFuture.completeExceptionally(
+                new CustomException(
+                    com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED,
+                    "AI 채점 서비스 연동 중 오류가 발생했습니다."));
+            return failedFuture;
+          }
+        });
+  }
+
+  private boolean isTimeout(Throwable throwable) {
+    Throwable current = throwable;
+    while (current.getCause() != null
+        && (current instanceof java.util.concurrent.CompletionException
+            || current instanceof java.util.concurrent.ExecutionException)) {
+      current = current.getCause();
+    }
+    return current instanceof TimeoutException;
   }
 
   private AiEvaluationResult doGrade(

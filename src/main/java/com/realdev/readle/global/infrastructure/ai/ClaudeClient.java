@@ -8,6 +8,11 @@ import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeRequest;
 import com.realdev.readle.global.infrastructure.ai.dto.ClaudeResponse;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,30 +27,40 @@ import org.springframework.web.client.RestClientResponseException;
 public class ClaudeClient {
 
   private static final Logger log = LoggerFactory.getLogger(ClaudeClient.class);
+  private static final String AI_REQUESTS = "readle.ai.client.requests";
+  private static final String AI_RETRIES = "readle.ai.client.retries";
+  private static final String AI_TOKENS = "readle.ai.client.tokens";
+  private static final String AI_TOTAL_TOKENS = "readle.ai.client.tokens.all";
+  private static final String QUIZ_GENERATION = "quiz_generation";
+  private static final String QUIZ_GRADING = "quiz_grading";
+  private static final String CONTENT_VALIDATION = "content_validation";
 
   private final RestClient claudeRestClient;
   private final RestClient gradingClaudeRestClient;
   private final RestClient validationClaudeRestClient;
   private final ObjectMapper objectMapper;
   private final ClaudeProperties properties;
+  private final MeterRegistry meterRegistry;
 
   public ClaudeClient(
       RestClient claudeRestClient,
       RestClient gradingClaudeRestClient,
       RestClient validationClaudeRestClient,
       ClaudeProperties properties,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      MeterRegistry meterRegistry) {
     this.claudeRestClient = claudeRestClient;
     this.gradingClaudeRestClient = gradingClaudeRestClient;
     this.validationClaudeRestClient = validationClaudeRestClient;
     this.properties = properties;
     this.objectMapper = objectMapper;
+    this.meterRegistry = meterRegistry;
   }
 
   // 기본 모델(properties.getModel())을 사용하는 기본 버전
   private ClaudeResponse generateMessage(String systemPrompt, String userPrompt) {
     return generateMessageInternal(
-        claudeRestClient, properties.getModel(), systemPrompt, userPrompt);
+        claudeRestClient, properties.getModel(), systemPrompt, userPrompt, QUIZ_GENERATION);
   }
 
   // 채점 전용 (6초 타임아웃 클라이언트 사용, 자체 재시도 없음)
@@ -56,24 +71,28 @@ public class ClaudeClient {
 
   // 콘텐츠 검증 전용 (readTimeout 4초 클라이언트 사용)
   // 재시도는 AiValidationService가 전담하므로 클라이언트 내부 재시도를 거치지 않는다.
+  // 요청 시간·결과 계측도 AiValidationService.callClaudeWithTimeout이 담당한다. 여기서 중복 기록하지 않는다.
   public ClaudeResponse generateValidationMessage(String systemPrompt, String userPrompt) {
-    return executeGenerateMessage(
-        validationClaudeRestClient, properties.getModel(), systemPrompt, userPrompt);
+    ClaudeResponse response =
+        executeGenerateMessage(
+            validationClaudeRestClient, properties.getModel(), systemPrompt, userPrompt);
+    recordTokenUsage(CONTENT_VALIDATION, response);
+    return response;
   }
 
   private ClaudeResponse generateMessageInternal(
-      RestClient client, String model, String systemPrompt, String userPrompt) {
+      RestClient client, String model, String systemPrompt, String userPrompt, String purpose) {
     try {
-      return executeGenerateMessage(client, model, systemPrompt, userPrompt);
+      return executeGenerationAttempt(client, model, systemPrompt, userPrompt, purpose);
     } catch (RestClientResponseException e) {
       // 429 Too Many Requests 또는 5xx Server Error인 경우에만 1회 재시도
       if (isRetryable(e.getStatusCode())) {
-        return retryCall(client, model, systemPrompt, userPrompt, e);
+        return retryCall(client, model, systemPrompt, userPrompt, purpose, e);
       }
       throw e;
     } catch (ResourceAccessException e) {
       // I/O 연결 장애 발생 시 1회 재시도
-      return retryCall(client, model, systemPrompt, userPrompt, e);
+      return retryCall(client, model, systemPrompt, userPrompt, purpose, e);
     }
   }
 
@@ -88,24 +107,44 @@ public class ClaudeClient {
       String model,
       String systemPrompt,
       String userPrompt,
+      String purpose,
       RestClientException e) {
     log.warn(
         "[CLAUDE_API_WARNING] Claude API 일시적 호출 실패. 500ms 후 1회 재시도를 진행합니다. model={}, errorType={}",
         model,
         e.getClass().getSimpleName());
+    Counter.builder(AI_RETRIES).tag("purpose", purpose).register(meterRegistry).increment();
     try {
       Thread.sleep(500);
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
     }
     try {
-      return executeGenerateMessage(client, model, systemPrompt, userPrompt);
+      return executeGenerationAttempt(client, model, systemPrompt, userPrompt, purpose);
     } catch (RestClientException retryEx) {
       log.error(
           "[CLAUDE_API_ERROR] Claude API 재시도 호출도 실패하였습니다. 최종 실패 처리합니다. model={}, errorType={}",
           model,
           retryEx.getClass().getSimpleName());
       throw retryEx;
+    }
+  }
+
+  private ClaudeResponse executeGenerationAttempt(
+      RestClient client, String model, String systemPrompt, String userPrompt, String purpose) {
+    Timer.Sample sample = Timer.start(meterRegistry);
+    String outcome = "failure";
+    try {
+      ClaudeResponse response = executeGenerateMessage(client, model, systemPrompt, userPrompt);
+      outcome = "success";
+      return response;
+    } catch (RuntimeException e) {
+      if (isTimeout(e)) {
+        outcome = "timeout";
+      }
+      throw e;
+    } finally {
+      recordRequest(sample, purpose, outcome);
     }
   }
 
@@ -173,13 +212,47 @@ public class ClaudeClient {
   // 기본 모델(properties.getModel())을 사용하는 기본 버전
   public String getGeneratedText(String systemPrompt, String userPrompt) {
     ClaudeResponse response = generateMessage(systemPrompt, userPrompt);
+    recordTokenUsage(QUIZ_GENERATION, response);
     return extractTextFromResponse(response);
   }
 
   // 채점 전용 오버로딩 (6초 타임아웃)
   public String getGradingGeneratedText(String systemPrompt, String userPrompt) {
     ClaudeResponse response = generateGradingMessage(systemPrompt, userPrompt);
+    recordTokenUsage(QUIZ_GRADING, response);
     return extractTextFromResponse(response);
+  }
+
+  private void recordRequest(Timer.Sample sample, String purpose, String outcome) {
+    sample.stop(
+        Timer.builder(AI_REQUESTS)
+            .tags("purpose", purpose, "outcome", outcome)
+            .register(meterRegistry));
+  }
+
+  private void recordTokenUsage(String purpose, ClaudeResponse response) {
+    if (response == null || response.getUsage() == null) {
+      return;
+    }
+    ClaudeResponse.Usage usage = response.getUsage();
+    incrementTokenCounter(purpose, "input_tokens", usage.getInputTokens());
+    incrementTokenCounter(purpose, "output_tokens", usage.getOutputTokens());
+  }
+
+  private void incrementTokenCounter(String purpose, String type, int tokens) {
+    if (tokens > 0) {
+      Counter.builder(AI_TOKENS)
+          .tags("purpose", purpose, "type", type)
+          .register(meterRegistry)
+          .increment(tokens);
+      Counter.builder(AI_TOTAL_TOKENS).tag("type", type).register(meterRegistry).increment(tokens);
+    }
+  }
+
+  private boolean isTimeout(Throwable throwable) {
+    return throwable instanceof ResourceAccessException resourceAccessException
+        && (resourceAccessException.getCause() instanceof SocketTimeoutException
+            || resourceAccessException.getCause() instanceof HttpTimeoutException);
   }
 
   private String extractTextFromResponse(ClaudeResponse response) {

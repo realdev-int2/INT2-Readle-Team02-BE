@@ -13,10 +13,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.global.config.ClaudeProperties;
 import com.realdev.readle.global.config.ClaudeTestConfig;
 import com.realdev.readle.global.exception.CustomException;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +51,12 @@ class ClaudeClientTest {
   @Autowired private MockRestServiceServer server;
 
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private MeterRegistry meterRegistry;
+
+  @BeforeEach
+  void clearMeters() {
+    meterRegistry.clear();
+  }
 
   // 반복되는 Claude 성공 응답 JSON을 생성하는 헬퍼 메서드
   private String mockResponseJson(String responseText) throws JsonProcessingException {
@@ -84,6 +92,41 @@ class ClaudeClientTest {
 
     // then
     assertThat(generatedText).isEqualTo("Generated Quiz JSON text");
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "quiz_generation", "outcome", "success")
+                .timer()
+                .count())
+        .isEqualTo(1);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.tokens")
+                .tags("purpose", "quiz_generation", "type", "input_tokens")
+                .counter()
+                .count())
+        .isEqualTo(100);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.tokens")
+                .tags("purpose", "quiz_generation", "type", "output_tokens")
+                .counter()
+                .count())
+        .isEqualTo(200);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.tokens.all")
+                .tag("type", "input_tokens")
+                .counter()
+                .count())
+        .isEqualTo(100);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.tokens.all")
+                .tag("type", "output_tokens")
+                .counter()
+                .count())
+        .isEqualTo(200);
     server.verify();
   }
 
@@ -173,6 +216,20 @@ class ClaudeClientTest {
     // then
     assertThat(response).isNotNull();
     assertThat(response).isEqualTo("Generated Quiz JSON text");
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "quiz_generation", "outcome", "failure")
+                .timer()
+                .count())
+        .isEqualTo(1);
+    assertThat(
+            meterRegistry
+                .get("readle.ai.client.requests")
+                .tags("purpose", "quiz_generation", "outcome", "success")
+                .timer()
+                .count())
+        .isEqualTo(1);
     server.verify();
   }
 

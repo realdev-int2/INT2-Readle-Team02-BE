@@ -33,6 +33,8 @@ import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
 import com.realdev.readle.domain.tag.repository.ContentTagRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -60,6 +63,7 @@ class QuizSolveServiceTest {
   @Mock private ContentTagRepository contentTagRepository;
   @Mock private QuizAiGradingService quizAiGradingService;
   @Mock private TransactionTemplate transactionTemplate;
+  @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   private Member member;
   private QuizSet quizSet;
@@ -172,6 +176,8 @@ class QuizSolveServiceTest {
     verify(quizAttempt).submit();
     verify(quizAnswerRepository, times(2)).saveAll(any());
     verify(quizResultRepository).save(any(QuizResult.class));
+    assertThat(meterRegistry.get("readle.quiz.grading").tag("outcome", "success").timer().count())
+        .isEqualTo(1);
   }
 
   @Test
@@ -408,6 +414,8 @@ class QuizSolveServiceTest {
     // AI 채점 실패 시 saveAll 및 save가 결코 호출되지 않고 All-or-Nothing 롤백되었음을 검증
     verify(quizAnswerRepository, times(0)).saveAll(any());
     verify(quizResultRepository, times(0)).save(any());
+    assertThat(meterRegistry.get("readle.quiz.grading").tag("outcome", "failure").timer().count())
+        .isEqualTo(1);
   }
 
   @Test

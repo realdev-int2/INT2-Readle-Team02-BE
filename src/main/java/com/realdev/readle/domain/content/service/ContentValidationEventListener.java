@@ -18,7 +18,7 @@ public class ContentValidationEventListener {
   public void handleContentCreatedEvent(ContentCreatedEvent event) {
     log.info("[VALIDATION_EVENT] 콘텐츠 검증 비동기 트리거 시작. Content ID: {}", event.contentId());
     try {
-      contentValidationService.validateContent(event.contentId());
+      contentValidationService.validateContent(event.contentId(), event.requestedAtNanos());
     } catch (RuntimeException e) {
       log.error(
           "[VALIDATION_EVENT] 콘텐츠 검증 비동기 파이프라인 최종 에러 발생 (세부 단계별 실패 이력 확인 필요). Content ID: {}",
