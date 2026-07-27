@@ -109,7 +109,8 @@ class WebCrawlerTest {
   @Test
   @DisplayName("바디 태그에 노이즈 클래스가 포함되어도 본문 구조(body, main 등)는 삭제되지 않고 보호된다")
   void bodyTagProtectionFromNoise() {
-    String html = "<html class='menu'><body class='menu sidebar'><div class='menu'><main><article><p>보호된 본문</p></article></main></div></body></html>";
+    String html =
+        "<html class='menu'><body class='menu sidebar'><div class='menu'><main><article><p>보호된 본문</p></article></main></div></body></html>";
     Document doc = Jsoup.parse(html);
     String content = webCrawler.parse(doc).content();
     assertThat(content).isEqualTo("보호된 본문");
