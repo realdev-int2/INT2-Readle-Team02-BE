@@ -184,7 +184,7 @@ public class AiValidationService {
       }
       return customEx;
     }
-    if (e instanceof JsonProcessingException) {
+    if (e instanceof JsonProcessingException || e.getCause() instanceof JsonProcessingException) {
       return new CustomException(
           ContentErrorCode.INVALID_AI_VALIDATION_RESPONSE, "AI 응답 파싱 실패", cause);
     }

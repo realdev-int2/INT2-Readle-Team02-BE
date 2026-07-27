@@ -41,10 +41,13 @@ public class ClaudeTemplate {
       Supplier<String> apiCall,
       Class<T> responseType,
       Consumer<T> responseValidator,
+      long timeoutSeconds,
+      Executor executor,
+      String purpose,
       Function<Throwable, RuntimeException> errorMapper) {
     try {
-      String rawResponse = apiCall.get();
-      T response = parseResponse(rawResponse, responseType, errorMapper);
+      String rawResponse = callWithTimeout(apiCall, timeoutSeconds, executor, purpose);
+      T response = parseResponse(rawResponse, responseType);
       responseValidator.accept(response);
       return response;
     } catch (RuntimeException e) {
@@ -77,7 +80,7 @@ public class ClaudeTemplate {
 
         String rawText =
             callWithTimeout(() -> apiCall.apply(currentAttempt), timeoutSeconds, executor, purpose);
-        T response = parseResponse(rawText, responseType, errorMapper);
+        T response = parseResponse(rawText, responseType);
         responseValidator.accept(response);
         return response;
 
@@ -117,7 +120,7 @@ public class ClaudeTemplate {
           supplyInterruptiblyAsync(
               () -> {
                 String rawResponse = apiCall.apply(attempt);
-                T response = parseResponse(rawResponse, responseType, errorMapper);
+                T response = parseResponse(rawResponse, responseType);
                 responseValidator.accept(response);
                 return response;
               },
@@ -207,10 +210,7 @@ public class ClaudeTemplate {
     }
   }
 
-  private <T> T parseResponse(
-      String rawResponse,
-      Class<T> responseType,
-      Function<Throwable, RuntimeException> errorMapper) {
+  private <T> T parseResponse(String rawResponse, Class<T> responseType) {
     try {
       String cleanJson = JsonExtractor.extractJson(rawResponse);
       if (cleanJson == null || cleanJson.isEmpty()) {
@@ -218,9 +218,7 @@ public class ClaudeTemplate {
       }
       return objectMapper.readValue(cleanJson, responseType);
     } catch (JsonProcessingException e) {
-      throw errorMapper.apply(e);
-    } catch (RuntimeException e) {
-      throw errorMapper.apply(e);
+      throw new RuntimeException("AI 응답 JSON 파싱 실패", e);
     }
   }
 

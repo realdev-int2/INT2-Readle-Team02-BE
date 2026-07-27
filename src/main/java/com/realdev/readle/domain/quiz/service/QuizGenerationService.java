@@ -26,6 +26,9 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeoutException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -52,7 +55,9 @@ public class QuizGenerationService {
   private final MeterRegistry meterRegistry;
 
   private final TransactionTemplate transactionTemplate;
-
+  @Qualifier("claudeCallExecutor")
+  private final Executor claudeCallExecutor;
+  
   public QuizCreateResponse createQuizSet(Long sourceValidationId) {
     Timer.Sample sample = Timer.start(meterRegistry);
     ContentValidation validation;
@@ -174,6 +179,9 @@ public class QuizGenerationService {
               () -> claudeClient.getGeneratedText(systemPrompt, userPrompt),
               ClaudeQuizResponseDto.class,
               res -> validateGeneratedQuizRules(res),
+              60L,
+              claudeCallExecutor,
+              QUIZ_GENERATION,
               this::mapToQuizGenerationException);
 
       // 3. 문제 및 선택지 엔티티 저장 및 완료 (Transaction 분리)
@@ -286,13 +294,10 @@ public class QuizGenerationService {
     if (response.getQuizzes() == null || response.getQuizzes().isEmpty()) {
       throw new CustomException(QuizErrorCode.QUIZ_GENERATION_FAILED, "퀴즈 목록이 비어있습니다.");
     }
-    if (response.getQuizzes().size() < 1 || response.getQuizzes().size() > 5) {
+    if (response.getQuizzes().size() > 5) {
       throw new CustomException(QuizErrorCode.QUIZ_GENERATION_FAILED, "생성된 문제 수가 1~5개 범위를 벗어납니다.");
     }
-    if (response.getTags() == null
-        || response.getTags().isEmpty()
-        || response.getTags().size() < 1
-        || response.getTags().size() > 3) {
+    if (response.getTags() == null || response.getTags().isEmpty() || response.getTags().size() > 3) {
       throw new CustomException(
           QuizErrorCode.QUIZ_GENERATION_FAILED, "생성된 태그 수가 1~3개 범위를 벗어나거나 비어있습니다.");
     }
@@ -301,14 +306,17 @@ public class QuizGenerationService {
   private RuntimeException mapToQuizGenerationException(Throwable e) {
     Throwable cause = (e instanceof CustomException && e.getCause() != null) ? e.getCause() : e;
 
-    if (e instanceof CustomException customEx) {
-      if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
+    if (e instanceof CustomException) {
+      if (((CustomException) e).getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
         return new CustomException(
             QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", cause);
       }
-      return customEx;
+      return (CustomException) e;
     }
-    if (e instanceof JsonProcessingException) {
+    if (e instanceof TimeoutException) {
+      return new CustomException(QuizErrorCode.QUIZ_TIMEOUT, "AI 타임아웃이 발생했습니다.", cause);
+    }
+    if (e instanceof JsonProcessingException || e.getCause() instanceof JsonProcessingException) {
       return new CustomException(
           QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", cause);
     }

@@ -71,7 +71,8 @@ class QuizGenerationServiceTest {
             promptLoader,
             tagService,
             meterRegistry,
-            transactionTemplate);
+            transactionTemplate,
+            Runnable::run);
 
     member = org.mockito.Mockito.mock(Member.class);
     ReflectionTestUtils.setField(member, "id", 1L);

@@ -207,7 +207,7 @@ class QuizAiGradingServiceTest {
         .hasCauseInstanceOf(com.realdev.readle.global.exception.CustomException.class)
         .extracting(Throwable::getCause)
         .extracting("errorCode")
-        .isEqualTo(com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED);
+        .isEqualTo(com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_TIMEOUT);
 
     // 첫 호출에서 타임아웃나면 재시도 1번 더 하므로 2번 호출됨 (재시도도 타임아웃 남)
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());

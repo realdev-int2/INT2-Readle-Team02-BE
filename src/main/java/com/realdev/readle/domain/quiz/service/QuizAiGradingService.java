@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -52,7 +53,7 @@ public class QuizAiGradingService {
 
               if (isRetry) {
                 systemPrompt +=
-                    "\n\n[Correction Hint]\n이전 응답이 올바른 JSON 형식이 아니었습니다. 반드시 주어진 JSON 형식만 순수하게 반환하세요.";
+                    "\n\n[Correction Hint]\n이전 응답이 올바른 JSON 형식이 아니었거나 처리 지연이 발생했습니다. 반드시 주어진 JSON 형식만 순수하게 반환하세요.";
               }
 
               // 2. 사용자 프롬프트 준비 (본문 격리)
@@ -83,14 +84,17 @@ public class QuizAiGradingService {
   private RuntimeException mapToQuizGradingException(Throwable ex) {
     Throwable cause = (ex instanceof CustomException && ex.getCause() != null) ? ex.getCause() : ex;
 
-    if (ex instanceof CustomException customEx) {
-      if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
+    if (ex instanceof CustomException) {
+      if (((CustomException) ex).getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
         return new CustomException(
             QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 응답 JSON 파싱에 실패했습니다.", cause);
       }
-      return customEx;
+      return (CustomException) ex;
     }
-    if (ex instanceof JsonProcessingException) {
+    if (ex instanceof TimeoutException) {
+      return new CustomException(QuizErrorCode.QUIZ_TIMEOUT, "AI 채점 중 타임아웃이 발생했습니다.", cause);
+    }
+    if (ex instanceof JsonProcessingException || ex.getCause() instanceof JsonProcessingException) {
       return new CustomException(
           QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 응답 JSON 파싱에 실패했습니다.", cause);
     }
