@@ -7,6 +7,7 @@ import com.realdev.readle.domain.member.service.OAuthProfile;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,7 +76,7 @@ public class AuthService {
       throw failure();
     }
     try {
-      return OAuthProvider.valueOf(providerName.toUpperCase(java.util.Locale.ROOT));
+      return OAuthProvider.valueOf(providerName.toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException exception) {
       throw failure();
     }
@@ -84,7 +85,7 @@ public class AuthService {
   private String callbackUri(OAuthProvider provider) {
     return properties.backendOrigin()
         + "/api/auth/"
-        + provider.name().toLowerCase(java.util.Locale.ROOT)
+        + provider.name().toLowerCase(Locale.ROOT)
         + "/callback";
   }
 

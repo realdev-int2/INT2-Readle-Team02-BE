@@ -33,7 +33,7 @@ class OAuthProviderClientTest {
                     " ",
                     "verifier",
                     "https://readle.test/api/auth/google/callback"))
-        .isInstanceOf(com.realdev.readle.global.exception.CustomException.class)
+        .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
   }
@@ -51,7 +51,7 @@ class OAuthProviderClientTest {
                     "code",
                     "verifier",
                     "https://readle.test/api/auth/google/callback"))
-        .isInstanceOf(com.realdev.readle.global.exception.CustomException.class)
+        .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
   }
@@ -69,7 +69,7 @@ class OAuthProviderClientTest {
                     "state",
                     "code-challenge",
                     "https://readle.test/api/auth/google/callback"))
-        .isInstanceOf(com.realdev.readle.global.exception.CustomException.class)
+        .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
   }

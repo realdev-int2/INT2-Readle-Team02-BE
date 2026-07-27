@@ -13,6 +13,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.realdev.readle.domain.member.entity.OAuthProvider;
 import com.realdev.readle.domain.member.service.OAuthProfile;
+import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
 import com.realdev.readle.global.security.SecurityProperties;
 import java.io.IOException;
@@ -308,7 +309,7 @@ class OAuthProviderClientHttpIntegrationTest {
   private void assertOAuthFailure(ThrowingCallable exchange) {
     try {
       assertThatThrownBy(exchange)
-          .isInstanceOf(com.realdev.readle.global.exception.CustomException.class)
+          .isInstanceOf(CustomException.class)
           .extracting("errorCode")
           .isEqualTo(GlobalErrorCode.OAUTH_AUTHORIZATION_FAILED);
     } finally {
