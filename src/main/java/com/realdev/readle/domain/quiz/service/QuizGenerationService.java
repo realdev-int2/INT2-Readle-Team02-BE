@@ -71,10 +71,14 @@ public class QuizGenerationService {
           transactionTemplate.execute(
               status -> {
                 QuizSet existing =
-                    quizSetRepository.findBySourceValidationId(sourceValidationId).orElse(null);
+                    quizSetRepository
+                        .findForUpdateBySourceValidationId(sourceValidationId)
+                        .orElse(null);
                 if (existing != null) {
                   if (existing.getStatus() == QuizSetStatus.FAILED) {
                     existing.retry();
+                    quizChoiceRepository.deleteByQuizSetId(existing.getId());
+                    quizQuestionRepository.deleteByQuizSetId(existing.getId());
                     return new QuizSetStart(quizSetRepository.saveAndFlush(existing), true);
                   } else {
                     throw new CustomException(
