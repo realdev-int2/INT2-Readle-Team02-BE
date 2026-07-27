@@ -7,6 +7,7 @@ import com.realdev.readle.domain.content.entity.ValidationMethod;
 import com.realdev.readle.domain.content.entity.ValidationStatus;
 import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.domain.quiz.dto.ClaudeQuizResponseDto;
+import com.realdev.readle.domain.quiz.dto.response.ClaudeQualityVerifyResponseDto;
 import com.realdev.readle.domain.quiz.dto.response.QuizCreateResponse;
 import com.realdev.readle.domain.quiz.entity.QuestionType;
 import com.realdev.readle.domain.quiz.entity.QuizChoice;
@@ -25,6 +26,8 @@ import com.realdev.readle.global.util.JsonExtractor;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +53,7 @@ public class QuizGenerationService {
   private final ObjectMapper objectMapper;
   private final TagService tagService;
   private final MeterRegistry meterRegistry;
+  private final QuizQualityGuard quizQualityGuard;
 
   private final TransactionTemplate transactionTemplate;
 
@@ -171,6 +175,9 @@ public class QuizGenerationService {
 
       String jsonResponse = claudeClient.getGeneratedText(systemPrompt, userPrompt);
       ClaudeQuizResponseDto parsedResponse = parseAndValidate(jsonResponse);
+
+      // 퀴즈 사후 품질 검증 (정답 노출 스크리닝 및 단건 타겟 재생성)
+      sanitizeAndFilterQuizzes(parsedResponse, articleText);
 
       // 3. 문제 및 선택지 엔티티 저장 및 완료 (Transaction 분리)
       QuizCreateResponse response =
@@ -304,5 +311,110 @@ public class QuizGenerationService {
     } catch (JsonProcessingException e) {
       throw new CustomException(QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", e);
     }
+  }
+
+  private void sanitizeAndFilterQuizzes(ClaudeQuizResponseDto parsedResponse, String articleText) {
+    if (parsedResponse == null || parsedResponse.getQuizzes() == null) {
+      return;
+    }
+
+    List<ClaudeQuizResponseDto.ClaudeQuizDto> quizList = parsedResponse.getQuizzes();
+    List<ClaudeQuizResponseDto.ClaudeQuizDto> validQuizzes = new ArrayList<>();
+
+    for (int i = 0; i < quizList.size(); i++) {
+      ClaudeQuizResponseDto.ClaudeQuizDto quizDto = quizList.get(i);
+      String answerText = getAnswerText(quizDto);
+      boolean hasLeak = quizQualityGuard.checkRegexLeak(quizDto.getQuestion(), answerText);
+
+      if (!hasLeak) {
+        List<QuizQualityGuard.QuestionInspectItem> items =
+            List.of(
+                new QuizQualityGuard.QuestionInspectItem(i + 1, quizDto.getQuestion(), answerText));
+        List<ClaudeQualityVerifyResponseDto.QuestionVerifyResult> results =
+            quizQualityGuard.verifyWithLlm(items);
+        if (results != null && !results.isEmpty()) {
+          hasLeak = results.get(0).hasLeak();
+        }
+      }
+
+      if (hasLeak) {
+        log.warn(
+            "[QUIZ_QUALITY_GUARD] 문항 본문에 정답/힌트 누출이 탐지되었습니다. 단건 타겟 재생성을 시도합니다: {}",
+            quizDto.getQuestion());
+
+        ClaudeQuizResponseDto.ClaudeQuizDto regenerated = retrySingleQuestion(quizDto, articleText);
+        if (regenerated != null) {
+          validQuizzes.add(regenerated);
+        } else {
+          log.error(
+              "[QUIZ_QUALITY_GUARD] 단건 재생성 2회 실패로 해당 문항을 세트에서 제외합니다: {}", quizDto.getQuestion());
+        }
+      } else {
+        validQuizzes.add(quizDto);
+      }
+    }
+
+    parsedResponse.setQuizzes(validQuizzes);
+  }
+
+  private String getAnswerText(ClaudeQuizResponseDto.ClaudeQuizDto quizDto) {
+    if ("MULTIPLE_CHOICE".equalsIgnoreCase(quizDto.getType())) {
+      try {
+        int idx = Integer.parseInt(quizDto.getAnswer());
+        if (quizDto.getOptions() != null && idx >= 0 && idx < quizDto.getOptions().size()) {
+          return quizDto.getOptions().get(idx);
+        }
+      } catch (Exception e) {
+        // Fallback to raw answer string
+      }
+    }
+    return quizDto.getAnswer();
+  }
+
+  private ClaudeQuizResponseDto.ClaudeQuizDto retrySingleQuestion(
+      ClaudeQuizResponseDto.ClaudeQuizDto targetQuiz, String articleText) {
+    String answerText = getAnswerText(targetQuiz);
+    String hintRule =
+        "이전 생성 문항("
+            + targetQuiz.getQuestion()
+            + ") 본문에 정답 또는 정답의 풀네임/유사 표현이 유출되었습니다. 질문 본문에서 정답 단어("
+            + answerText
+            + ") 및 풀네임/약어 암시 표현을 완벽히 제거하고 순수 문맥 문제로 단건 재구성하세요.";
+
+    String systemPrompt =
+        promptLoader.loadPrompt("quiz-gen-prompt.txt", Map.of("additional_rule", hintRule));
+    String userPrompt =
+        "<source_content>\n" + articleText + "\n</source_content>\nTarget question count: 1";
+
+    for (int retry = 0; retry < 2; retry++) {
+      try {
+        String jsonResponse = claudeClient.getGeneratedText(systemPrompt, userPrompt);
+        ClaudeQuizResponseDto parsed = parseAndValidate(jsonResponse);
+        if (parsed != null && parsed.getQuizzes() != null && !parsed.getQuizzes().isEmpty()) {
+          ClaudeQuizResponseDto.ClaudeQuizDto candidate = parsed.getQuizzes().get(0);
+          String candidateAnswer = getAnswerText(candidate);
+
+          boolean regexLeak =
+              quizQualityGuard.checkRegexLeak(candidate.getQuestion(), candidateAnswer);
+          if (!regexLeak) {
+            List<ClaudeQualityVerifyResponseDto.QuestionVerifyResult> verifyResults =
+                quizQualityGuard.verifyWithLlm(
+                    List.of(
+                        new QuizQualityGuard.QuestionInspectItem(
+                            1, candidate.getQuestion(), candidateAnswer)));
+            if (verifyResults == null
+                || verifyResults.isEmpty()
+                || !verifyResults.get(0).hasLeak()) {
+              log.info("[QUIZ_QUALITY_GUARD] 타겟 단건 재생성 및 재검증 성공");
+              return candidate;
+            }
+          }
+        }
+      } catch (Exception e) {
+        log.warn(
+            "[QUIZ_QUALITY_GUARD] 타겟 단건 재생성 중 예외 발생 (retry={}): {}", retry + 1, e.getMessage());
+      }
+    }
+    return null;
   }
 }
