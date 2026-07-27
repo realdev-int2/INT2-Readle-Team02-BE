@@ -74,6 +74,15 @@ public class QuizAttempt {
       throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
     }
     this.status = AttemptStatus.IN_PROGRESS;
+    this.submittedAt = null;
+  }
+
+  public void recoverFailedSubmission() {
+    if (this.status != AttemptStatus.SUBMITTED) {
+      throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+    }
+    this.status = AttemptStatus.IN_PROGRESS;
+    this.submittedAt = null;
   }
 
   public void submit() {

@@ -34,4 +34,18 @@ class QuizAttemptTest {
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
   }
+
+  @Test
+  @DisplayName(
+      "SUBMITTED 상태에서 recoverFailedSubmission 호출 시 IN_PROGRESS 상태로 복구되고 submittedAt이 초기화된다")
+  void recoverFailedSubmission_FromSubmitted() {
+    QuizAttempt attempt = QuizAttempt.createInProgress(mock(QuizSet.class), mock(Member.class));
+    attempt.submit();
+    assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.SUBMITTED);
+    assertThat(attempt.getSubmittedAt()).isNotNull();
+
+    attempt.recoverFailedSubmission();
+    assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.IN_PROGRESS);
+    assertThat(attempt.getSubmittedAt()).isNull();
+  }
 }

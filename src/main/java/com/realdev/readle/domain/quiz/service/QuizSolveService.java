@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -122,7 +123,13 @@ public class QuizSolveService {
 
       if (preAttempt.getStatus()
           != com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS) {
-        throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+        if (preAttempt.getStatus() == com.realdev.readle.domain.quiz.entity.AttemptStatus.GRADING) {
+          throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+        }
+        Optional<QuizResult> existingResult = quizResultRepository.findByQuizAttemptId(attemptId);
+        if (existingResult.isPresent()) {
+          throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+        }
       }
 
       questions = quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(preAttempt.getQuizSet());
@@ -213,11 +220,20 @@ public class QuizSolveService {
                   throw new CustomException(GlobalErrorCode.FORBIDDEN, "해당 풀이 정보에 대한 권한이 없습니다.");
                 }
 
-                try {
-                  attempt.markAsGrading();
-                } catch (IllegalStateException e) {
-                  throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+                if (attempt.getStatus()
+                    != com.realdev.readle.domain.quiz.entity.AttemptStatus.IN_PROGRESS) {
+                  if (attempt.getStatus()
+                      == com.realdev.readle.domain.quiz.entity.AttemptStatus.GRADING) {
+                    throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+                  }
+                  Optional<QuizResult> existingResult =
+                      quizResultRepository.findByQuizAttemptId(attemptId);
+                  if (existingResult.isPresent()) {
+                    throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+                  }
+                  attempt.recoverFailedSubmission();
                 }
+                attempt.markAsGrading();
                 return attempt;
               });
 
@@ -297,6 +313,7 @@ public class QuizSolveService {
                   QuizAttempt activeAttempt =
                       quizAttemptRepository.findById(attemptId).orElseThrow();
 
+                  quizAnswerRepository.deleteByQuizAttemptId(attemptId);
                   quizAnswerRepository.saveAll(staticAnswers);
                   quizAnswerRepository.saveAll(aiAnswers);
 
@@ -346,7 +363,7 @@ public class QuizSolveService {
             .orElseThrow(
                 () ->
                     new CustomException(
-                        GlobalErrorCode.SERVER_ERROR, "해당 시도의 채점 결과 데이터가 존재하지 않습니다."));
+                        QuizErrorCode.RESULT_REPORT_NOT_FOUND, "해당 시도의 채점 결과 데이터가 존재하지 않습니다."));
 
     return buildAttemptResult(quizAttempt, quizResult);
   }
