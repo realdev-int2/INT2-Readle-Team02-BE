@@ -14,6 +14,7 @@ public enum QuizErrorCode implements ErrorCode {
   SOURCE_VALIDATION_NOT_FOUND(HttpStatus.NOT_FOUND, "퀴즈 생성을 위한 콘텐츠 검증 정보를 찾을 수 없습니다."),
   EMPTY_SOURCE_TEXT_FOR_QUIZ(HttpStatus.BAD_REQUEST, "퀴즈 생성을 위한 원문 텍스트가 비어 있습니다."),
   VALIDATION_NOT_PASSED(HttpStatus.BAD_REQUEST, "해당 콘텐츠는 퀴즈 생성이 불가능한 상태입니다."),
+  QUIZ_GENERATION_IN_PROGRESS(HttpStatus.CONFLICT, "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다."),
   QUIZ_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "퀴즈 생성 중 오류가 발생했습니다."),
   QUIZ_GRADING_FAILED(HttpStatus.BAD_GATEWAY, "AI 채점 처리 중 오류가 발생했습니다."),
   ATTEMPT_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 제출이 완료되었거나 진행 중이 아닌 풀이입니다."),

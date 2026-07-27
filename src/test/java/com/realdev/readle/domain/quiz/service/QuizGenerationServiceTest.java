@@ -160,7 +160,7 @@ class QuizGenerationServiceTest {
     ReflectionTestUtils.setField(existingQuizSet, "id", 300L);
 
     // 기존 QuizSet 반환하도록 모킹
-    given(quizSetRepository.findBySourceValidationId(100L))
+    given(quizSetRepository.findForUpdateBySourceValidationId(100L))
         .willReturn(Optional.of(existingQuizSet));
     given(quizSetRepository.saveAndFlush(existingQuizSet)).willReturn(existingQuizSet);
     given(quizSetRepository.findById(300L)).willReturn(Optional.of(existingQuizSet));
@@ -195,9 +195,33 @@ class QuizGenerationServiceTest {
 
     // retry()가 불려서 GENERATING을 거쳤는지 검증
     org.mockito.Mockito.verify(existingQuizSet, org.mockito.Mockito.times(1)).retry();
+    org.mockito.Mockito.verify(quizChoiceRepository, org.mockito.Mockito.times(1))
+        .deleteByQuizSetId(300L);
+    org.mockito.Mockito.verify(quizQuestionRepository, org.mockito.Mockito.times(1))
+        .deleteByQuizSetId(300L);
 
     // delete는 절대 호출되지 않아야 함
     org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.never()).delete(any());
+  }
+
+  @Test
+  @DisplayName(
+      "기존에 COMPLETED 또는 GENERATING 상태인 퀴즈 세트가 존재하면 QUIZ_GENERATION_IN_PROGRESS 예외(HTTP 409)가"
+          + " 발생한다")
+  void createQuizSet_ThrowsQuizGenerationInProgress_WhenQuizSetAlreadyExistsAndNotFailed() {
+    lenient().when(validation.getStatus()).thenReturn(ValidationStatus.PASSED);
+    lenient()
+        .when(contentValidationRepository.findByIdWithContent(100L))
+        .thenReturn(Optional.of(validation));
+
+    QuizSet existingQuizSet = QuizSet.create(content, validation, false);
+    given(quizSetRepository.findForUpdateBySourceValidationId(100L))
+        .willReturn(Optional.of(existingQuizSet));
+
+    assertThatThrownBy(() -> quizGenerationService.createQuizSet(100L))
+        .isInstanceOf(CustomException.class)
+        .extracting("errorCode")
+        .isEqualTo(QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS);
   }
 
   @Test
@@ -217,7 +241,7 @@ class QuizGenerationServiceTest {
         existingQuizSet, "completedAt", java.time.LocalDateTime.now().minusDays(1));
 
     // 기존 QuizSet 반환하도록 모킹
-    given(quizSetRepository.findBySourceValidationId(100L))
+    given(quizSetRepository.findForUpdateBySourceValidationId(100L))
         .willReturn(Optional.of(existingQuizSet));
     given(quizSetRepository.saveAndFlush(existingQuizSet))
         .willAnswer(
@@ -337,7 +361,7 @@ class QuizGenerationServiceTest {
     org.mockito.BDDMockito.lenient().when(content.getRawText()).thenReturn("   ");
     org.mockito.BDDMockito.lenient().when(content.getExtractedText()).thenReturn("   ");
 
-    given(quizSetRepository.findBySourceValidationId(100L)).willReturn(Optional.empty());
+    given(quizSetRepository.findForUpdateBySourceValidationId(100L)).willReturn(Optional.empty());
 
     QuizSet expectedQuizSet = QuizSet.create(content, validation, false);
     ReflectionTestUtils.setField(expectedQuizSet, "id", 200L);
@@ -583,7 +607,7 @@ class QuizGenerationServiceTest {
         .when(contentValidationRepository.findByIdWithContent(100L))
         .thenReturn(Optional.of(validation));
 
-    given(quizSetRepository.findBySourceValidationId(100L)).willReturn(Optional.empty());
+    given(quizSetRepository.findForUpdateBySourceValidationId(100L)).willReturn(Optional.empty());
 
     // saveAndFlush 될 때 isBypassed가 true인지 검증
     given(quizSetRepository.saveAndFlush(any(QuizSet.class)))
