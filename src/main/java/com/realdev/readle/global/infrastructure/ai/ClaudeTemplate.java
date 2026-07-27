@@ -54,7 +54,7 @@ public class ClaudeTemplate {
 
   /** 2. 콘텐츠 검증 등 동기식 루프 재시도 및 CompletableFuture(내부 타임아웃) 사용 */
   public <T> T executeWithSyncRetry(
-      Supplier<String> apiCall,
+      Function<Integer, String> apiCall,
       Class<T> responseType,
       Consumer<T> responseValidator,
       int maxAttempts,
@@ -71,10 +71,11 @@ public class ClaudeTemplate {
     Throwable lastException = null;
 
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      final int currentAttempt = attempt;
       try {
         log.info("[AI_TEMPLATE] AI 호출 시도 ({}/{}) - purpose: {}", attempt, maxAttempts, purpose);
 
-        String rawText = callWithTimeout(apiCall, timeoutSeconds, executor, purpose);
+        String rawText = callWithTimeout(() -> apiCall.apply(currentAttempt), timeoutSeconds, executor, purpose);
         T response = parseResponse(rawText, responseType, errorMapper);
         responseValidator.accept(response);
         return response;
@@ -97,10 +98,11 @@ public class ClaudeTemplate {
 
   /** 3. 퀴즈 채점 등 완전 비동기 체이닝 기반 재시도 */
   public <T> CompletableFuture<T> executeAsyncWithRetry(
-      Supplier<String> apiCall,
+      Function<Integer, String> apiCall,
       Class<T> responseType,
       Consumer<T> responseValidator,
-      int retriesLeft,
+      int attempt,
+      int maxAttempts,
       Duration timeout,
       Executor executor,
       String purpose,
@@ -113,7 +115,7 @@ public class ClaudeTemplate {
       task =
           CompletableFuture.supplyAsync(
               () -> {
-                String rawResponse = apiCall.get();
+                String rawResponse = apiCall.apply(attempt);
                 T response = parseResponse(rawResponse, responseType, errorMapper);
                 responseValidator.accept(response);
                 return response;
@@ -141,14 +143,15 @@ public class ClaudeTemplate {
     return timedTask.exceptionallyCompose(
         ex -> {
           submittedTask.cancel(true);
-          if (retriesLeft > 0) {
+          if (attempt < maxAttempts) {
             Counter.builder(AI_RETRIES).tag("purpose", purpose).register(meterRegistry).increment();
-            log.warn("[AI_TEMPLATE] AI 비동기 호출 실패. 재시도를 진행합니다. 남은 횟수: {}", retriesLeft, ex);
+            log.warn("[AI_TEMPLATE] AI 비동기 호출 실패. 재시도를 진행합니다. 시도: {}/{}", attempt, maxAttempts, ex);
             return executeAsyncWithRetry(
                 apiCall,
                 responseType,
                 responseValidator,
-                retriesLeft - 1,
+                attempt + 1,
+                maxAttempts,
                 timeout,
                 executor,
                 purpose,

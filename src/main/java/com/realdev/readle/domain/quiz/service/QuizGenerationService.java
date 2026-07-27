@@ -161,21 +161,7 @@ public class QuizGenerationService {
               () -> claudeClient.getGeneratedText(systemPrompt, userPrompt),
               ClaudeQuizResponseDto.class,
               res -> validateGeneratedQuizRules(res),
-              e -> {
-                if (e instanceof CustomException customEx) {
-                  if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
-                    return new CustomException(
-                        QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", e);
-                  }
-                  return customEx;
-                }
-                if (e instanceof JsonProcessingException) {
-                  return new CustomException(
-                      QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", e);
-                }
-                return new CustomException(
-                    QuizErrorCode.QUIZ_GENERATION_FAILED, "퀴즈 생성 중 오류가 발생했습니다.", e);
-              });
+              this::mapToQuizGenerationException);
 
       // 3. 문제 및 선택지 엔티티 저장 및 완료 (Transaction 분리)
       QuizCreateResponse response =
@@ -297,5 +283,22 @@ public class QuizGenerationService {
       throw new CustomException(
           QuizErrorCode.QUIZ_GENERATION_FAILED, "생성된 태그 수가 1~3개 범위를 벗어나거나 비어있습니다.");
     }
+  }
+  private RuntimeException mapToQuizGenerationException(Throwable e) {
+    Throwable cause = (e instanceof CustomException && e.getCause() != null) ? e.getCause() : e;
+
+    if (e instanceof CustomException customEx) {
+      if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
+        return new CustomException(
+            QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", cause);
+      }
+      return customEx;
+    }
+    if (e instanceof JsonProcessingException) {
+      return new CustomException(
+          QuizErrorCode.QUIZ_GENERATION_FAILED, "AI 응답 JSON 파싱에 실패했습니다.", cause);
+    }
+    return new CustomException(
+        QuizErrorCode.QUIZ_GENERATION_FAILED, "퀴즈 생성 중 오류가 발생했습니다.", cause);
   }
 }

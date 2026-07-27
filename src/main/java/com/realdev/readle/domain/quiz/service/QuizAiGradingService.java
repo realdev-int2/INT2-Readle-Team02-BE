@@ -37,13 +37,10 @@ public class QuizAiGradingService {
   public CompletableFuture<AiEvaluationResult> gradeAnswerAsync(
       QuizQuestion question, String submittedAnswer, String articleText) {
 
-    AtomicInteger attemptCounter = new AtomicInteger(0);
-
     return claudeTemplate
         .executeAsyncWithRetry(
-            () -> {
-              int attempt = attemptCounter.getAndIncrement();
-              boolean isRetry = attempt > 0;
+            attempt -> {
+              boolean isRetry = attempt > 1;
 
               // 1. 시스템 프롬프트 준비
               String systemPrompt =
@@ -72,28 +69,32 @@ public class QuizAiGradingService {
                     QuizErrorCode.QUIZ_GRADING_FAILED, "AI 응답에 isCorrect 필드가 누락되었습니다.");
               }
             },
-            1, // retriesLeft
+            1, // attempt
+            2, // maxAttempts
             timeoutDuration,
             gradingExecutor,
             QUIZ_GRADING,
-            ex -> {
-              if (ex instanceof CustomException customEx) {
-                if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
-                  return new CustomException(
-                      QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 응답 JSON 파싱에 실패했습니다.", ex);
-                }
-                return customEx;
-              }
-              if (ex instanceof JsonProcessingException) {
-                return new CustomException(
-                    QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 응답 JSON 파싱에 실패했습니다.", ex);
-              }
-              return new CustomException(
-                  QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 서비스 연동 중 오류가 발생했습니다.", ex);
-            })
+            this::mapToQuizGradingException)
         .thenApply(
             dto ->
                 new AiEvaluationResult(
                     question, submittedAnswer, dto.getIsCorrect(), dto.getAiFeedback()));
+  }
+  private RuntimeException mapToQuizGradingException(Throwable ex) {
+    Throwable cause = (ex instanceof CustomException && ex.getCause() != null) ? ex.getCause() : ex;
+
+    if (ex instanceof CustomException customEx) {
+      if (customEx.getErrorCode() == GlobalErrorCode.AI_PARSING_ERROR) {
+        return new CustomException(
+            QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 응답 JSON 파싱에 실패했습니다.", cause);
+      }
+      return customEx;
+    }
+    if (ex instanceof JsonProcessingException) {
+      return new CustomException(
+          QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 응답 JSON 파싱에 실패했습니다.", cause);
+    }
+    return new CustomException(
+        QuizErrorCode.QUIZ_GRADING_FAILED, "AI 채점 서비스 연동 중 오류가 발생했습니다.", cause);
   }
 }
