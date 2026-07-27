@@ -231,7 +231,7 @@ public class QuizSolveService {
                   if (existingResult.isPresent()) {
                     throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
                   }
-                  attempt.resetToInProgress();
+                  attempt.recoverFailedSubmission();
                 }
                 attempt.markAsGrading();
                 return attempt;

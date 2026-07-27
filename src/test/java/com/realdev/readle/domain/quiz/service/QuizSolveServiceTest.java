@@ -280,7 +280,7 @@ class QuizSolveServiceTest {
     QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
 
     assertThat(response).isNotNull();
-    verify(submittedAttempt).resetToInProgress();
+    verify(submittedAttempt).recoverFailedSubmission();
 
     org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(quizAnswerRepository);
     inOrder.verify(quizAnswerRepository).deleteByQuizAttemptId(200L);
