@@ -408,7 +408,16 @@ public class WebCrawler {
             ".blind",
             ".sr-only" // 스크린 리더용 숨김 텍스트 (메뉴 레이어, 검색 레이어 등)
             );
-    doc.select(noiseSelectors).remove();
+    doc.select(noiseSelectors).forEach(el -> {
+      String tag = el.tagName().toLowerCase();
+      if (tag.equals("html") || tag.equals("body") || tag.equals("main") || tag.equals("article")) {
+        return;
+      }
+      if (el.selectFirst("article") != null || el.selectFirst("main") != null) {
+        return;
+      }
+      el.remove();
+    });
 
     // 3차: 특정 블로그 플랫폼 특화 텍스트/구조 기반 노이즈 제거 (Velog 등)
     // - "다음 포스트", "이전 포스트" 링크 블록 째로 제거

@@ -107,6 +107,15 @@ class WebCrawlerTest {
   }
 
   @Test
+  @DisplayName("바디 태그에 노이즈 클래스가 포함되어도 본문 구조(body, main 등)는 삭제되지 않고 보호된다")
+  void bodyTagProtectionFromNoise() {
+    String html = "<html class='menu'><body class='menu sidebar'><div class='menu'><main><article><p>보호된 본문</p></article></main></div></body></html>";
+    Document doc = Jsoup.parse(html);
+    String content = webCrawler.parse(doc).content();
+    assertThat(content).isEqualTo("보호된 본문");
+  }
+
+  @Test
   @DisplayName("article 태그가 존재하면 main 이나 body의 다른 영역을 제외하고 article 태그의 본문만 추출한다")
   void extractBodyArticlePriority() {
     String html =
