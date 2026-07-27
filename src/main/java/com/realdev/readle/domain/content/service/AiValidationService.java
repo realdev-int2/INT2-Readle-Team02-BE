@@ -169,6 +169,7 @@ public class AiValidationService {
         """
         .formatted(escapedText);
   }
+
   private RuntimeException mapToAiValidationException(Throwable e) {
     Throwable cause = (e instanceof CustomException && e.getCause() != null) ? e.getCause() : e;
 
@@ -191,7 +192,6 @@ public class AiValidationService {
       return new CustomException(
           ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "Claude API 호출 중 오류가 발생했습니다.", cause);
     }
-    return new CustomException(
-        ContentErrorCode.AI_VALIDATION_SERVICE_ERROR, "예기치 않은 예외가 발생했습니다.", cause);
+    return new CustomException(GlobalErrorCode.SERVER_ERROR, "AI 호출 중 오류가 발생했습니다.", cause);
   }
 }

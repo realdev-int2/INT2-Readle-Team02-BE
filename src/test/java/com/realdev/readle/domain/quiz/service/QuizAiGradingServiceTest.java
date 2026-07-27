@@ -58,9 +58,9 @@ class QuizAiGradingServiceTest {
         "gradingExecutor",
         java.util.concurrent.Executors.newFixedThreadPool(2));
 
-    // Use a short 100ms timeout for deterministic fast testing
+    // Use a short 1000ms timeout for deterministic fast testing
     ReflectionTestUtils.setField(
-        quizAiGradingService, "timeoutDuration", java.time.Duration.ofMillis(100));
+        quizAiGradingService, "timeoutDuration", java.time.Duration.ofMillis(1000));
 
     question = mock(QuizQuestion.class);
     ReflectionTestUtils.setField(question, "id", 10L);
@@ -186,6 +186,8 @@ class QuizAiGradingServiceTest {
   @Test
   @DisplayName("AI 응답이 설정된 타임아웃을 초과할 경우 타임아웃 발생 및 QUIZ_GRADING_FAILED 예외 발생")
   void gradeAnswerAsync_Timeout() throws Exception {
+    ReflectionTestUtils.setField(
+        quizAiGradingService, "timeoutDuration", java.time.Duration.ofMillis(100));
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
 
     given(claudeClient.getGradingGeneratedText(any(), any()))

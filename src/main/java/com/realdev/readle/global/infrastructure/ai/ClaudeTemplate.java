@@ -75,7 +75,8 @@ public class ClaudeTemplate {
       try {
         log.info("[AI_TEMPLATE] AI 호출 시도 ({}/{}) - purpose: {}", attempt, maxAttempts, purpose);
 
-        String rawText = callWithTimeout(() -> apiCall.apply(currentAttempt), timeoutSeconds, executor, purpose);
+        String rawText =
+            callWithTimeout(() -> apiCall.apply(currentAttempt), timeoutSeconds, executor, purpose);
         T response = parseResponse(rawText, responseType, errorMapper);
         responseValidator.accept(response);
         return response;
@@ -113,7 +114,7 @@ public class ClaudeTemplate {
 
     try {
       task =
-          CompletableFuture.supplyAsync(
+          supplyInterruptiblyAsync(
               () -> {
                 String rawResponse = apiCall.apply(attempt);
                 T response = parseResponse(rawResponse, responseType, errorMapper);
@@ -174,7 +175,7 @@ public class ClaudeTemplate {
     CompletableFuture<String> future = null;
 
     try {
-      future = CompletableFuture.supplyAsync(apiCall, executor);
+      future = supplyInterruptiblyAsync(apiCall, executor);
       String rawText = future.get(timeoutSeconds, TimeUnit.SECONDS);
       outcome = "success";
       return rawText;
@@ -246,5 +247,48 @@ public class ClaudeTemplate {
       current = current.getCause();
     }
     return false;
+  }
+
+  private <T> CompletableFuture<T> supplyInterruptiblyAsync(
+      Supplier<T> supplier, Executor executor) {
+    class InterruptibleFuture extends CompletableFuture<T> {
+      private Thread executingThread;
+
+      @Override
+      public boolean cancel(boolean mayInterruptIfRunning) {
+        boolean cancelled = super.cancel(mayInterruptIfRunning);
+        if (cancelled && mayInterruptIfRunning) {
+          synchronized (this) {
+            if (executingThread != null) {
+              executingThread.interrupt();
+            }
+          }
+        }
+        return cancelled;
+      }
+
+      synchronized void setExecutingThread(Thread thread) {
+        this.executingThread = thread;
+      }
+    }
+
+    InterruptibleFuture future = new InterruptibleFuture();
+
+    executor.execute(
+        () -> {
+          future.setExecutingThread(Thread.currentThread());
+          try {
+            if (!future.isCancelled()) {
+              future.complete(supplier.get());
+            }
+          } catch (Throwable ex) {
+            future.completeExceptionally(ex);
+          } finally {
+            future.setExecutingThread(null);
+            Thread.interrupted(); // Clear interrupt flag
+          }
+        });
+
+    return future;
   }
 }
