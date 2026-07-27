@@ -22,6 +22,7 @@ import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
+import com.realdev.readle.global.infrastructure.ai.ClaudeTemplate;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Optional;
@@ -58,6 +59,7 @@ class QuizGenerationServiceTest {
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
+    ClaudeTemplate claudeTemplate = new ClaudeTemplate(objectMapper, meterRegistry);
     quizGenerationService =
         new QuizGenerationService(
             contentValidationRepository,
@@ -65,11 +67,12 @@ class QuizGenerationServiceTest {
             quizQuestionRepository,
             quizChoiceRepository,
             claudeClient,
+            claudeTemplate,
             promptLoader,
-            objectMapper,
             tagService,
             meterRegistry,
-            transactionTemplate);
+            transactionTemplate,
+            Runnable::run);
 
     member = org.mockito.Mockito.mock(Member.class);
     ReflectionTestUtils.setField(member, "id", 1L);
