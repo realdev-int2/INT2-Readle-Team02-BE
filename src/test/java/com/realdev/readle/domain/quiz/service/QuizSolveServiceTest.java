@@ -100,6 +100,9 @@ class QuizSolveServiceTest {
     lenient()
         .when(quizAttempt.getStartedAt())
         .thenReturn(java.time.LocalDateTime.now().minusMinutes(5));
+    lenient()
+        .when(quizResultRepository.save(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     question1 = mock(QuizQuestion.class);
     lenient().when(question1.getId()).thenReturn(10L);
@@ -125,7 +128,10 @@ class QuizSolveServiceTest {
             invocation -> {
               org.springframework.transaction.support.TransactionCallback<?> callback =
                   invocation.getArgument(0);
-              return callback.doInTransaction(null);
+              if (callback != null) {
+                return callback.doInTransaction(null);
+              }
+              return null;
             });
   }
 
@@ -223,9 +229,15 @@ class QuizSolveServiceTest {
   }
 
   @Test
-  @DisplayName("이미 제출 완료/진행중인 퀴즈 재제출 시 ATTEMPT_ALREADY_SUBMITTED 발생")
+  @DisplayName("이미 제출 완료된 퀴즈와 QuizResult가 이미 존재하는 경우 ATTEMPT_ALREADY_SUBMITTED 발생")
   void submitAnswers_AlreadySubmitted() {
-    given(quizAttempt.getStatus()).willReturn(AttemptStatus.SUBMITTED);
+    QuizAttempt submittedAttempt = mock(QuizAttempt.class);
+    lenient().when(submittedAttempt.getMember()).thenReturn(member);
+    lenient().when(submittedAttempt.getStatus()).thenReturn(AttemptStatus.SUBMITTED);
+
+    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(submittedAttempt));
+    given(quizResultRepository.findByQuizAttemptId(200L))
+        .willReturn(Optional.of(mock(QuizResult.class)));
 
     QuizSubmitRequest request = new QuizSubmitRequest();
 
@@ -233,6 +245,38 @@ class QuizSolveServiceTest {
         .isInstanceOf(CustomException.class)
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+  }
+
+  @Test
+  @DisplayName("Attempt 상태가 SUBMITTED이지만 QuizResult가 없으면 재채점 및 복구 수행")
+  void submitAnswers_RecoveryWhenResultMissing() {
+    QuizAttempt submittedAttempt = mock(QuizAttempt.class);
+    lenient().when(submittedAttempt.getId()).thenReturn(200L);
+    lenient().when(submittedAttempt.getQuizSet()).thenReturn(quizSet);
+    lenient().when(submittedAttempt.getMember()).thenReturn(member);
+    lenient().when(submittedAttempt.getStatus()).thenReturn(AttemptStatus.SUBMITTED);
+    lenient().when(submittedAttempt.getStartedAt()).thenReturn(java.time.LocalDateTime.now().minusMinutes(5));
+    lenient().when(submittedAttempt.getSubmittedAt()).thenReturn(java.time.LocalDateTime.now());
+
+    given(quizAttemptRepository.findWithDetailsById(200L)).willReturn(Optional.of(submittedAttempt));
+    given(quizResultRepository.findByQuizAttemptId(200L)).willReturn(Optional.empty());
+    given(quizQuestionRepository.findByQuizSetOrderByOrderNoAsc(quizSet))
+        .willReturn(List.of(question1));
+    given(quizChoiceRepository.findById(50L)).willReturn(Optional.of(choice1));
+
+    given(quizAttemptRepository.findByIdForUpdate(200L)).willReturn(Optional.of(submittedAttempt));
+    given(quizAttemptRepository.findById(200L)).willReturn(Optional.of(submittedAttempt));
+
+    QuizSubmitRequest request = new QuizSubmitRequest();
+    QuizSubmitRequest.AnswerRequest answerReq = new QuizSubmitRequest.AnswerRequest();
+    ReflectionTestUtils.setField(answerReq, "questionId", 10L);
+    ReflectionTestUtils.setField(answerReq, "submittedChoiceId", 50L);
+    ReflectionTestUtils.setField(request, "answers", List.of(answerReq));
+
+    QuizSubmitResponse response = quizSolveService.submitAnswers(200L, "test-uuid", request);
+
+    assertThat(response).isNotNull();
+    verify(submittedAttempt).resetToInProgress();
   }
 
   @Test

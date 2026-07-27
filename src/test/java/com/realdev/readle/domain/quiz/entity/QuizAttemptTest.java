@@ -24,14 +24,15 @@ class QuizAttemptTest {
   }
 
   @Test
-  @DisplayName("GRADING 상태가 아닌 경우 resetToInProgress 호출 시 ATTEMPT_ALREADY_SUBMITTED 예외가 발생한다")
-  void resetToInProgress_InvalidStatus() {
+  @DisplayName("SUBMITTED 상태에서 resetToInProgress 호출 시 IN_PROGRESS 상태로 복구되고 submittedAt이 초기화된다")
+  void resetToInProgress_FromSubmitted() {
     QuizAttempt attempt = QuizAttempt.createInProgress(mock(QuizSet.class), mock(Member.class));
-    assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.IN_PROGRESS);
+    attempt.submit();
+    assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.SUBMITTED);
+    assertThat(attempt.getSubmittedAt()).isNotNull();
 
-    assertThatThrownBy(attempt::resetToInProgress)
-        .isInstanceOf(CustomException.class)
-        .extracting("errorCode")
-        .isEqualTo(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
+    attempt.resetToInProgress();
+    assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.IN_PROGRESS);
+    assertThat(attempt.getSubmittedAt()).isNull();
   }
 }

@@ -15,4 +15,6 @@ public interface QuizAnswerRepository extends JpaRepository<QuizAnswer, Long> {
           + "WHERE qa.quizAttempt.id = :attemptId "
           + "ORDER BY qq.orderNo ASC")
   List<QuizAnswer> findByQuizAttemptIdWithQuestionAndChoice(@Param("attemptId") Long attemptId);
+
+  void deleteByQuizAttemptId(Long attemptId);
 }

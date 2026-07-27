@@ -70,10 +70,8 @@ public class QuizAttempt {
   }
 
   public void resetToInProgress() {
-    if (this.status != AttemptStatus.GRADING) {
-      throw new CustomException(QuizErrorCode.ATTEMPT_ALREADY_SUBMITTED);
-    }
     this.status = AttemptStatus.IN_PROGRESS;
+    this.submittedAt = null;
   }
 
   public void submit() {
