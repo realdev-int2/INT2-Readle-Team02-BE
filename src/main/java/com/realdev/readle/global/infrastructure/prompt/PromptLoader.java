@@ -17,6 +17,10 @@ public class PromptLoader {
     this.resourceLoader = resourceLoader;
   }
 
+  public String loadPrompt(String promptFileName) {
+    return loadPrompt(promptFileName, Map.of());
+  }
+
   public String loadPrompt(String promptFileName, Map<String, String> variables) {
     String template = readTemplate(promptFileName);
 

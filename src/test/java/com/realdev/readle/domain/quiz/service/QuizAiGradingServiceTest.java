@@ -45,8 +45,6 @@ class QuizAiGradingServiceTest {
 
   @BeforeEach
   void setUp() {
-    meterRegistry = new SimpleMeterRegistry();
-
     // We inject a real ObjectMapper to test Jackson annotations (@JsonIgnoreProperties etc)
     objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
     claudeTemplate = new ClaudeTemplate(objectMapper, meterRegistry);
@@ -114,31 +112,37 @@ class QuizAiGradingServiceTest {
     assertThat(result.aiFeedback()).isEqualTo("틀림");
     // getGradingGeneratedText가 재시도 포함 총 2회 호출되어야 함
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
-    assertThat(
-            meterRegistry
-                .find("readle.ai.client.requests")
-                .tags("purpose", "quiz_grading", "outcome", "success")
-                .timers()
-                .stream()
-                .mapToLong(io.micrometer.core.instrument.Timer::count)
-                .sum())
-        .isEqualTo(1);
-    assertThat(
-            meterRegistry
-                .find("readle.ai.client.requests")
-                .tags("purpose", "quiz_grading", "outcome", "failure")
-                .timers()
-                .stream()
-                .mapToLong(io.micrometer.core.instrument.Timer::count)
-                .sum())
-        .isEqualTo(1);
-    assertThat(
-            meterRegistry
-                .get("readle.ai.client.retries")
-                .tag("purpose", "quiz_grading")
-                .counter()
-                .count())
-        .isEqualTo(1);
+
+    org.awaitility.Awaitility.await()
+        .atMost(java.time.Duration.ofSeconds(2))
+        .untilAsserted(
+            () -> {
+              assertThat(
+                      meterRegistry
+                          .find("readle.ai.client.requests")
+                          .tags("purpose", "quiz_grading", "outcome", "success")
+                          .timers()
+                          .stream()
+                          .mapToLong(io.micrometer.core.instrument.Timer::count)
+                          .sum())
+                  .isEqualTo(1);
+              assertThat(
+                      meterRegistry
+                          .find("readle.ai.client.requests")
+                          .tags("purpose", "quiz_grading", "outcome", "failure")
+                          .timers()
+                          .stream()
+                          .mapToLong(io.micrometer.core.instrument.Timer::count)
+                          .sum())
+                  .isEqualTo(1);
+              assertThat(
+                      meterRegistry
+                          .get("readle.ai.client.retries")
+                          .tag("purpose", "quiz_grading")
+                          .counter()
+                          .count())
+                  .isEqualTo(1);
+            });
   }
 
   @Test
