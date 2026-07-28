@@ -738,4 +738,52 @@ class QuizGenerationServiceTest {
         .extracting("errorCode")
         .isEqualTo(QuizErrorCode.QUIZ_GENERATION_FAILED);
   }
+
+  @Test
+  @DisplayName("정답 누출 탐지 시 타겟 단건 재생성이 성공하면 해당 문항을 포함하여 퀴즈 세트가 정상 생성된다")
+  void createQuizSet_SuccessfullyRegeneratesLeakedQuestion_WhenSingleItemRetrySucceeds() {
+    // given
+    QuizSet quizSet = QuizSet.create(content, validation, false);
+    ReflectionTestUtils.setField(quizSet, "id", 1L);
+
+    given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
+    given(contentValidationRepository.findByIdWithContent(100L))
+        .willReturn(Optional.of(validation));
+    given(quizSetRepository.findForUpdateBySourceValidationId(100L)).willReturn(Optional.empty());
+    given(quizSetRepository.saveAndFlush(any(QuizSet.class))).willReturn(quizSet);
+    given(quizSetRepository.findById(1L)).willReturn(Optional.of(quizSet));
+    given(promptLoader.loadPrompt(anyString(), any())).willReturn("mock prompt");
+
+    String jsonResponse =
+        "{\n"
+            + "  \"tags\": [\"Spring\"],\n"
+            + "  \"quizzes\": [\n"
+            + "    {\n"
+            + "      \"id\": 1,\n"
+            + "      \"type\": \"SHORT_ANSWER\",\n"
+            + "      \"question\": \"Spring에서 Autowired는 자동주입 어노테이션이다.\",\n"
+            + "      \"answer\": \"Autowired\"\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+    given(claudeClient.getGeneratedText(anyString(), anyString())).willReturn(jsonResponse);
+    given(quizQualityGuard.checkRegexLeak(anyString(), anyString()))
+        .willReturn(true)
+        .willReturn(false);
+
+    given(transactionTemplate.execute(any()))
+        .willAnswer(
+            invocation -> {
+              org.springframework.transaction.support.TransactionCallback<?> callback =
+                  invocation.getArgument(0);
+              return callback.doInTransaction(null);
+            });
+
+    // when
+    QuizCreateResponse response = quizGenerationService.createQuizSet(100L);
+
+    // then
+    assertThat(response).isNotNull();
+    assertThat(response.getQuizId()).isEqualTo(1L);
+  }
 }

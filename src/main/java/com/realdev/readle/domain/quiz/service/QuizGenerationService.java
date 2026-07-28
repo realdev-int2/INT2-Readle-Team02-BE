@@ -338,25 +338,39 @@ public class QuizGenerationService {
     }
 
     List<ClaudeQuizResponseDto.ClaudeQuizDto> quizList = parsedResponse.getQuizzes();
-    List<ClaudeQuizResponseDto.ClaudeQuizDto> validQuizzes = new ArrayList<>();
+    boolean[] hasLeak = new boolean[quizList.size()];
+    List<QuizQualityGuard.QuestionInspectItem> nonLeakingItems = new ArrayList<>();
 
+    // 1차: 모든 문항 0ms 정규식 스크리닝
     for (int i = 0; i < quizList.size(); i++) {
       ClaudeQuizResponseDto.ClaudeQuizDto quizDto = quizList.get(i);
       String answerText = getAnswerText(quizDto);
-      boolean hasLeak = quizQualityGuard.checkRegexLeak(quizDto.getQuestion(), answerText);
+      if (quizQualityGuard.checkRegexLeak(quizDto.getQuestion(), answerText)) {
+        hasLeak[i] = true;
+      } else {
+        nonLeakingItems.add(
+            new QuizQualityGuard.QuestionInspectItem(i + 1, quizDto.getQuestion(), answerText));
+      }
+    }
 
-      if (!hasLeak) {
-        List<QuizQualityGuard.QuestionInspectItem> items =
-            List.of(
-                new QuizQualityGuard.QuestionInspectItem(i + 1, quizDto.getQuestion(), answerText));
-        List<ClaudeQualityVerifyResponseDto.QuestionVerifyResult> results =
-            quizQualityGuard.verifyWithLlm(items);
-        if (results != null && !results.isEmpty()) {
-          hasLeak = results.get(0).hasLeak();
+    // 2차: 정규식 통과 문항들에 대해 1회 배치 LLM 의미 검증기 호출
+    if (!nonLeakingItems.isEmpty()) {
+      List<ClaudeQualityVerifyResponseDto.QuestionVerifyResult> verifyResults =
+          quizQualityGuard.verifyWithLlm(nonLeakingItems);
+      if (verifyResults != null) {
+        for (ClaudeQualityVerifyResponseDto.QuestionVerifyResult res : verifyResults) {
+          if (res.hasLeak() && res.index() >= 1 && res.index() <= quizList.size()) {
+            hasLeak[res.index() - 1] = true;
+          }
         }
       }
+    }
 
-      if (hasLeak) {
+    // 3차: 누출 탐지 문항 단건 타겟 재생성 또는 세트 제외 처리
+    List<ClaudeQuizResponseDto.ClaudeQuizDto> validQuizzes = new ArrayList<>();
+    for (int i = 0; i < quizList.size(); i++) {
+      ClaudeQuizResponseDto.ClaudeQuizDto quizDto = quizList.get(i);
+      if (hasLeak[i]) {
         log.warn(
             "[QUIZ_QUALITY_GUARD] 문항 본문에 정답/힌트 누출이 탐지되었습니다. 단건 타겟 재생성을 시도합니다: {}",
             quizDto.getQuestion());
@@ -393,12 +407,23 @@ public class QuizGenerationService {
   private ClaudeQuizResponseDto.ClaudeQuizDto retrySingleQuestion(
       ClaudeQuizResponseDto.ClaudeQuizDto targetQuiz, String articleText) {
     String answerText = getAnswerText(targetQuiz);
+
+    String cleanPrevQuestion =
+        targetQuiz.getQuestion() != null
+            ? targetQuiz.getQuestion().replaceAll("(?i)</?\\s*previous_question\\s*>", "")
+            : "";
+    String cleanPrevAnswer =
+        answerText != null ? answerText.replaceAll("(?i)</?\\s*previous_answer\\s*>", "") : "";
+
     String hintRule =
-        "이전 생성 문항("
-            + targetQuiz.getQuestion()
-            + ") 본문에 정답 또는 정답의 풀네임/유사 표현이 유출되었습니다. 질문 본문에서 정답 단어("
-            + answerText
-            + ") 및 풀네임/약어 암시 표현을 완벽히 제거하고 순수 문맥 문제로 단건 재구성하세요.";
+        "이전 생성 문항 본문에 정답 또는 정답의 풀네임/유사 표현이 유출되었습니다.\n"
+            + "<previous_question>\n"
+            + cleanPrevQuestion
+            + "\n</previous_question>\n"
+            + "<previous_answer>\n"
+            + cleanPrevAnswer
+            + "\n</previous_answer>\n"
+            + "위 문항 본문에서 정답 단어 및 풀네임/약어 암시 표현을 완벽히 제거하고 순수 문맥 문제로 단건 재구성하세요.";
 
     String systemPrompt =
         promptLoader.loadPrompt("quiz-gen-prompt.txt", Map.of("additional_rule", hintRule));
@@ -407,7 +432,6 @@ public class QuizGenerationService {
 
     for (int retry = 0; retry < 2; retry++) {
       try {
-        String jsonResponse = claudeClient.getGeneratedText(systemPrompt, userPrompt);
         ClaudeQuizResponseDto parsed =
             claudeTemplate.executeSync(
                 () -> claudeClient.getGeneratedText(systemPrompt, userPrompt),

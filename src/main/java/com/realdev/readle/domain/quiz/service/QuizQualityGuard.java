@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -112,9 +114,13 @@ public class QuizQualityGuard {
       String quizzesJson = objectMapper.writeValueAsString(items);
       String systemPrompt =
           promptLoader.loadPrompt("quiz-quality-verifier.txt", Map.of("quizzesJson", quizzesJson));
-      String responseText =
-          claudeClient.getGeneratedText(
-              systemPrompt, "Inspect the provided quiz questions for answer leakage.");
+
+      CompletableFuture<String> future =
+          CompletableFuture.supplyAsync(
+              () ->
+                  claudeClient.getGeneratedText(
+                      systemPrompt, "Inspect the provided quiz questions for answer leakage."));
+      String responseText = future.get(7, TimeUnit.SECONDS);
 
       String cleanJson = JsonExtractor.extractJson(responseText);
       ClaudeQualityVerifyResponseDto dto =

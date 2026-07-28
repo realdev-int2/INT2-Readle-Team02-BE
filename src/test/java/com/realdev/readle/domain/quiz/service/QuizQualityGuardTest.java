@@ -99,4 +99,22 @@ class QuizQualityGuardTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).hasLeak()).isFalse();
   }
+
+  @Test
+  @DisplayName("LLM 검증기 예외 발생 또는 비정상 JSON 수신 시 경량 정규식 검사 결과로 안전 Fallback된다")
+  void verifyWithLlm_FallsBackToRegex_WhenExceptionOrMalformedJson() {
+    given(promptLoader.loadPrompt(anyString(), any())).willReturn("mock prompt");
+    given(claudeClient.getGeneratedText(anyString(), anyString()))
+        .willThrow(new RuntimeException("LLM Timeout or Connection Failure"));
+
+    List<QuestionVerifyResult> results =
+        quizQualityGuard.verifyWithLlm(
+            List.of(
+                new QuizQualityGuard.QuestionInspectItem(
+                    1, "스프링 트랜잭션 (REQUIRED) 옵션의 역할은?", "REQUIRED")));
+
+    assertThat(results).hasSize(1);
+    assertThat(results.get(0).hasLeak()).isTrue();
+    assertThat(results.get(0).reason()).isEqualTo("Regex fallback match");
+  }
 }
