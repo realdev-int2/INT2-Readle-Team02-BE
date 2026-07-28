@@ -89,6 +89,24 @@ class QuizAiGradingServiceTest {
   }
 
   @Test
+  @DisplayName("영문 질문 및 답안 제출 시에도 한국어 피드백을 파싱하고 보존한다")
+  void gradeAnswerAsync_EnglishContent_ReturnsKoreanFeedback() throws Exception {
+    given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
+    given(claudeClient.getGradingGeneratedText(any(), any()))
+        .willReturn(
+            "{\"isCorrect\": false, \"aiFeedback\": \"제출하신 답안은 오답입니다. 본문의 트랜잭션 수동 동기화 절을 다시 복습해 보세요.\"}");
+
+    CompletableFuture<QuizAiGradingService.AiEvaluationResult> future =
+        quizAiGradingService.gradeAnswerAsync(
+            question, "slmcvmvvf sdald", "Source article containing English sections");
+    QuizAiGradingService.AiEvaluationResult result = future.join();
+
+    assertThat(result.isCorrect()).isFalse();
+    assertThat(result.aiFeedback()).isEqualTo("제출하신 답안은 오답입니다. 본문의 트랜잭션 수동 동기화 절을 다시 복습해 보세요.");
+    assertThat(result.submittedAnswer()).isEqualTo("slmcvmvvf sdald");
+  }
+
+  @Test
   @DisplayName("JSON 파싱 에러 시 1회 재시도 후 성공")
   void gradeAnswerAsync_Retry_Success() throws Exception {
     // given
