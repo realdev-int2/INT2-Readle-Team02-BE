@@ -2,7 +2,7 @@
 
 ## 상태
 
-이 문서는 현재 backend AI 호출, 검증, 생성, 채점 구현을 기준으로 한다. 관련 결정 배경은 [ADR-001](../adr/ADR-001.md), [ADR-010](../adr/ADR-010.md), [ADR-011](../adr/ADR-011.md), [ADR-014](../adr/ADR-014.md), [ADR-019](../adr/ADR-019.md), [ADR-020](../adr/ADR-020.md)에 있다.
+이 문서는 현재 backend AI 호출, 검증, 생성, 채점 구현을 기준으로 한다. 관련 결정 배경은 [ADR-001](../adr/ADR-001.md), [ADR-010](../adr/ADR-010.md), [ADR-011](../adr/ADR-011.md), [ADR-014](../adr/ADR-014.md), [ADR-021](../adr/ADR-021.md)에 있다.
 
 ## 구성
 
@@ -15,7 +15,6 @@
 | base URL | `https://api.anthropic.com` |
 | max tokens | `4000` |
 | prompt 위치 | `src/main/resources/prompts/` |
-| URL 추출 | Jsoup 기반 정적 크롤러 |
 
 ## 콘텐츠 검증 파이프라인
 
