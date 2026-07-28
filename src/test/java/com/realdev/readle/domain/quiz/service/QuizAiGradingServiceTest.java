@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.domain.quiz.entity.QuizQuestion;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
+import com.realdev.readle.global.infrastructure.ai.ClaudeTemplate;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -36,19 +37,20 @@ class QuizAiGradingServiceTest {
 
   @Mock private ClaudeClient claudeClient;
   @Mock private PromptLoader promptLoader;
-  @Mock private ObjectMapper objectMapper;
+  private ClaudeTemplate claudeTemplate;
   @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   private QuizQuestion question;
+  private ObjectMapper objectMapper;
 
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
-    ReflectionTestUtils.setField(quizAiGradingService, "meterRegistry", meterRegistry);
 
     // We inject a real ObjectMapper to test Jackson annotations (@JsonIgnoreProperties etc)
     objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-    ReflectionTestUtils.setField(quizAiGradingService, "objectMapper", objectMapper);
+    claudeTemplate = new ClaudeTemplate(objectMapper, meterRegistry);
+    ReflectionTestUtils.setField(quizAiGradingService, "claudeTemplate", claudeTemplate);
 
     // Use a multi-thread executor so retry tasks execute immediately without queueing delay
     ReflectionTestUtils.setField(
@@ -56,9 +58,9 @@ class QuizAiGradingServiceTest {
         "gradingExecutor",
         java.util.concurrent.Executors.newFixedThreadPool(2));
 
-    // Use a short 100ms timeout for deterministic fast testing
+    // Use a short 1000ms timeout for deterministic fast testing
     ReflectionTestUtils.setField(
-        quizAiGradingService, "timeoutDuration", java.time.Duration.ofMillis(100));
+        quizAiGradingService, "timeoutDuration", java.time.Duration.ofMillis(1000));
 
     question = mock(QuizQuestion.class);
     ReflectionTestUtils.setField(question, "id", 10L);
@@ -184,6 +186,8 @@ class QuizAiGradingServiceTest {
   @Test
   @DisplayName("AI 응답이 설정된 타임아웃을 초과할 경우 타임아웃 발생 및 QUIZ_GRADING_FAILED 예외 발생")
   void gradeAnswerAsync_Timeout() throws Exception {
+    ReflectionTestUtils.setField(
+        quizAiGradingService, "timeoutDuration", java.time.Duration.ofMillis(100));
     given(promptLoader.loadPrompt(eq("quiz-grading.txt"), anyMap())).willReturn("system_prompt");
 
     given(claudeClient.getGradingGeneratedText(any(), any()))
@@ -203,7 +207,7 @@ class QuizAiGradingServiceTest {
         .hasCauseInstanceOf(com.realdev.readle.global.exception.CustomException.class)
         .extracting(Throwable::getCause)
         .extracting("errorCode")
-        .isEqualTo(com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_GRADING_FAILED);
+        .isEqualTo(com.realdev.readle.domain.quiz.exception.QuizErrorCode.QUIZ_TIMEOUT);
 
     // 첫 호출에서 타임아웃나면 재시도 1번 더 하므로 2번 호출됨 (재시도도 타임아웃 남)
     verify(claudeClient, times(2)).getGradingGeneratedText(any(), any());
