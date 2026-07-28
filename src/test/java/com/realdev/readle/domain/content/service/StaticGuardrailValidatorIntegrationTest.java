@@ -84,4 +84,15 @@ class StaticGuardrailValidatorIntegrationTest {
 
     assertThat(result).isEmpty();
   }
+
+  @Test
+  @DisplayName("safewords.data에 등록된 문장(예: 보지 마세요)은 비속어 오탐지 없이 1차 가드레일을 통과한다")
+  void validate_safeSentenceWithBojiMaseyo_passesStaticGuardrail() {
+    String safeSentenceText = "테스트 실행 중에는 정답을 먼저 보지 마세요. 학습 흐름을 확인하기 위한 안전한 안내 문장입니다. ".repeat(10);
+    Content safeContent = createMockContent(safeSentenceText);
+
+    Optional<RejectReasonCode> result = staticGuardrailValidator.validate(safeContent);
+
+    assertThat(result).isEmpty();
+  }
 }
