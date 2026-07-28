@@ -650,13 +650,23 @@ class QuizSolveServiceTest {
     given(quizResultRepository.findByQuizAttemptId(100L)).willReturn(Optional.of(mockResult));
 
     QuizAnswer mockAnswer = mock(QuizAnswer.class);
+    QuizChoice mockSubmittedChoice = mock(QuizChoice.class);
+    given(mockSubmittedChoice.getOrderNo()).willReturn(2);
+    given(mockSubmittedChoice.getChoiceText()).willReturn("제출한 선택지 내용");
+    given(mockAnswer.getSubmittedChoice()).willReturn(mockSubmittedChoice);
     given(mockAnswer.getQuizQuestion()).willReturn(question1);
-    given(mockAnswer.getSubmittedAnswerText()).willReturn("test");
     given(mockAnswer.getIsCorrect()).willReturn(true);
     given(mockAnswer.getAiFeedback()).willReturn("good");
 
+    QuizAnswer mockAnswer2 = mock(QuizAnswer.class);
+    given(mockAnswer2.getQuizQuestion()).willReturn(question2);
+    given(mockAnswer2.getSubmittedAnswerText()).willReturn("주관식 작성 답안");
+    given(mockAnswer2.getSubmittedChoice()).willReturn(null);
+    given(mockAnswer2.getIsCorrect()).willReturn(true);
+    given(mockAnswer2.getAiFeedback()).willReturn("good short answer");
+
     given(quizAnswerRepository.findByQuizAttemptIdWithQuestionAndChoice(100L))
-        .willReturn(List.of(mockAnswer));
+        .willReturn(List.of(mockAnswer, mockAnswer2));
     given(quizChoiceRepository.findByQuizQuestionInAndIsCorrectTrue(List.of(question1)))
         .willReturn(List.of(choice1));
     given(choice1.getOrderNo()).willReturn(1);
@@ -670,10 +680,20 @@ class QuizSolveServiceTest {
     assertThat(response.getTitle()).isEqualTo("Spring @Transactional 심층 이해");
     assertThat(response.getTags()).containsExactly("spring");
     assertThat(response.getAccuracyRate()).isEqualTo(new java.math.BigDecimal("100.00"));
-    assertThat(response.getResults()).hasSize(1);
-    assertThat(response.getResults().get(0).getSubmittedAnswer()).isEqualTo("test");
+    assertThat(response.getResults()).hasSize(2);
+
+    // 1. 객관식 문항 검증 (submittedChoiceNo 2, correctChoiceNo 1)
+    assertThat(response.getResults().get(0).getSubmittedChoiceNo()).isEqualTo(2);
+    assertThat(response.getResults().get(0).getSubmittedAnswer()).isEqualTo("제출한 선택지 내용");
     assertThat(response.getResults().get(0).getCorrectChoiceNo()).isEqualTo(1);
     assertThat(response.getResults().get(0).getCorrectChoiceText()).isEqualTo("정답 선택지 내용");
+
+    // 2. 주관식 문항 검증 (submittedChoiceNo null, submittedAnswer 보존)
+    assertThat(response.getResults().get(1).getSubmittedChoiceNo()).isNull();
+    assertThat(response.getResults().get(1).getSubmittedAnswer()).isEqualTo("주관식 작성 답안");
+    assertThat(response.getResults().get(1).getCorrectChoiceNo()).isNull();
+    assertThat(response.getResults().get(1).getCorrectChoiceText()).isNull();
+
     verify(quizChoiceRepository, times(1)).findByQuizQuestionInAndIsCorrectTrue(List.of(question1));
   }
 

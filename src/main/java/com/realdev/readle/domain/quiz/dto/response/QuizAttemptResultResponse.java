@@ -34,6 +34,7 @@ public class QuizAttemptResultResponse {
     private final Integer orderNo;
     private final String questionType;
     private final String questionText;
+    private final Integer submittedChoiceNo;
     private final String submittedAnswer;
     private final Boolean isCorrect;
     private final String aiFeedback;
@@ -41,8 +42,10 @@ public class QuizAttemptResultResponse {
     private final String correctChoiceText;
 
     public static QuestionResult from(QuizAnswer answer, QuizChoice correctChoice) {
+      Integer submittedChoiceNo = null;
       String submittedAnswerText = answer.getSubmittedAnswerText();
       if (answer.getSubmittedChoice() != null) {
+        submittedChoiceNo = answer.getSubmittedChoice().getOrderNo();
         submittedAnswerText = answer.getSubmittedChoice().getChoiceText();
       }
 
@@ -65,6 +68,7 @@ public class QuizAttemptResultResponse {
           .orderNo(answer.getQuizQuestion().getOrderNo())
           .questionType(questionTypeStr)
           .questionText(answer.getQuizQuestion().getQuestionText())
+          .submittedChoiceNo(submittedChoiceNo)
           .submittedAnswer(submittedAnswerText)
           .isCorrect(answer.getIsCorrect())
           .aiFeedback(answer.getAiFeedback())
