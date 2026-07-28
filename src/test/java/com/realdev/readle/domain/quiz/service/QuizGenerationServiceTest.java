@@ -16,24 +16,32 @@ import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.domain.member.entity.Member;
 import com.realdev.readle.domain.quiz.dto.response.QuizCreateResponse;
 import com.realdev.readle.domain.quiz.entity.QuizSet;
+import com.realdev.readle.domain.quiz.entity.QuizSetStatus;
 import com.realdev.readle.domain.quiz.exception.QuizErrorCode;
 import com.realdev.readle.domain.quiz.repository.QuizChoiceRepository;
 import com.realdev.readle.domain.quiz.repository.QuizQuestionRepository;
 import com.realdev.readle.domain.quiz.repository.QuizSetRepository;
+import com.realdev.readle.domain.tag.service.TagService;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.infrastructure.ai.ClaudeClient;
 import com.realdev.readle.global.infrastructure.ai.ClaudeTemplate;
 import com.realdev.readle.global.infrastructure.prompt.PromptLoader;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.BDDMockito;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class QuizGenerationServiceTest {
@@ -46,8 +54,8 @@ class QuizGenerationServiceTest {
   @Mock private QuizChoiceRepository quizChoiceRepository;
   @Mock private ClaudeClient claudeClient;
   @Mock private PromptLoader promptLoader;
-  @Mock private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
-  @Mock private com.realdev.readle.domain.tag.service.TagService tagService;
+  @Mock private TransactionTemplate transactionTemplate;
+  @Mock private TagService tagService;
   @Mock private QuizQualityGuard quizQualityGuard;
 
   private ObjectMapper objectMapper = new ObjectMapper();
@@ -76,25 +84,24 @@ class QuizGenerationServiceTest {
             transactionTemplate,
             Runnable::run);
 
-    member = org.mockito.Mockito.mock(Member.class);
+    member = Mockito.mock(Member.class);
     ReflectionTestUtils.setField(member, "id", 1L);
 
-    content = org.mockito.Mockito.mock(Content.class);
+    content = Mockito.mock(Content.class);
     ReflectionTestUtils.setField(content, "id", 1L);
-    org.mockito.BDDMockito.lenient()
+    BDDMockito.lenient()
         .when(content.getRawText())
         .thenReturn("This is test content with public void someCode() {}");
 
-    validation = org.mockito.Mockito.mock(ContentValidation.class);
+    validation = Mockito.mock(ContentValidation.class);
     ReflectionTestUtils.setField(validation, "id", 100L);
-    org.mockito.BDDMockito.lenient().when(validation.getContent()).thenReturn(content);
+    BDDMockito.lenient().when(validation.getContent()).thenReturn(content);
 
-    org.mockito.BDDMockito.lenient()
-        .when(transactionTemplate.execute(org.mockito.ArgumentMatchers.any()))
+    BDDMockito.lenient()
+        .when(transactionTemplate.execute(ArgumentMatchers.any()))
         .thenAnswer(
             invocation -> {
-              org.springframework.transaction.support.TransactionCallback callback =
-                  invocation.getArgument(0);
+              TransactionCallback callback = invocation.getArgument(0);
               if (callback == null) return null;
               return callback.doInTransaction(null);
             });
@@ -145,10 +152,9 @@ class QuizGenerationServiceTest {
         .isEqualTo(1);
     assertThat(response.getStatus()).isEqualTo("completed");
 
-    org.mockito.Mockito.verify(quizQuestionRepository, org.mockito.Mockito.times(1)).save(any());
-    org.mockito.Mockito.verify(quizChoiceRepository, org.mockito.Mockito.times(2)).save(any());
-    org.mockito.Mockito.verify(tagService, org.mockito.Mockito.times(1))
-        .saveContentTags(any(), any());
+    Mockito.verify(quizQuestionRepository, Mockito.times(1)).save(any());
+    Mockito.verify(quizChoiceRepository, Mockito.times(2)).save(any());
+    Mockito.verify(tagService, Mockito.times(1)).saveContentTags(any(), any());
   }
 
   @Test
@@ -160,9 +166,11 @@ class QuizGenerationServiceTest {
         .thenReturn(Optional.of(validation));
 
     // 기존 FAILED 상태의 QuizSet 모킹
-    QuizSet existingQuizSet = org.mockito.Mockito.spy(QuizSet.create(content, validation, false));
+    QuizSet existingQuizSet = Mockito.spy(QuizSet.create(content, validation, false));
     existingQuizSet.fail(); // FAILED 상태로 만듦
+    assertThat(existingQuizSet.getCompletedAt()).isNull(); // fail() 직후 completedAt 상태 전이 계약 검증
     ReflectionTestUtils.setField(existingQuizSet, "id", 300L);
+    ReflectionTestUtils.setField(existingQuizSet, "createdAt", LocalDateTime.now());
 
     // 기존 QuizSet 반환하도록 모킹
     given(quizSetRepository.findForUpdateBySourceValidationId(100L))
@@ -199,14 +207,12 @@ class QuizGenerationServiceTest {
     assertThat(response.getStatus()).isEqualTo("completed");
 
     // retry()가 불려서 GENERATING을 거쳤는지 검증
-    org.mockito.Mockito.verify(existingQuizSet, org.mockito.Mockito.times(1)).retry();
-    org.mockito.Mockito.verify(quizChoiceRepository, org.mockito.Mockito.times(1))
-        .deleteByQuizSetId(300L);
-    org.mockito.Mockito.verify(quizQuestionRepository, org.mockito.Mockito.times(1))
-        .deleteByQuizSetId(300L);
+    Mockito.verify(existingQuizSet, Mockito.times(1)).retry();
+    Mockito.verify(quizChoiceRepository, Mockito.times(1)).deleteByQuizSetId(300L);
+    Mockito.verify(quizQuestionRepository, Mockito.times(1)).deleteByQuizSetId(300L);
 
     // delete는 절대 호출되지 않아야 함
-    org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.never()).delete(any());
+    Mockito.verify(quizSetRepository, Mockito.never()).delete(any());
   }
 
   @Test
@@ -220,6 +226,7 @@ class QuizGenerationServiceTest {
         .thenReturn(Optional.of(validation));
 
     QuizSet existingQuizSet = QuizSet.create(content, validation, false);
+    ReflectionTestUtils.setField(existingQuizSet, "createdAt", LocalDateTime.now());
     given(quizSetRepository.findForUpdateBySourceValidationId(100L))
         .willReturn(Optional.of(existingQuizSet));
 
@@ -238,12 +245,11 @@ class QuizGenerationServiceTest {
         .thenReturn(Optional.of(validation));
 
     // 기존 FAILED 상태의 QuizSet 모킹
-    QuizSet existingQuizSet = org.mockito.Mockito.spy(QuizSet.create(content, validation, false));
+    QuizSet existingQuizSet = Mockito.spy(QuizSet.create(content, validation, false));
     existingQuizSet.fail(); // FAILED 상태로 만듦
     ReflectionTestUtils.setField(existingQuizSet, "id", 300L);
     ReflectionTestUtils.setField(existingQuizSet, "questionCount", 3);
-    ReflectionTestUtils.setField(
-        existingQuizSet, "completedAt", java.time.LocalDateTime.now().minusDays(1));
+    ReflectionTestUtils.setField(existingQuizSet, "createdAt", LocalDateTime.now());
 
     // 기존 QuizSet 반환하도록 모킹
     given(quizSetRepository.findForUpdateBySourceValidationId(100L))
@@ -252,8 +258,7 @@ class QuizGenerationServiceTest {
         .willAnswer(
             invocation -> {
               QuizSet arg = invocation.getArgument(0);
-              assertThat(arg.getStatus())
-                  .isEqualTo(com.realdev.readle.domain.quiz.entity.QuizSetStatus.GENERATING);
+              assertThat(arg.getStatus()).isEqualTo(QuizSetStatus.GENERATING);
               assertThat(arg.getQuestionCount()).isNull();
               assertThat(arg.getCompletedAt()).isNull();
               return arg;
@@ -273,26 +278,23 @@ class QuizGenerationServiceTest {
         .isEqualTo(QuizErrorCode.QUIZ_GENERATION_FAILED);
 
     // retry()가 불려서 GENERATING으로 전환되었는지 검증
-    org.mockito.Mockito.verify(existingQuizSet, org.mockito.Mockito.times(1)).retry();
+    Mockito.verify(existingQuizSet, Mockito.times(1)).retry();
 
     // saveAndFlush 호출 횟수 검증 (내부 상태 검증은 given의 willAnswer에서 수행됨)
-    org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.times(1))
-        .saveAndFlush(any(QuizSet.class));
+    Mockito.verify(quizSetRepository, Mockito.times(1)).saveAndFlush(any(QuizSet.class));
 
     // catch 블록에서 fail()이 호출되어 다시 FAILED로 돌아왔는지 검증
     // 초기 셋업 때 fail() 1번 + catch 블록에서 fail() 1번 = 총 2번 호출됨
-    org.mockito.Mockito.verify(existingQuizSet, org.mockito.Mockito.times(2)).fail();
+    Mockito.verify(existingQuizSet, Mockito.times(2)).fail();
 
     // 최종 상태 검증
-    assertThat(existingQuizSet.getStatus())
-        .isEqualTo(com.realdev.readle.domain.quiz.entity.QuizSetStatus.FAILED);
+    assertThat(existingQuizSet.getStatus()).isEqualTo(QuizSetStatus.FAILED);
 
     // 실패 후 복구 시 save가 호출되었는지 검증
-    org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.times(1))
-        .save(existingQuizSet);
+    Mockito.verify(quizSetRepository, Mockito.times(1)).save(existingQuizSet);
 
     // delete는 호출되지 않아야 함
-    org.mockito.Mockito.verify(quizSetRepository, org.mockito.Mockito.never()).delete(any());
+    Mockito.verify(quizSetRepository, Mockito.never()).delete(any());
   }
 
   @Test
@@ -322,7 +324,7 @@ class QuizGenerationServiceTest {
   void createQuizSet_ThrowsWhenPending() {
     // given
     given(validation.getStatus()).willReturn(ValidationStatus.PENDING);
-    org.mockito.BDDMockito.lenient()
+    BDDMockito.lenient()
         .when(validation.getValidationMethod())
         .thenReturn(ValidationMethod.STATIC_GUARDRAIL);
     given(contentValidationRepository.findByIdWithContent(100L))
@@ -343,7 +345,7 @@ class QuizGenerationServiceTest {
   void createQuizSet_ThrowsWhenFailed() {
     // given
     given(validation.getStatus()).willReturn(ValidationStatus.FAILED);
-    org.mockito.BDDMockito.lenient()
+    BDDMockito.lenient()
         .when(validation.getValidationMethod())
         .thenReturn(ValidationMethod.STATIC_GUARDRAIL);
     given(contentValidationRepository.findByIdWithContent(100L))
@@ -363,8 +365,8 @@ class QuizGenerationServiceTest {
     given(validation.getStatus()).willReturn(ValidationStatus.PASSED);
     given(contentValidationRepository.findByIdWithContent(100L))
         .willReturn(Optional.of(validation));
-    org.mockito.BDDMockito.lenient().when(content.getRawText()).thenReturn("   ");
-    org.mockito.BDDMockito.lenient().when(content.getExtractedText()).thenReturn("   ");
+    BDDMockito.lenient().when(content.getRawText()).thenReturn("   ");
+    BDDMockito.lenient().when(content.getExtractedText()).thenReturn("   ");
 
     given(quizSetRepository.findForUpdateBySourceValidationId(100L)).willReturn(Optional.empty());
 
@@ -380,8 +382,7 @@ class QuizGenerationServiceTest {
         .isEqualTo(QuizErrorCode.EMPTY_SOURCE_TEXT_FOR_QUIZ);
 
     // 예외 보상 상태 전이 검증 (FAILED 상태 전이 확인)
-    assertThat(expectedQuizSet.getStatus())
-        .isEqualTo(com.realdev.readle.domain.quiz.entity.QuizSetStatus.FAILED);
+    assertThat(expectedQuizSet.getStatus()).isEqualTo(QuizSetStatus.FAILED);
   }
 
   @Test
@@ -554,9 +555,7 @@ class QuizGenerationServiceTest {
         .willReturn(Optional.of(validation));
 
     // 코드가 없는 본문으로 설정 (hasCode = false)
-    org.mockito.BDDMockito.lenient()
-        .when(content.getRawText())
-        .thenReturn("이것은 코드가 전혀 없는 순수 텍스트 본문입니다.");
+    BDDMockito.lenient().when(content.getRawText()).thenReturn("이것은 코드가 전혀 없는 순수 텍스트 본문입니다.");
 
     QuizSet expectedQuizSet = QuizSet.create(content, validation, false);
     ReflectionTestUtils.setField(expectedQuizSet, "id", 200L);
@@ -590,12 +589,10 @@ class QuizGenerationServiceTest {
         .isEqualTo(QuizErrorCode.QUIZ_GENERATION_FAILED);
 
     // 실패 상태 전이 확인
-    assertThat(expectedQuizSet.getStatus())
-        .isEqualTo(com.realdev.readle.domain.quiz.entity.QuizSetStatus.FAILED);
+    assertThat(expectedQuizSet.getStatus()).isEqualTo(QuizSetStatus.FAILED);
 
     // 태그 저장이 수행되지 않았음을 확인
-    org.mockito.Mockito.verify(tagService, org.mockito.Mockito.never())
-        .saveContentTags(any(), any());
+    Mockito.verify(tagService, Mockito.never()).saveContentTags(any(), any());
   }
 
   // =========================================================================

@@ -93,7 +93,7 @@ public class QuizSet extends BaseCreatedAtEntity {
           GlobalErrorCode.INVALID_INPUT, "이미 처리된 퀴즈 세트입니다. 현재 상태: " + this.status);
     }
     this.status = QuizSetStatus.FAILED;
-    this.completedAt = LocalDateTime.now();
+    this.completedAt = null; // 실패 시 completedAt은 null이어야 함 (성공 시에만 기록)
   }
 
   public void retry() {
