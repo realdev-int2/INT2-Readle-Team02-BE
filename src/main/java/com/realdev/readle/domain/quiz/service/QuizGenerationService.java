@@ -32,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -81,23 +82,25 @@ public class QuizGenerationService {
                       quizSetRepository
                           .findForUpdateBySourceValidationId(sourceValidationId)
                           .orElse(null);
-                } catch (org.springframework.dao.PessimisticLockingFailureException e) {
+                } catch (PessimisticLockingFailureException e) {
                   throw new CustomException(
                       QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS,
-                      "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.",
+                      "해당 콘텐츠에 대한 퀴즈 생성이 진행 중입니다. 잠시 후 다시 시도해주세요.",
                       e);
                 }
 
                 if (existing != null) {
-                  if (existing.getStatus() == QuizSetStatus.FAILED) {
+                  if (existing.getStatus() == QuizSetStatus.GENERATING) {
+                    throw new CustomException(
+                        QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS,
+                        "해당 콘텐츠에 대한 퀴즈 생성이 진행 중입니다. 잠시 후 다시 시도해주세요.");
+                  } else if (existing.getStatus() == QuizSetStatus.FAILED) {
                     existing.retry();
                     quizChoiceRepository.deleteByQuizSetId(existing.getId());
                     quizQuestionRepository.deleteByQuizSetId(existing.getId());
-                    return new QuizSetStart(quizSetRepository.saveAndFlush(existing), true);
-                  } else {
-                    throw new CustomException(
-                        QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS,
-                        "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.");
+                    return new QuizSetStart(quizSetRepository.saveAndFlush(existing), true, false);
+                  } else if (existing.getStatus() == QuizSetStatus.COMPLETED) {
+                    return new QuizSetStart(existing, false, true);
                   }
                 }
 
@@ -125,11 +128,11 @@ public class QuizGenerationService {
                 try {
                   newQuizSet =
                       QuizSet.create(managedValidation.getContent(), managedValidation, isBypassed);
-                  return new QuizSetStart(quizSetRepository.saveAndFlush(newQuizSet), false);
+                  return new QuizSetStart(quizSetRepository.saveAndFlush(newQuizSet), false, false);
                 } catch (DataIntegrityViolationException e) {
                   throw new CustomException(
                       QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS,
-                      "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다.",
+                      "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다. 잠시 후 다시 시도해주세요.",
                       e);
                 }
               });
@@ -138,6 +141,12 @@ public class QuizGenerationService {
       throw e;
     }
     QuizSet quizSet = quizSetStart.quizSet();
+    if (quizSetStart.alreadyCompleted()) {
+      sample.stop(
+          Timer.builder(QUIZ_GENERATION).tag("outcome", "success_cached").register(meterRegistry));
+      return QuizCreateResponse.from(quizSet);
+    }
+
     if (quizSetStart.retry()) {
       Counter.builder(QUIZ_GENERATION_RETRIES).register(meterRegistry).increment();
     }
@@ -288,7 +297,7 @@ public class QuizGenerationService {
     }
   }
 
-  private record QuizSetStart(QuizSet quizSet, boolean retry) {}
+  private record QuizSetStart(QuizSet quizSet, boolean retry, boolean alreadyCompleted) {}
 
   private void validateGeneratedQuizRules(ClaudeQuizResponseDto response) {
     if (response.getQuizzes() == null || response.getQuizzes().isEmpty()) {
