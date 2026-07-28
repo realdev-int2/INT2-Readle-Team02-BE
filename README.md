@@ -145,6 +145,19 @@ flowchart LR
 | 문서 UI | springdoc OpenAPI UI |
 | 운영 확인 | Spring Boot Actuator health/prometheus, Grafana dashboard |
 
+## 관측 환경
+
+배포 환경의 Grafana는 `https://<service-host>/grafana/`에서 확인할 수 있으며, 운영자가 관리하는 계정으로 로그인해야 합니다.
+
+![Readle Grafana Overview](docs/assets/readle-grafana-overview.png)
+
+- 인프라 상태와 백엔드 health·HTTP·JVM·DB connection pool을 확인합니다.
+- AI 호출·토큰 사용량과 콘텐츠 검증·퀴즈 생성·채점 흐름을 관측합니다.
+- Loki 로그를 통해 backend/frontend/Nginx 컨테이너 로그를 조회합니다.
+- Prometheus 메트릭 endpoint와 Grafana 자격 증명은 외부에 공개하지 않습니다.
+
+설치·업데이트·검증·장애 대응 절차는 [배포 운영 문서](docs/DEPLOYMENT.md)를 참고합니다.
+
 ## 빠른 시작
 
 ```bash
