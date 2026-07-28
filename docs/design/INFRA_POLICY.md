@@ -9,7 +9,7 @@
 - [백엔드 이미지 배포 계약](../DEPLOYMENT.md)
 - [ADR-008](../adr/ADR-008.md)
 - [ADR-012](../adr/ADR-012.md)
-- [ADR-020](../adr/ADR-020.md)
+- [ADR-021](../adr/ADR-021.md)
 
 ## Backend runtime
 
