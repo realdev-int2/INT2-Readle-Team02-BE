@@ -3,8 +3,20 @@ title = "Readle gitleaks config"
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Ignore generated build artifacts"
 paths = [
     '''(^|/)build/''',
+]
+
+[[allowlists]]
+description = "Ignore Pencil document metadata UUID"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = [
+    '''^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$''',
+]
+paths = [
+    '''^docs/assets/readle-backend-architecture\.pen$''',
 ]

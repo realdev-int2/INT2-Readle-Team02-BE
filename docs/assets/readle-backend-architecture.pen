@@ -1,0 +1,2563 @@
+{
+  "version": "2.14",
+  "children": [
+    {
+      "type": "frame",
+      "id": "bi8Au",
+      "x": 0,
+      "y": 0,
+      "name": "Readle 백엔드 시스템 아키텍처",
+      "clip": true,
+      "width": 1600,
+      "height": 1200,
+      "fill": "#FFFFFF",
+      "layout": "none",
+      "children": [
+        {
+          "type": "text",
+          "id": "SA3vE",
+          "x": 50,
+          "y": 32,
+          "name": "아키텍처 라벨",
+          "fill": "#EA580C",
+          "content": "READLE BACKEND · SYSTEM ARCHITECTURE",
+          "fontFamily": "Inter",
+          "fontSize": 13,
+          "fontWeight": "700"
+        },
+        {
+          "type": "text",
+          "id": "EMgPm",
+          "x": 50,
+          "y": 58,
+          "name": "아키텍처 제목",
+          "fill": "#0F172A",
+          "content": "배포·네트워크·관측 흐름",
+          "fontFamily": "Inter",
+          "fontSize": 34,
+          "fontWeight": "700"
+        },
+        {
+          "type": "text",
+          "id": "klj1z",
+          "x": 50,
+          "y": 106,
+          "name": "아키텍처 설명",
+          "fill": "#475569",
+          "content": "단일 EC2에서 Nginx가 외부 요청을 분기하고, API·데이터·관측 서비스는 역할별 네트워크로 운영합니다.",
+          "fontFamily": "Inter",
+          "fontSize": 16
+        },
+        {
+          "type": "rectangle",
+          "id": "MUTy0",
+          "x": 50,
+          "y": 142,
+          "name": "헤더 구분선",
+          "fill": "#E2E8F0",
+          "width": 1490,
+          "height": 1
+        },
+        {
+          "type": "frame",
+          "id": "A9shJf",
+          "x": 34,
+          "y": 338,
+          "name": "사용자",
+          "width": 116,
+          "height": 110,
+          "fill": "#FFFFFF",
+          "cornerRadius": 16,
+          "stroke": "#CBD5E1",
+          "strokeWidth": 1,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A10",
+            "offset": {
+              "x": 0,
+              "y": 3
+            },
+            "blur": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "ZtiEU",
+              "x": 35,
+              "y": 20,
+              "name": "사용자 아이콘",
+              "width": 38,
+              "height": 38,
+              "icon": "users",
+              "library": "lucide",
+              "fill": "#475569"
+            },
+            {
+              "type": "text",
+              "id": "NVrnc",
+              "x": 34,
+              "y": 70,
+              "name": "사용자 제목",
+              "fill": "#0F172A",
+              "content": "사용자",
+              "fontFamily": "Inter",
+              "fontSize": 17,
+              "fontWeight": "700"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "e7Gn4r",
+          "x": 180,
+          "y": 168,
+          "name": "AWS EC2",
+          "width": 1060,
+          "height": 560,
+          "fill": "#FFFCF8",
+          "cornerRadius": 16,
+          "stroke": "#FB923C",
+          "strokeWidth": 1,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A10",
+            "offset": {
+              "x": 0,
+              "y": 3
+            },
+            "blur": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "rectangle",
+              "id": "KIIK1",
+              "x": 28,
+              "y": 24,
+              "name": "AWS EC2 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/aws.png",
+                "mode": "fit"
+              },
+              "width": 28,
+              "height": 28
+            },
+            {
+              "type": "text",
+              "id": "xebcs",
+              "x": 62,
+              "y": 20,
+              "name": "EC2 제목",
+              "fill": "#0F172A",
+              "content": "AWS  단일 EC2",
+              "fontFamily": "Inter",
+              "fontSize": 19,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "OJGyt",
+              "x": 62,
+              "y": 48,
+              "name": "EC2 설명",
+              "fill": "#64748B",
+              "content": "Podman 기반 운영 환경",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "Xw4hS",
+              "x": 20,
+              "y": 82,
+              "name": "Nginx",
+              "width": 250,
+              "height": 410,
+              "fill": "#F0FDF4",
+              "cornerRadius": 16,
+              "stroke": "#65A30D",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A10",
+                "offset": {
+                  "x": 0,
+                  "y": 3
+                },
+                "blur": 8
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "H0QRIL",
+                  "x": 23,
+                  "y": 21,
+                  "name": "Nginx 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/nginx.png",
+                    "mode": "fit"
+                  },
+                  "width": 28,
+                  "height": 28
+                },
+                {
+                  "type": "text",
+                  "id": "k91ct",
+                  "x": 56,
+                  "y": 20,
+                  "name": "Nginx 제목",
+                  "fill": "#14532D",
+                  "content": "Nginx",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "MIPA2",
+                  "x": 20,
+                  "y": 53,
+                  "name": "Nginx 보조",
+                  "fill": "#166534",
+                  "content": "rootful Podman · readle-nginx",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "LpH2G",
+                  "x": 16,
+                  "y": 88,
+                  "name": "Nginx 역할",
+                  "width": 218,
+                  "height": 142,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": "#BBF7D0",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#0F172A10",
+                    "offset": {
+                      "x": 0,
+                      "y": 3
+                    },
+                    "blur": 8
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ScNsB",
+                      "x": 18,
+                      "y": 18,
+                      "name": "Nginx 역할 제목",
+                      "fill": "#14532D",
+                      "content": "Reverse Proxy",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "l8xKHB",
+                      "x": 18,
+                      "y": 48,
+                      "name": "Nginx 역할 내용",
+                      "fill": "#334155",
+                      "content": "Host ports: 80, 443\nTLS termination",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nMzod",
+                  "x": 16,
+                  "y": 250,
+                  "name": "Nginx Upstream",
+                  "width": 218,
+                  "height": 140,
+                  "fill": "#F8FFFA",
+                  "cornerRadius": 16,
+                  "stroke": "#86EFAC",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#0F172A10",
+                    "offset": {
+                      "x": 0,
+                      "y": 3
+                    },
+                    "blur": 8
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cmrLZ",
+                      "x": 18,
+                      "y": 16,
+                      "name": "Upstream 제목",
+                      "fill": "#166534",
+                      "content": "Dynamic Upstreams",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "miKMt",
+                      "x": 18,
+                      "y": 46,
+                      "name": "Upstream 내용",
+                      "fill": "#334155",
+                      "content": "/          → readle-frontend:8080\n/api/* → active backend:8080\n          (blue | green)",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "XZ9qZ",
+              "x": 390,
+              "y": 80,
+              "name": "Frontend",
+              "width": 280,
+              "height": 155,
+              "fill": "#EFF6FF",
+              "cornerRadius": 16,
+              "stroke": "#2563EB",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A10",
+                "offset": {
+                  "x": 0,
+                  "y": 3
+                },
+                "blur": 8
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "xGwuP",
+                  "x": 27,
+                  "y": 20,
+                  "name": "React 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/react.png",
+                    "mode": "fit"
+                  },
+                  "width": 30,
+                  "height": 30
+                },
+                {
+                  "type": "text",
+                  "id": "tmXcs",
+                  "x": 62,
+                  "y": 21,
+                  "name": "Frontend 제목",
+                  "fill": "#1E3A8A",
+                  "content": "Frontend",
+                  "fontFamily": "Inter",
+                  "fontSize": 19,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "DpnJh",
+                  "x": 62,
+                  "y": 50,
+                  "name": "Frontend 보조",
+                  "fill": "#1E3A8A",
+                  "content": "Podman · readle-frontend",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "mZdzq",
+                  "x": 18,
+                  "y": 80,
+                  "name": "Frontend 역할",
+                  "width": 244,
+                  "height": 56,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": "#DBEAFE",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#0F172A10",
+                    "offset": {
+                      "x": 0,
+                      "y": 3
+                    },
+                    "blur": 8
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "uCwYC",
+                      "x": 16,
+                      "y": 18,
+                      "name": "Frontend 역할 내용",
+                      "fill": "#334155",
+                      "content": "React · :8080 · readle-public",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "EH9rc",
+              "x": 390,
+              "y": 253,
+              "name": "Backend",
+              "width": 420,
+              "height": 250,
+              "fill": "#EFF6FF",
+              "cornerRadius": 16,
+              "stroke": "#2563EB",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A10",
+                "offset": {
+                  "x": 0,
+                  "y": 3
+                },
+                "blur": 8
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "hNRdP",
+                  "x": 24,
+                  "y": 21,
+                  "name": "Spring Boot 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/springboot.png",
+                    "mode": "fit"
+                  },
+                  "width": 28,
+                  "height": 28
+                },
+                {
+                  "type": "text",
+                  "id": "KEY6T",
+                  "x": 56,
+                  "y": 20,
+                  "name": "Backend 제목",
+                  "fill": "#1E3A8A",
+                  "content": "Backend API",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "MECMX",
+                  "x": 56,
+                  "y": 50,
+                  "name": "Backend 보조",
+                  "fill": "#1E3A8A",
+                  "content": "Spring Boot · :8080 · active: blue | green",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "ScIL1",
+                  "x": 18,
+                  "y": 84,
+                  "name": "Backend Core",
+                  "width": 196,
+                  "height": 142,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": "#DBEAFE",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#0F172A10",
+                    "offset": {
+                      "x": 0,
+                      "y": 3
+                    },
+                    "blur": 8
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "h5Yaaa",
+                      "x": 16,
+                      "y": 16,
+                      "name": "Backend Core 제목",
+                      "fill": "#1E3A8A",
+                      "content": "애플리케이션",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ij8tT",
+                      "x": 16,
+                      "y": 45,
+                      "name": "Backend Core 내용",
+                      "fill": "#334155",
+                      "content": "prod profile\nFlyway · MySQL\nOAuth · JWT · S3",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KfCqq",
+                  "x": 230,
+                  "y": 84,
+                  "name": "Blue Green Slots",
+                  "width": 172,
+                  "height": 142,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": "#BFDBFE",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#0F172A10",
+                    "offset": {
+                      "x": 0,
+                      "y": 3
+                    },
+                    "blur": 8
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "O4uiw",
+                      "x": 16,
+                      "y": 16,
+                      "name": "슬롯 제목",
+                      "fill": "#1D4ED8",
+                      "content": "Blue / Green Slots",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "lvjjX",
+                      "x": 14,
+                      "y": 42,
+                      "name": "Blue Slot",
+                      "width": 144,
+                      "height": 40,
+                      "fill": "#EFF6FF",
+                      "cornerRadius": 16,
+                      "stroke": "#60A5FA",
+                      "strokeWidth": 1,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#0F172A10",
+                        "offset": {
+                          "x": 0,
+                          "y": 3
+                        },
+                        "blur": 8
+                      },
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZOlNA",
+                          "x": 14,
+                          "y": 12,
+                          "name": "Blue Slot 내용",
+                          "fill": "#1D4ED8",
+                          "content": "blue · ACTIVE",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VHriI",
+                      "x": 14,
+                      "y": 94,
+                      "name": "Green Slot",
+                      "width": 144,
+                      "height": 34,
+                      "fill": "#F8FAFC",
+                      "cornerRadius": 16,
+                      "stroke": "#CBD5E1",
+                      "strokeWidth": 1,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#0F172A10",
+                        "offset": {
+                          "x": 0,
+                          "y": 3
+                        },
+                        "blur": 8
+                      },
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FzZlI",
+                          "x": 14,
+                          "y": 9,
+                          "name": "Green Slot 내용",
+                          "fill": "#475569",
+                          "content": "green · INACTIVE",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Fvyl3",
+              "x": 845,
+              "y": 253,
+              "name": "MySQL",
+              "width": 195,
+              "height": 250,
+              "fill": "#FAF5FF",
+              "cornerRadius": 16,
+              "stroke": "#7E22CE",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A10",
+                "offset": {
+                  "x": 0,
+                  "y": 3
+                },
+                "blur": 8
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "Cmlt8",
+                  "x": 18,
+                  "y": 18,
+                  "name": "MySQL 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/mysql.png",
+                    "mode": "fit"
+                  },
+                  "width": 28,
+                  "height": 28
+                },
+                {
+                  "type": "text",
+                  "id": "in7Nx",
+                  "x": 56,
+                  "y": 20,
+                  "name": "MySQL 제목",
+                  "fill": "#581C87",
+                  "content": "MySQL",
+                  "fontFamily": "Inter",
+                  "fontSize": 19,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "ZJC4h",
+                  "x": 18,
+                  "y": 52,
+                  "name": "MySQL 보조",
+                  "fill": "#6B21A8",
+                  "content": "Podman · readle-mysql",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "T4r3tG",
+                  "x": 16,
+                  "y": 84,
+                  "name": "MySQL 역할",
+                  "width": 163,
+                  "height": 128,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": "#E9D5FF",
+                  "strokeWidth": 1,
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#0F172A10",
+                    "offset": {
+                      "x": 0,
+                      "y": 3
+                    },
+                    "blur": 8
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "w1aX7c",
+                      "x": 16,
+                      "y": 16,
+                      "name": "MySQL 역할 내용",
+                      "fill": "#334155",
+                      "content": "Port: 3306\nHost port 미공개\nRefresh Token hash\nOAuth state",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "AqpU6",
+              "x": 20,
+              "y": 520,
+              "name": "Public Network",
+              "width": 650,
+              "height": 28,
+              "fill": "#EFF6FF",
+              "cornerRadius": 16,
+              "stroke": "#2563EB",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A10",
+                "offset": {
+                  "x": 0,
+                  "y": 3
+                },
+                "blur": 8
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "HyBOh",
+                  "x": 18,
+                  "y": 6,
+                  "name": "Public Network 아이콘",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "globe",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                },
+                {
+                  "type": "text",
+                  "id": "gTgdS",
+                  "x": 44,
+                  "y": 7,
+                  "name": "Public Network 제목",
+                  "fill": "#1E40AF",
+                  "content": "readle-public · Nginx · Frontend · Backend",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "e5w7w",
+              "x": 700,
+              "y": 520,
+              "name": "Private Network",
+              "width": 340,
+              "height": 28,
+              "fill": "#ECFDF5",
+              "cornerRadius": 16,
+              "stroke": "#059669",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A10",
+                "offset": {
+                  "x": 0,
+                  "y": 3
+                },
+                "blur": 8
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "uetYt",
+                  "x": 18,
+                  "y": 6,
+                  "name": "Private Network 아이콘",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "lock-keyhole",
+                  "library": "lucide",
+                  "fill": "#059669"
+                },
+                {
+                  "type": "text",
+                  "id": "uKfaT",
+                  "x": 44,
+                  "y": 7,
+                  "name": "Private Network 제목",
+                  "fill": "#047857",
+                  "content": "readle-private · Backend · MySQL",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "path",
+              "id": "ehtSS",
+              "x": 270,
+              "y": 155,
+              "name": "Nginx Frontend 연결",
+              "geometry": "M0 8h108m-10-6l10 6-10 6",
+              "viewBox": [
+                0,
+                0,
+                120,
+                16
+              ],
+              "fill": "#00000000",
+              "width": 120,
+              "height": 16,
+              "stroke": "#2563EB",
+              "strokeWidth": 2,
+              "strokeLinejoin": "round",
+              "strokeLinecap": "round"
+            },
+            {
+              "type": "text",
+              "id": "o5S0w8",
+              "x": 308,
+              "y": 132,
+              "name": "Nginx Frontend 라벨",
+              "fill": "#1D4ED8",
+              "content": "/",
+              "fontFamily": "IBM Plex Mono",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "path",
+              "id": "k4Hd9F",
+              "x": 270,
+              "y": 385,
+              "name": "Nginx Backend 연결",
+              "geometry": "M0 8h108m-10-6l10 6-10 6",
+              "viewBox": [
+                0,
+                0,
+                120,
+                16
+              ],
+              "fill": "#00000000",
+              "width": 120,
+              "height": 16,
+              "stroke": "#2563EB",
+              "strokeWidth": 2,
+              "strokeLinejoin": "round",
+              "strokeLinecap": "round"
+            },
+            {
+              "type": "text",
+              "id": "U03TC",
+              "x": 303,
+              "y": 362,
+              "name": "Nginx Backend 라벨",
+              "fill": "#1D4ED8",
+              "content": "/api/*",
+              "fontFamily": "IBM Plex Mono",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "path",
+              "id": "WyAme",
+              "x": 816,
+              "y": 377,
+              "name": "Backend MySQL 연결",
+              "geometry": "M0 8h23m-10-6l10 6-10 6",
+              "viewBox": [
+                0,
+                0,
+                35,
+                16
+              ],
+              "fill": "#00000000",
+              "width": 35,
+              "height": 16,
+              "stroke": "#334155",
+              "strokeWidth": 2,
+              "strokeLinejoin": "round",
+              "strokeLinecap": "round"
+            },
+            {
+              "type": "text",
+              "id": "c7hFV",
+              "x": 813,
+              "y": 363,
+              "name": "Backend MySQL 라벨",
+              "fill": "#334155",
+              "content": "JDBC",
+              "fontFamily": "IBM Plex Mono",
+              "fontSize": 11,
+              "fontWeight": "700"
+            },
+            {
+              "type": "path",
+              "id": "BHruO",
+              "x": 137,
+              "y": 500,
+              "name": "Nginx Public 연결",
+              "geometry": "M8 0v14m-6-10l6 10 6-10",
+              "viewBox": [
+                0,
+                0,
+                16,
+                26
+              ],
+              "fill": "#00000000",
+              "width": 16,
+              "height": 26,
+              "stroke": "#2563EB",
+              "strokeWidth": 2,
+              "strokeLinejoin": "round",
+              "strokeLinecap": "round"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "CYhnX",
+          "x": 1265,
+          "y": 168,
+          "name": "Blue Green 배포",
+          "width": 270,
+          "height": 334,
+          "fill": "#F8FAFC",
+          "cornerRadius": 16,
+          "stroke": "#94A3B8",
+          "strokeWidth": 1,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A10",
+            "offset": {
+              "x": 0,
+              "y": 3
+            },
+            "blur": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "iluE5",
+              "x": 20,
+              "y": 18,
+              "name": "배포 아이콘",
+              "width": 26,
+              "height": 26,
+              "icon": "settings",
+              "library": "lucide",
+              "fill": "#2563EB"
+            },
+            {
+              "type": "text",
+              "id": "JgtZP",
+              "x": 56,
+              "y": 20,
+              "name": "배포 제목",
+              "fill": "#0F172A",
+              "content": "배포 흐름 · Blue/Green",
+              "fontFamily": "Inter",
+              "fontSize": 17,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "ZK2rr",
+              "x": 16,
+              "y": 62,
+              "name": "배포 단계 1",
+              "width": 238,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "b5FkBr",
+                  "x": 12,
+                  "y": 10,
+                  "name": "배포 단계 아이콘 1",
+                  "width": 21,
+                  "height": 21,
+                  "icon": "rocket",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                },
+                {
+                  "type": "text",
+                  "id": "Ws0zZ",
+                  "x": 42,
+                  "y": 8,
+                  "name": "배포 단계 제목 1",
+                  "fill": "#0F172A",
+                  "content": "1. Candidate 기동",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "j77OZz",
+                  "x": 42,
+                  "y": 25,
+                  "name": "배포 단계 설명 1",
+                  "fill": "#475569",
+                  "content": "inactive slot 기동",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "k51qh",
+              "x": 125,
+              "y": 104,
+              "name": "배포 단계 화살표 1",
+              "fill": "#64748B",
+              "content": "↓",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "pUnMc",
+              "x": 16,
+              "y": 114,
+              "name": "배포 단계 2",
+              "width": 238,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "TeiPw",
+                  "x": 12,
+                  "y": 10,
+                  "name": "배포 단계 아이콘 2",
+                  "width": 21,
+                  "height": 21,
+                  "icon": "circle-check",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                },
+                {
+                  "type": "text",
+                  "id": "frv4R",
+                  "x": 42,
+                  "y": 8,
+                  "name": "배포 단계 제목 2",
+                  "fill": "#0F172A",
+                  "content": "2. Readiness 확인",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "D1Eqqe",
+                  "x": 42,
+                  "y": 25,
+                  "name": "배포 단계 설명 2",
+                  "fill": "#475569",
+                  "content": "health · actuator",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "IF6Jg",
+              "x": 125,
+              "y": 156,
+              "name": "배포 단계 화살표 2",
+              "fill": "#64748B",
+              "content": "↓",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "cD7bI",
+              "x": 16,
+              "y": 166,
+              "name": "배포 단계 3",
+              "width": 238,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "Yk2IS",
+                  "x": 12,
+                  "y": 10,
+                  "name": "배포 단계 아이콘 3",
+                  "width": 21,
+                  "height": 21,
+                  "icon": "arrow-left-right",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                },
+                {
+                  "type": "text",
+                  "id": "r8zpH",
+                  "x": 42,
+                  "y": 8,
+                  "name": "배포 단계 제목 3",
+                  "fill": "#0F172A",
+                  "content": "3. Upstream 전환",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "fllFS",
+                  "x": 42,
+                  "y": 25,
+                  "name": "배포 단계 설명 3",
+                  "fill": "#475569",
+                  "content": "Nginx target switch",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "C1rVF",
+              "x": 125,
+              "y": 208,
+              "name": "배포 단계 화살표 3",
+              "fill": "#64748B",
+              "content": "↓",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "VOKeJ",
+              "x": 16,
+              "y": 218,
+              "name": "배포 단계 4",
+              "width": 238,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "YbsZB",
+                  "x": 12,
+                  "y": 10,
+                  "name": "배포 단계 아이콘 4",
+                  "width": 21,
+                  "height": 21,
+                  "icon": "search-check",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                },
+                {
+                  "type": "text",
+                  "id": "ZfF4H",
+                  "x": 42,
+                  "y": 8,
+                  "name": "배포 단계 제목 4",
+                  "fill": "#0F172A",
+                  "content": "4. Edge Smoke",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "JE8Jy",
+                  "x": 42,
+                  "y": 25,
+                  "name": "배포 단계 설명 4",
+                  "fill": "#475569",
+                  "content": "/api/actuator/health",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "bTH3N",
+              "x": 125,
+              "y": 260,
+              "name": "배포 단계 화살표 4",
+              "fill": "#64748B",
+              "content": "↓",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "japWn",
+              "x": 16,
+              "y": 270,
+              "name": "배포 단계 5",
+              "width": 238,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "niYXc",
+                  "x": 12,
+                  "y": 10,
+                  "name": "배포 단계 아이콘 5",
+                  "width": 21,
+                  "height": 21,
+                  "icon": "settings",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                },
+                {
+                  "type": "text",
+                  "id": "RrFcW",
+                  "x": 42,
+                  "y": 8,
+                  "name": "배포 단계 제목 5",
+                  "fill": "#0F172A",
+                  "content": "5. 이전 슬롯 정리",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "fvDdZ",
+                  "x": 42,
+                  "y": 25,
+                  "name": "배포 단계 설명 5",
+                  "fill": "#475569",
+                  "content": "기존 컨테이너 stop",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "500"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "RZ2mQ",
+          "x": 1265,
+          "y": 526,
+          "name": "S3 백업",
+          "width": 270,
+          "height": 148,
+          "fill": "#FFFBEB",
+          "cornerRadius": 16,
+          "stroke": "#F59E0B",
+          "strokeWidth": 1,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A10",
+            "offset": {
+              "x": 0,
+              "y": 3
+            },
+            "blur": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "rectangle",
+              "id": "vkTRl",
+              "x": 20,
+              "y": 20,
+              "name": "Amazon S3 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/s3.png",
+                "mode": "fit"
+              },
+              "width": 28,
+              "height": 28
+            },
+            {
+              "type": "text",
+              "id": "WXU59",
+              "x": 58,
+              "y": 22,
+              "name": "S3 제목",
+              "fill": "#92400E",
+              "content": "Amazon S3",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "E2hj3",
+              "x": 20,
+              "y": 65,
+              "name": "S3 설명",
+              "fill": "#92400E",
+              "content": "MySQL 논리 백업 보관\n일 1회 gzip dump 업로드",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "500"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "e6lsN",
+          "x": 1265,
+          "y": 698,
+          "name": "운영 핵심",
+          "width": 270,
+          "height": 317,
+          "fill": "#F8FAFC",
+          "cornerRadius": 16,
+          "stroke": "#CBD5E1",
+          "strokeWidth": 1,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A10",
+            "offset": {
+              "x": 0,
+              "y": 3
+            },
+            "blur": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "wjuiF",
+              "x": 20,
+              "y": 20,
+              "name": "운영 핵심 아이콘",
+              "width": 27,
+              "height": 27,
+              "icon": "shield-check",
+              "library": "lucide",
+              "fill": "#475569"
+            },
+            {
+              "type": "text",
+              "id": "QMmg1",
+              "x": 56,
+              "y": 23,
+              "name": "운영 핵심 제목",
+              "fill": "#0F172A",
+              "content": "운영 핵심",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "700"
+            },
+            {
+              "type": "icon",
+              "id": "A1ThF",
+              "x": 20,
+              "y": 66,
+              "name": "핵심 아이콘 1",
+              "width": 19,
+              "height": 19,
+              "icon": "layers",
+              "library": "lucide",
+              "fill": "#475569"
+            },
+            {
+              "type": "text",
+              "id": "aiUMd",
+              "x": 50,
+              "y": 67,
+              "name": "핵심 내용 1",
+              "fill": "#334155",
+              "content": "Backend는 blue/green 2-slot 운영",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            {
+              "type": "icon",
+              "id": "cGmG9",
+              "x": 20,
+              "y": 118,
+              "name": "핵심 아이콘 2",
+              "width": 19,
+              "height": 19,
+              "icon": "monitor",
+              "library": "lucide",
+              "fill": "#475569"
+            },
+            {
+              "type": "text",
+              "id": "k8yBJ",
+              "x": 50,
+              "y": 119,
+              "name": "핵심 내용 2",
+              "fill": "#334155",
+              "content": "Frontend는 단일 컨테이너 교체",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            {
+              "type": "icon",
+              "id": "WX0SV",
+              "x": 20,
+              "y": 170,
+              "name": "핵심 아이콘 3",
+              "width": 19,
+              "height": 19,
+              "icon": "database",
+              "library": "lucide",
+              "fill": "#475569"
+            },
+            {
+              "type": "text",
+              "id": "sOoPJ",
+              "x": 50,
+              "y": 171,
+              "name": "핵심 내용 3",
+              "fill": "#334155",
+              "content": "MySQL은 private network 전용",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            {
+              "type": "icon",
+              "id": "ZLhCy",
+              "x": 20,
+              "y": 222,
+              "name": "핵심 아이콘 4",
+              "width": 19,
+              "height": 19,
+              "icon": "shield-check",
+              "library": "lucide",
+              "fill": "#475569"
+            },
+            {
+              "type": "text",
+              "id": "xwgO1",
+              "x": 50,
+              "y": 223,
+              "name": "핵심 내용 4",
+              "fill": "#334155",
+              "content": "민감 값은 env·secret으로 관리",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            {
+              "type": "icon",
+              "id": "dUUFj",
+              "x": 20,
+              "y": 274,
+              "name": "핵심 아이콘 5",
+              "width": 19,
+              "height": 19,
+              "icon": "ban",
+              "library": "lucide",
+              "fill": "#475569"
+            },
+            {
+              "type": "text",
+              "id": "GicIk",
+              "x": 50,
+              "y": 268,
+              "name": "핵심 내용 5",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 190,
+              "content": "Redis 미사용 · MySQL state/refresh token",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "uKyyj",
+          "x": 40,
+          "y": 760,
+          "name": "모니터링 및 로깅",
+          "width": 1200,
+          "height": 255,
+          "fill": "#FFFFFF",
+          "cornerRadius": 16,
+          "stroke": "#CBD5E1",
+          "strokeWidth": 1,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A10",
+            "offset": {
+              "x": 0,
+              "y": 3
+            },
+            "blur": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "Fzb8F",
+              "x": 20,
+              "y": 18,
+              "name": "관측 아이콘",
+              "width": 26,
+              "height": 26,
+              "icon": "activity",
+              "library": "lucide",
+              "fill": "#EA580C"
+            },
+            {
+              "type": "text",
+              "id": "MqUX5",
+              "x": 56,
+              "y": 20,
+              "name": "관측 제목",
+              "fill": "#0F172A",
+              "content": "Monitoring & Logging",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "SwPFW",
+              "x": 56,
+              "y": 47,
+              "name": "관측 설명",
+              "fill": "#64748B",
+              "content": "EC2 내부에서 메트릭·로그를 수집하고 Grafana로 확인",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "trFwR",
+              "x": 18,
+              "y": 82,
+              "name": "관측 카드 Prometheus",
+              "width": 156,
+              "height": 138,
+              "fill": "#FFF7ED",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "XA6Oc",
+                  "x": 16,
+                  "y": 16,
+                  "name": "Prometheus 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/prometheus.png",
+                    "mode": "fit"
+                  },
+                  "width": 27,
+                  "height": 27
+                },
+                {
+                  "type": "text",
+                  "id": "JI5dS",
+                  "x": 16,
+                  "y": 56,
+                  "name": "Prometheus 제목",
+                  "fill": "#0F172A",
+                  "content": "Prometheus",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "v5OiX",
+                  "x": 16,
+                  "y": 84,
+                  "name": "Prometheus 설명",
+                  "fill": "#475569",
+                  "content": "메트릭 수집\nfile-SD active backend",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "tNWGl",
+              "x": 186,
+              "y": 82,
+              "name": "관측 카드 Grafana",
+              "width": 156,
+              "height": 138,
+              "fill": "#EFF6FF",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "J7Rq9v",
+                  "x": 16,
+                  "y": 16,
+                  "name": "Grafana 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/grafana.png",
+                    "mode": "fit"
+                  },
+                  "width": 27,
+                  "height": 27
+                },
+                {
+                  "type": "text",
+                  "id": "hZaWy",
+                  "x": 16,
+                  "y": 56,
+                  "name": "Grafana 제목",
+                  "fill": "#0F172A",
+                  "content": "Grafana",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "qKVp6",
+                  "x": 16,
+                  "y": 84,
+                  "name": "Grafana 설명",
+                  "fill": "#475569",
+                  "content": "대시보드\n운영 지표 확인",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ft09r",
+              "x": 354,
+              "y": 82,
+              "name": "관측 카드 Loki",
+              "width": 156,
+              "height": 138,
+              "fill": "#F5F3FF",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "g4TUW",
+                  "x": 16,
+                  "y": 16,
+                  "name": "Loki 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/loki.png",
+                    "mode": "fit"
+                  },
+                  "width": 27,
+                  "height": 27
+                },
+                {
+                  "type": "text",
+                  "id": "PgBu1",
+                  "x": 16,
+                  "y": 56,
+                  "name": "Loki 제목",
+                  "fill": "#0F172A",
+                  "content": "Loki",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "l1rc5",
+                  "x": 16,
+                  "y": 84,
+                  "name": "Loki 설명",
+                  "fill": "#475569",
+                  "content": "로그 저장\n7일 보관",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Ez0zS",
+              "x": 522,
+              "y": 82,
+              "name": "관측 카드 Alloy",
+              "width": 156,
+              "height": 138,
+              "fill": "#F5F3FF",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "n6Fije",
+                  "x": 16,
+                  "y": 16,
+                  "name": "Grafana Alloy 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/alloy.png",
+                    "mode": "fit"
+                  },
+                  "width": 27,
+                  "height": 27
+                },
+                {
+                  "type": "text",
+                  "id": "QeRCC",
+                  "x": 16,
+                  "y": 56,
+                  "name": "Alloy 제목",
+                  "fill": "#0F172A",
+                  "content": "Alloy",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "RcQA0",
+                  "x": 16,
+                  "y": 84,
+                  "name": "Alloy 설명",
+                  "fill": "#475569",
+                  "content": "컨테이너 로그 수집\nLoki로 전달",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "P1Z5p",
+              "x": 690,
+              "y": 82,
+              "name": "관측 카드 Node Exporter",
+              "width": 156,
+              "height": 138,
+              "fill": "#F8FAFC",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "LQ9V7",
+                  "x": 16,
+                  "y": 16,
+                  "name": "Node Exporter 아이콘",
+                  "width": 27,
+                  "height": 27,
+                  "icon": "server",
+                  "library": "lucide",
+                  "fill": "#64748B"
+                },
+                {
+                  "type": "text",
+                  "id": "vh6ux",
+                  "x": 16,
+                  "y": 56,
+                  "name": "Node Exporter 제목",
+                  "fill": "#0F172A",
+                  "content": "Node Exporter",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "VPHWX",
+                  "x": 16,
+                  "y": 84,
+                  "name": "Node Exporter 설명",
+                  "fill": "#475569",
+                  "content": "EC2 host 지표",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "HyMwf",
+              "x": 858,
+              "y": 82,
+              "name": "관측 카드 MySQL Exporter",
+              "width": 156,
+              "height": 138,
+              "fill": "#F8FAFC",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "B7xvXY",
+                  "x": 16,
+                  "y": 16,
+                  "name": "MySQL Exporter 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/mysql.png",
+                    "mode": "fit"
+                  },
+                  "width": 27,
+                  "height": 27
+                },
+                {
+                  "type": "text",
+                  "id": "T2GvA",
+                  "x": 16,
+                  "y": 56,
+                  "name": "MySQL Exporter 제목",
+                  "fill": "#0F172A",
+                  "content": "MySQL Exporter",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "pQE6z",
+                  "x": 16,
+                  "y": 84,
+                  "name": "MySQL Exporter 설명",
+                  "fill": "#475569",
+                  "content": "DB 상태 지표",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "KaAQF",
+              "x": 1026,
+              "y": 82,
+              "name": "관측 카드 Podman Exporter",
+              "width": 156,
+              "height": 138,
+              "fill": "#F8FAFC",
+              "cornerRadius": 12,
+              "stroke": "#CBD5E1",
+              "strokeWidth": 1,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#0F172A0D",
+                "offset": {
+                  "x": 0,
+                  "y": 2
+                },
+                "blur": 6
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "OuAFt",
+                  "x": 16,
+                  "y": 16,
+                  "name": "Podman Exporter 로고",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "icons/png/brand/podman.png",
+                    "mode": "fit"
+                  },
+                  "width": 27,
+                  "height": 27
+                },
+                {
+                  "type": "text",
+                  "id": "UUR3R",
+                  "x": 16,
+                  "y": 56,
+                  "name": "Podman Exporter 제목",
+                  "fill": "#0F172A",
+                  "content": "Podman Exporter",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "LfCMr",
+                  "x": 16,
+                  "y": 84,
+                  "name": "Podman Exporter 설명",
+                  "fill": "#475569",
+                  "content": "컨테이너 지표",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "N4t6M",
+          "x": 40,
+          "y": 1040,
+          "name": "기술 스택",
+          "width": 1495,
+          "height": 112,
+          "fill": "#F8FAFC",
+          "cornerRadius": 16,
+          "stroke": "#CBD5E1",
+          "strokeWidth": 1,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A10",
+            "offset": {
+              "x": 0,
+              "y": 3
+            },
+            "blur": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "SSicn",
+              "x": 20,
+              "y": 16,
+              "name": "스택 제목",
+              "fill": "#0F172A",
+              "content": "기술 스택",
+              "fontFamily": "Inter",
+              "fontSize": 17,
+              "fontWeight": "700"
+            },
+            {
+              "type": "rectangle",
+              "id": "PTwQf",
+              "x": 20,
+              "y": 51,
+              "name": "Podman 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/podman.png",
+                "mode": "fit"
+              },
+              "width": 24,
+              "height": 24
+            },
+            {
+              "type": "text",
+              "id": "Olnly",
+              "x": 54,
+              "y": 45,
+              "name": "Podman 이름",
+              "fill": "#0F172A",
+              "content": "Podman",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "mM40w",
+              "x": 54,
+              "y": 66,
+              "name": "Podman 역할",
+              "fill": "#64748B",
+              "content": "Container Runtime",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            },
+            {
+              "type": "rectangle",
+              "id": "svckM",
+              "x": 202,
+              "y": 51,
+              "name": "Nginx 스택 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/nginx.png",
+                "mode": "fit"
+              },
+              "width": 24,
+              "height": 24
+            },
+            {
+              "type": "text",
+              "id": "wBB77",
+              "x": 236,
+              "y": 45,
+              "name": "Nginx 이름",
+              "fill": "#0F172A",
+              "content": "Nginx",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "N53nr",
+              "x": 236,
+              "y": 66,
+              "name": "Nginx 역할",
+              "fill": "#64748B",
+              "content": "Reverse Proxy",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            },
+            {
+              "type": "rectangle",
+              "id": "FZe9Q",
+              "x": 384,
+              "y": 51,
+              "name": "Spring Boot 스택 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/springboot.png",
+                "mode": "fit"
+              },
+              "width": 24,
+              "height": 24
+            },
+            {
+              "type": "text",
+              "id": "E4p6iP",
+              "x": 418,
+              "y": 45,
+              "name": "Spring Boot 이름",
+              "fill": "#0F172A",
+              "content": "Spring Boot",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "tT6DY",
+              "x": 418,
+              "y": 66,
+              "name": "Spring Boot 역할",
+              "fill": "#64748B",
+              "content": "Backend",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            },
+            {
+              "type": "rectangle",
+              "id": "Ol8wj",
+              "x": 566,
+              "y": 51,
+              "name": "React 스택 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/react.png",
+                "mode": "fit"
+              },
+              "width": 24,
+              "height": 24
+            },
+            {
+              "type": "text",
+              "id": "uMlok",
+              "x": 600,
+              "y": 45,
+              "name": "React 이름",
+              "fill": "#0F172A",
+              "content": "React",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "xHZJp",
+              "x": 600,
+              "y": 66,
+              "name": "React 역할",
+              "fill": "#64748B",
+              "content": "Frontend",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            },
+            {
+              "type": "rectangle",
+              "id": "L0tVNJ",
+              "x": 748,
+              "y": 51,
+              "name": "MySQL 스택 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/mysql.png",
+                "mode": "fit"
+              },
+              "width": 24,
+              "height": 24
+            },
+            {
+              "type": "text",
+              "id": "XLczY",
+              "x": 782,
+              "y": 45,
+              "name": "MySQL 이름",
+              "fill": "#0F172A",
+              "content": "MySQL",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "a9Sl3",
+              "x": 782,
+              "y": 66,
+              "name": "MySQL 역할",
+              "fill": "#64748B",
+              "content": "Database",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            },
+            {
+              "type": "rectangle",
+              "id": "kimrG",
+              "x": 930,
+              "y": 51,
+              "name": "Flyway 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/flyway.png",
+                "mode": "fit"
+              },
+              "width": 24,
+              "height": 24
+            },
+            {
+              "type": "text",
+              "id": "r2ytuv",
+              "x": 964,
+              "y": 45,
+              "name": "Flyway 이름",
+              "fill": "#0F172A",
+              "content": "Flyway",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "MkE5e",
+              "x": 964,
+              "y": 66,
+              "name": "Flyway 역할",
+              "fill": "#64748B",
+              "content": "Migration",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            },
+            {
+              "type": "rectangle",
+              "id": "URxhR",
+              "x": 1112,
+              "y": 51,
+              "name": "Amazon S3 스택 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/s3.png",
+                "mode": "fit"
+              },
+              "width": 24,
+              "height": 24
+            },
+            {
+              "type": "text",
+              "id": "YR6E1",
+              "x": 1146,
+              "y": 45,
+              "name": "Amazon S3 이름",
+              "fill": "#0F172A",
+              "content": "Amazon S3",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "I68h9",
+              "x": 1146,
+              "y": 66,
+              "name": "Amazon S3 역할",
+              "fill": "#64748B",
+              "content": "Storage",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            },
+            {
+              "type": "rectangle",
+              "id": "HIKTE",
+              "x": 1294,
+              "y": 51,
+              "name": "Amazon Linux 로고",
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "icons/png/brand/linux.png",
+                "mode": "fit"
+              },
+              "width": 24,
+              "height": 24
+            },
+            {
+              "type": "text",
+              "id": "skDvf",
+              "x": 1328,
+              "y": 45,
+              "name": "Amazon Linux 이름",
+              "fill": "#0F172A",
+              "content": "Amazon Linux",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "EOQFf",
+              "x": 1328,
+              "y": 66,
+              "name": "Amazon Linux 역할",
+              "fill": "#64748B",
+              "content": "OS",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "500"
+            }
+          ]
+        },
+        {
+          "type": "path",
+          "id": "y2GD5E",
+          "x": 155,
+          "y": 392,
+          "name": "사용자 Nginx 연결",
+          "geometry": "M0 8h38m-10-6l10 6-10 6",
+          "viewBox": [
+            0,
+            0,
+            50,
+            16
+          ],
+          "fill": "#00000000",
+          "width": 50,
+          "height": 16,
+          "stroke": "#334155",
+          "strokeWidth": 2,
+          "strokeLinejoin": "round",
+          "strokeLinecap": "round"
+        },
+        {
+          "type": "text",
+          "id": "p2HNr",
+          "x": 155,
+          "y": 364,
+          "name": "사용자 Nginx 라벨",
+          "fill": "#334155",
+          "content": "HTTPS\n80/443",
+          "fontFamily": "IBM Plex Mono",
+          "fontSize": 11,
+          "fontWeight": "700"
+        },
+        {
+          "type": "path",
+          "id": "Hq8NM",
+          "x": 1220,
+          "y": 590,
+          "name": "MySQL S3 연결",
+          "geometry": "M0 8h33m-10-6l10 6-10 6",
+          "viewBox": [
+            0,
+            0,
+            45,
+            16
+          ],
+          "fill": "#00000000",
+          "width": 45,
+          "height": 16,
+          "stroke": "#D97706",
+          "strokeWidth": 2,
+          "strokeLinejoin": "round",
+          "strokeLinecap": "round"
+        }
+      ]
+    }
+  ],
+  "fileToken": "b4c38436-2f73-4149-80e6-af0faacc60e6"
+}
