@@ -166,9 +166,9 @@ class QuizGenerationServiceTest {
     // 기존 FAILED 상태의 QuizSet 모킹
     QuizSet existingQuizSet = Mockito.spy(QuizSet.create(content, validation, false));
     existingQuizSet.fail(); // FAILED 상태로 만듦
+    assertThat(existingQuizSet.getCompletedAt()).isNull(); // fail() 직후 completedAt 상태 전이 계약 검증
     ReflectionTestUtils.setField(existingQuizSet, "id", 300L);
     ReflectionTestUtils.setField(existingQuizSet, "createdAt", LocalDateTime.now());
-    ReflectionTestUtils.setField(existingQuizSet, "completedAt", null);
 
     // 기존 QuizSet 반환하도록 모킹
     given(quizSetRepository.findForUpdateBySourceValidationId(100L))
