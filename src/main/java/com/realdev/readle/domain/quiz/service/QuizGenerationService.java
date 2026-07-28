@@ -132,7 +132,7 @@ public class QuizGenerationService {
                 } catch (DataIntegrityViolationException e) {
                   throw new CustomException(
                       QuizErrorCode.QUIZ_GENERATION_IN_PROGRESS,
-                      "해당 콘텐츠에 대한 퀴즈 생성이 진행 중입니다. 잠시 후 다시 시도해주세요.",
+                      "이미 해당 콘텐츠에 대한 퀴즈 생성 요청이 진행 중이거나 완료되었습니다. 잠시 후 다시 시도해주세요.",
                       e);
                 }
               });
