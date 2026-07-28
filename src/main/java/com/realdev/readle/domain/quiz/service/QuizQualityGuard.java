@@ -11,11 +11,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -31,12 +35,23 @@ public class QuizQualityGuard {
   private final PromptLoader promptLoader;
   private final ClaudeClient claudeClient;
   private final ObjectMapper objectMapper;
+  private final Executor claudeCallExecutor;
 
+  @Autowired
   public QuizQualityGuard(
-      PromptLoader promptLoader, ClaudeClient claudeClient, ObjectMapper objectMapper) {
+      PromptLoader promptLoader,
+      ClaudeClient claudeClient,
+      ObjectMapper objectMapper,
+      @Qualifier("claudeCallExecutor") Executor claudeCallExecutor) {
     this.promptLoader = promptLoader;
     this.claudeClient = claudeClient;
     this.objectMapper = objectMapper;
+    this.claudeCallExecutor = claudeCallExecutor != null ? claudeCallExecutor : Runnable::run;
+  }
+
+  public QuizQualityGuard(
+      PromptLoader promptLoader, ClaudeClient claudeClient, ObjectMapper objectMapper) {
+    this(promptLoader, claudeClient, objectMapper, null);
   }
 
   public boolean checkRegexLeak(String questionText, String answerText) {
@@ -110,32 +125,78 @@ public class QuizQualityGuard {
       return List.of();
     }
 
+    CompletableFuture<String> future = null;
     try {
       String quizzesJson = objectMapper.writeValueAsString(items);
-      String systemPrompt =
-          promptLoader.loadPrompt("quiz-quality-verifier.txt", Map.of("quizzesJson", quizzesJson));
+      String systemPrompt = promptLoader.loadPrompt("quiz-quality-verifier.txt", Map.of());
+      String userPrompt =
+          "Inspect the provided quiz questions for answer leakage.\n<quizzes_to_inspect>\n"
+              + quizzesJson
+              + "\n</quizzes_to_inspect>";
 
-      CompletableFuture<String> future =
+      future =
           CompletableFuture.supplyAsync(
-              () ->
-                  claudeClient.getGeneratedText(
-                      systemPrompt, "Inspect the provided quiz questions for answer leakage."));
+              () -> claudeClient.getGeneratedText(systemPrompt, userPrompt), claudeCallExecutor);
+
       String responseText = future.get(7, TimeUnit.SECONDS);
 
       String cleanJson = JsonExtractor.extractJson(responseText);
       ClaudeQualityVerifyResponseDto dto =
           objectMapper.readValue(cleanJson, ClaudeQualityVerifyResponseDto.class);
-      return dto != null && dto.results() != null ? dto.results() : List.of();
-    } catch (Exception e) {
-      log.warn("[QUIZ_QUALITY_GUARD] LLM 검증기 연동 중 예외 발생. 경량 정규식 결과로 대체합니다: {}", e.getMessage());
-      List<QuestionVerifyResult> fallback = new ArrayList<>();
-      for (QuestionInspectItem item : items) {
-        boolean leak = checkRegexLeak(item.question(), item.answer());
-        fallback.add(
-            new QuestionVerifyResult(item.index(), leak, leak ? "Regex fallback match" : null));
+
+      if (dto != null && dto.results() != null && isValidResults(dto.results(), items.size())) {
+        return dto.results();
       }
-      return fallback;
+
+      log.warn("[QUIZ_QUALITY_GUARD] LLM 검증기 응답 항목 수 불일치 또는 비정상 데이터 수신. 경량 정규식 결과로 대체합니다.");
+      return buildFallbackResults(items);
+
+    } catch (InterruptedException ie) {
+      if (future != null) {
+        future.cancel(true);
+      }
+      Thread.currentThread().interrupt();
+      log.warn("[QUIZ_QUALITY_GUARD] LLM 검증기 실행 중 인터럽트 발생. 경량 정규식 결과로 대체합니다.");
+      return buildFallbackResults(items);
+    } catch (TimeoutException te) {
+      if (future != null) {
+        future.cancel(true);
+      }
+      log.warn("[QUIZ_QUALITY_GUARD] LLM 검증기 7초 타임아웃 발생. 경량 정규식 결과로 대체합니다.");
+      return buildFallbackResults(items);
+    } catch (Exception e) {
+      if (future != null) {
+        future.cancel(true);
+      }
+      log.warn("[QUIZ_QUALITY_GUARD] LLM 검증기 연동 중 예외 발생. 경량 정규식 결과로 대체합니다: {}", e.getMessage());
+      return buildFallbackResults(items);
     }
+  }
+
+  private boolean isValidResults(List<QuestionVerifyResult> results, int expectedSize) {
+    if (results.size() != expectedSize) {
+      return false;
+    }
+    Set<Integer> indices = new java.util.HashSet<>();
+    for (QuestionVerifyResult r : results) {
+      if (r == null || r.index() < 1 || r.index() > expectedSize) {
+        return false;
+      }
+      if (!indices.add(r.index())) {
+        return false; // 중복 인덱스 방지
+      }
+    }
+    return true;
+  }
+
+  private List<QuestionVerifyResult> buildFallbackResults(List<QuestionInspectItem> items) {
+    List<QuestionVerifyResult> fallback = new ArrayList<>();
+    for (QuestionInspectItem item : items) {
+      boolean leak = checkRegexLeak(item.question(), item.answer());
+      fallback.add(
+          new QuestionVerifyResult(item.index(), leak, leak ? "Regex fallback match" : null));
+    }
+    return fallback;
   }
 
   public record QuestionInspectItem(int index, String question, String answer) {}

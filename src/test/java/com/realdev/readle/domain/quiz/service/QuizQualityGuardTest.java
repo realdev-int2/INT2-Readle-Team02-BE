@@ -1,7 +1,6 @@
 package com.realdev.readle.domain.quiz.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -89,7 +88,7 @@ class QuizQualityGuardTest {
   @DisplayName("LLM 검증기 mock 연동 시 검증 결과를 정상 파싱하여 반환한다")
   void verifyWithLlm_ReturnsVerifyResult() {
     String mockResponse = "{\"results\":[{\"index\":1,\"hasLeak\":false,\"reason\":null}]}";
-    given(promptLoader.loadPrompt(anyString(), any())).willReturn("mock prompt");
+    given(promptLoader.loadPrompt(anyString())).willReturn("mock prompt");
     given(claudeClient.getGeneratedText(anyString(), anyString())).willReturn(mockResponse);
 
     List<QuestionVerifyResult> results =
@@ -103,7 +102,7 @@ class QuizQualityGuardTest {
   @Test
   @DisplayName("LLM 검증기 예외 발생 또는 비정상 JSON 수신 시 경량 정규식 검사 결과로 안전 Fallback된다")
   void verifyWithLlm_FallsBackToRegex_WhenExceptionOrMalformedJson() {
-    given(promptLoader.loadPrompt(anyString(), any())).willReturn("mock prompt");
+    given(promptLoader.loadPrompt(anyString())).willReturn("mock prompt");
     given(claudeClient.getGeneratedText(anyString(), anyString()))
         .willThrow(new RuntimeException("LLM Timeout or Connection Failure"));
 
