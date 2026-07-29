@@ -30,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class OpenApiContractTest {
 
   private static final String BEARER_AUTH = OpenApiConfig.BEARER_AUTH_SCHEME;
+  private static final String BASIC_AUTH = "basicAuth";
 
   @Autowired private MockMvc mockMvc;
 
@@ -50,6 +51,9 @@ class OpenApiContractTest {
     assertThat(bearerScheme.path("type").asText()).isEqualTo("http");
     assertThat(bearerScheme.path("scheme").asText()).isEqualTo("bearer");
     assertThat(bearerScheme.path("bearerFormat").asText()).isEqualTo("JWT");
+    JsonNode basicScheme = apiDocs.at("/components/securitySchemes/" + BASIC_AUTH);
+    assertThat(basicScheme.path("type").asText()).isEqualTo("http");
+    assertThat(basicScheme.path("scheme").asText()).isEqualTo("basic");
     assertThat(apiDocs.path("security").isMissingNode() || apiDocs.path("security").isEmpty())
         .isTrue();
 
@@ -68,7 +72,7 @@ class OpenApiContractTest {
         .forEach(
             (route, method) -> {
               if (apiDocs.path("paths").has(route)) {
-                assertBearerNotRequired(operation(apiDocs, route, method));
+                assertBasicRequired(operation(apiDocs, route, method));
               }
             });
   }
@@ -121,6 +125,14 @@ class OpenApiContractTest {
     assertThat(security.isArray()).isTrue();
     assertThat(security).hasSize(1);
     assertThat(security.get(0).has(BEARER_AUTH)).isTrue();
+  }
+
+  private static void assertBasicRequired(JsonNode operation) {
+    JsonNode security = operation.path("security");
+    assertThat(security.isArray()).isTrue();
+    assertThat(security).hasSize(1);
+    assertThat(security.get(0).has(BASIC_AUTH)).isTrue();
+    assertThat(security.get(0).has(BEARER_AUTH)).isFalse();
   }
 
   private static void assertBearerNotRequired(JsonNode operation) {
