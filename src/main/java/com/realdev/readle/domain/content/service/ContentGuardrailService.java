@@ -5,7 +5,6 @@ import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.domain.content.repository.ContentRepository;
 import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.global.exception.CustomException;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,32 +43,22 @@ public class ContentGuardrailService {
     return GuardrailResult.needsAi(content);
   }
 
+  private ContentValidation getLatestValidationOrThrow(Long contentId) {
+    return contentValidationRepository
+        .findFirstByContentIdOrderByCreatedAtDesc(contentId)
+        .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND));
+  }
+
   private void saveStaticGuardrailResult(Content content, RejectReasonCode rejectReasonCode) {
-    contentValidationRepository.save(
-        createValidation(
-            content,
-            ValidationMethod.STATIC_GUARDRAIL,
-            ValidationStatus.REJECTED,
-            rejectReasonCode));
+    ContentValidation validation = getLatestValidationOrThrow(content.getId());
+    validation.updateValidationMethod(ValidationMethod.STATIC_GUARDRAIL);
+    validation.markRejected(null, rejectReasonCode, null);
   }
 
   private void saveWhitelistResult(Content content) {
-    contentValidationRepository.save(
-        createValidation(content, ValidationMethod.WHITELIST, ValidationStatus.PASSED, null));
-  }
-
-  private ContentValidation createValidation(
-      Content content,
-      ValidationMethod method,
-      ValidationStatus status,
-      RejectReasonCode rejectReasonCode) {
-    return ContentValidation.builder()
-        .content(content)
-        .validationMethod(method)
-        .status(status)
-        .rejectReasonCode(rejectReasonCode)
-        .validatedAt(LocalDateTime.now())
-        .build();
+    ContentValidation validation = getLatestValidationOrThrow(content.getId());
+    validation.updateValidationMethod(ValidationMethod.WHITELIST);
+    validation.markPassed(null);
   }
 
   @Transactional
@@ -78,15 +67,13 @@ public class ContentGuardrailService {
         .findById(contentId)
         .ifPresentOrElse(
             content -> {
-              ContentValidation validation =
-                  ContentValidation.builder()
-                      .content(content)
-                      .validationMethod(validationMethod)
-                      .build();
-
-              validation.markFailed(errorCode);
-
-              contentValidationRepository.save(validation);
+              contentValidationRepository
+                  .findFirstByContentIdOrderByCreatedAtDesc(contentId)
+                  .ifPresent(
+                      validation -> {
+                        validation.updateValidationMethod(validationMethod);
+                        validation.markFailed(errorCode);
+                      });
             },
             () -> log.warn("[GUARDRAIL] 검증 실패 기록 중 컨텐츠 조회 실패. contentId={}", contentId));
   }

@@ -25,18 +25,16 @@ public class AiValidationTxHelper {
   private final ContentValidationRepository contentValidationRepository;
   private final ObjectMapper objectMapper;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public Long createPendingValidation(Long contentId) {
-    Content content = contentRepository.getReferenceById(contentId);
-
-    ContentValidation pending =
-        ContentValidation.builder()
-            .content(content)
-            .validationMethod(ValidationMethod.AI)
-            .status(ValidationStatus.PENDING)
-            .build();
-
-    return contentValidationRepository.save(pending).getId();
+  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+  public Long getLatestPendingValidationId(Long contentId) {
+    return contentValidationRepository
+        .findFirstByContentIdOrderByCreatedAtDesc(contentId)
+        .map(ContentValidation::getId)
+        .orElseThrow(
+            () ->
+                new CustomException(
+                    ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND,
+                    "존재하지 않는 검증 대상입니다. contentId: " + contentId));
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)

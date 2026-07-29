@@ -53,8 +53,8 @@ public class AiValidationService {
   }
 
   public ValidationStatus runAiValidation(Content content) {
-    Long validationId = txHelper.createPendingValidation(content.getId());
-    log.info("[AI_VALIDATION] PENDING Row 생성 완료. Validation ID: {}", validationId);
+    Long validationId = txHelper.getLatestPendingValidationId(content.getId());
+    log.info("[AI_VALIDATION] 기존 PENDING Row 조회 완료. Validation ID: {}", validationId);
 
     return executeClaudeValidationWithRetry(content, validationId);
   }

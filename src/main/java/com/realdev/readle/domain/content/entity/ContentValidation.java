@@ -64,6 +64,10 @@ public class ContentValidation extends BaseCreatedAtEntity {
   @Column(name = "validated_at")
   private LocalDateTime validatedAt;
 
+  public void updateValidationMethod(ValidationMethod validationMethod) {
+    this.validationMethod = validationMethod;
+  }
+
   public void markPassed(BigDecimal validationScore) {
     this.status = ValidationStatus.PASSED;
     this.validationScore = validationScore;
