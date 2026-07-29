@@ -5,7 +5,6 @@ import com.realdev.readle.domain.content.exception.ContentErrorCode;
 import com.realdev.readle.domain.content.repository.ContentRepository;
 import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.global.exception.CustomException;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,51 +43,41 @@ public class ContentGuardrailService {
     return GuardrailResult.needsAi(content);
   }
 
+  private ContentValidation getLatestPendingValidationOrThrow(Long contentId) {
+    return contentValidationRepository
+        .findFirstByContentIdAndStatusOrderByCreatedAtDesc(contentId, ValidationStatus.PENDING)
+        .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND));
+  }
+
   private void saveStaticGuardrailResult(Content content, RejectReasonCode rejectReasonCode) {
-    contentValidationRepository.save(
-        createValidation(
-            content,
-            ValidationMethod.STATIC_GUARDRAIL,
-            ValidationStatus.REJECTED,
-            rejectReasonCode));
+    ContentValidation validation = getLatestPendingValidationOrThrow(content.getId());
+    validation.updateValidationMethod(ValidationMethod.STATIC_GUARDRAIL);
+    validation.markRejected(null, rejectReasonCode, null);
   }
 
   private void saveWhitelistResult(Content content) {
-    contentValidationRepository.save(
-        createValidation(content, ValidationMethod.WHITELIST, ValidationStatus.PASSED, null));
-  }
-
-  private ContentValidation createValidation(
-      Content content,
-      ValidationMethod method,
-      ValidationStatus status,
-      RejectReasonCode rejectReasonCode) {
-    return ContentValidation.builder()
-        .content(content)
-        .validationMethod(method)
-        .status(status)
-        .rejectReasonCode(rejectReasonCode)
-        .validatedAt(LocalDateTime.now())
-        .build();
+    ContentValidation validation = getLatestPendingValidationOrThrow(content.getId());
+    validation.updateValidationMethod(ValidationMethod.WHITELIST);
+    validation.markPassed(null);
   }
 
   @Transactional
   public void markAsFailed(Long contentId, ValidationMethod validationMethod, ErrorCode errorCode) {
     contentRepository
         .findById(contentId)
-        .ifPresentOrElse(
-            content -> {
-              ContentValidation validation =
-                  ContentValidation.builder()
-                      .content(content)
-                      .validationMethod(validationMethod)
-                      .build();
+        .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
 
-              validation.markFailed(errorCode);
+    ContentValidation validation =
+        contentValidationRepository
+            .findFirstByContentIdAndStatusOrderByCreatedAtDesc(contentId, ValidationStatus.PENDING)
+            .orElseThrow(
+                () ->
+                    new CustomException(
+                        ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND,
+                        "PENDING 상태의 검증 레코드를 찾을 수 없습니다. 중복 이벤트이거나 이미 처리됨. contentId=" + contentId));
 
-              contentValidationRepository.save(validation);
-            },
-            () -> log.warn("[GUARDRAIL] 검증 실패 기록 중 컨텐츠 조회 실패. contentId={}", contentId));
+    validation.updateValidationMethod(validationMethod);
+    validation.markFailed(errorCode);
   }
 
   public record GuardrailResult(

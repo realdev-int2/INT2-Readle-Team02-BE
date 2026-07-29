@@ -14,4 +14,7 @@ public interface ContentValidationRepository extends JpaRepository<ContentValida
   Optional<ContentValidation> findByIdWithContent(@Param("id") Long id);
 
   Optional<ContentValidation> findFirstByContentIdOrderByCreatedAtDesc(Long contentId);
+
+  Optional<ContentValidation> findFirstByContentIdAndStatusOrderByCreatedAtDesc(
+      Long contentId, com.realdev.readle.domain.content.entity.ValidationStatus status);
 }

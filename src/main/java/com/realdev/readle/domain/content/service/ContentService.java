@@ -60,6 +60,15 @@ public class ContentService {
     Content content = buildContent(request, member);
     Content saved = contentRepository.save(content);
 
+    // 프론트엔드 폴링 Race Condition을 막기 위해 최초 PENDING 이력을 트랜잭션 내에 동기적으로 즉시 저장
+    ContentValidation pendingValidation =
+        ContentValidation.builder()
+            .content(saved)
+            .status(ValidationStatus.PENDING)
+            .validationMethod(ValidationMethod.AI) // 추후 Async 워커에 의해 다른 메서드로 덮어쓰여질 수 있음
+            .build();
+    contentValidationRepository.save(pendingValidation);
+
     eventPublisher.publishEvent(
         new ContentCreatedEvent(saved.getId(), memberUuid, requestedAtNanos));
 

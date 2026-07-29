@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.realdev.readle.domain.content.dto.response.ClaudeValidationResponse;
 import com.realdev.readle.domain.content.entity.*;
 import com.realdev.readle.domain.content.exception.ContentErrorCode;
-import com.realdev.readle.domain.content.repository.ContentRepository;
 import com.realdev.readle.domain.content.repository.ContentValidationRepository;
 import com.realdev.readle.global.exception.CustomException;
 import java.math.BigDecimal;
@@ -21,22 +20,19 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AiValidationTxHelper {
 
-  private final ContentRepository contentRepository;
   private final ContentValidationRepository contentValidationRepository;
   private final ObjectMapper objectMapper;
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public Long createPendingValidation(Long contentId) {
-    Content content = contentRepository.getReferenceById(contentId);
-
-    ContentValidation pending =
-        ContentValidation.builder()
-            .content(content)
-            .validationMethod(ValidationMethod.AI)
-            .status(ValidationStatus.PENDING)
-            .build();
-
-    return contentValidationRepository.save(pending).getId();
+  @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+  public Long getLatestPendingValidationId(Long contentId) {
+    return contentValidationRepository
+        .findFirstByContentIdAndStatusOrderByCreatedAtDesc(contentId, ValidationStatus.PENDING)
+        .map(ContentValidation::getId)
+        .orElseThrow(
+            () ->
+                new CustomException(
+                    ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND,
+                    "존재하지 않는 검증 대상입니다. contentId: " + contentId));
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)

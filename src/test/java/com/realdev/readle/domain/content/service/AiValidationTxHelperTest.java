@@ -15,7 +15,7 @@ class AiValidationTxHelperTest {
   void serializeSnippets_exceeds3_truncatesTo3() {
     // given
     ObjectMapper objectMapper = new ObjectMapper();
-    AiValidationTxHelper helper = new AiValidationTxHelper(null, null, objectMapper);
+    AiValidationTxHelper helper = new AiValidationTxHelper(null, objectMapper);
 
     List<String> snippets = List.of("증거1", "증거2", "증거3", "증거4", "증거5");
 
