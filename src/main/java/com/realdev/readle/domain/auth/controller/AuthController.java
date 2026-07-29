@@ -6,10 +6,15 @@ import com.realdev.readle.domain.auth.dto.response.AccessTokenResponse;
 import com.realdev.readle.domain.auth.service.AuthService;
 import com.realdev.readle.domain.auth.service.RefreshTokenService;
 import com.realdev.readle.domain.member.entity.Member;
+import com.realdev.readle.global.config.OpenApiConfig;
 import com.realdev.readle.global.exception.CustomException;
 import com.realdev.readle.global.exception.GlobalErrorCode;
+import com.realdev.readle.global.exception.dto.response.ErrorResponse;
 import com.realdev.readle.global.security.SecurityProperties;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -116,7 +121,26 @@ public class AuthController {
     return new ApiResponse<>(new AccessTokenResponse(refreshTokenService.refresh(refreshToken)));
   }
 
-  @Operation(summary = "로그아웃", description = "현재 리프레시 토큰을 폐기하고 쿠키를 삭제합니다.")
+  @Operation(
+      summary = "로그아웃",
+      description = "현재 리프레시 토큰을 폐기하고 쿠키를 삭제합니다.",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME),
+      responses = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "401",
+            description = "인증 실패",
+            content =
+                @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = ErrorResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "403",
+            description = "CSRF 토큰 누락 또는 불일치",
+            content =
+                @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = ErrorResponse.class)))
+      })
   @PostMapping("/auth/logout")
   public ResponseEntity<Void> logout(
       @AuthenticationPrincipal String memberUuid,
@@ -139,7 +163,18 @@ public class AuthController {
     return new ApiResponse<>(new SessionResponse(authenticated, uuid));
   }
 
-  @Operation(summary = "현재 사용자 조회", description = "인증된 회원의 기본 정보를 조회합니다.")
+  @Operation(
+      summary = "현재 사용자 조회",
+      description = "인증된 회원의 기본 정보를 조회합니다.",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME),
+      responses =
+          @io.swagger.v3.oas.annotations.responses.ApiResponse(
+              responseCode = "401",
+              description = "인증 실패",
+              content =
+                  @Content(
+                      mediaType = "application/json",
+                      schema = @Schema(implementation = ErrorResponse.class))))
   @GetMapping("/users/me")
   public ApiResponse<CurrentUserResponse> currentUser(@AuthenticationPrincipal String memberUuid) {
     if (memberUuid == null) {

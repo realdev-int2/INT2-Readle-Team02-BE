@@ -7,7 +7,13 @@ import com.realdev.readle.domain.quiz.dto.response.QuizDetailResponse;
 import com.realdev.readle.domain.quiz.dto.response.QuizSubmitResponse;
 import com.realdev.readle.domain.quiz.entity.QuizAttempt;
 import com.realdev.readle.domain.quiz.service.QuizSolveService;
+import com.realdev.readle.global.config.OpenApiConfig;
+import com.realdev.readle.global.exception.dto.response.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +34,18 @@ public class QuizSolveController {
 
   private final QuizSolveService quizSolveService;
 
-  @Operation(summary = "퀴즈 풀이 시작", description = "새로운 퀴즈 풀이 시도(Attempt)를 생성합니다.")
+  @Operation(
+      summary = "퀴즈 풀이 시작",
+      description = "새로운 퀴즈 풀이 시도(Attempt)를 생성합니다.",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME),
+      responses =
+          @ApiResponse(
+              responseCode = "401",
+              description = "인증 실패",
+              content =
+                  @Content(
+                      mediaType = "application/json",
+                      schema = @Schema(implementation = ErrorResponse.class))))
   @PostMapping("/{quizSetId}/attempts")
   public ResponseEntity<QuizAttemptStartResponse> startQuiz(
       @PathVariable("quizSetId") Long quizSetId, @AuthenticationPrincipal String memberUuid) {
@@ -36,7 +53,18 @@ public class QuizSolveController {
     return ResponseEntity.ok(QuizAttemptStartResponse.of(attempt));
   }
 
-  @Operation(summary = "퀴즈 세트 상세 조회", description = "풀이 시도의 퀴즈 세트 문제 목록을 조회합니다.")
+  @Operation(
+      summary = "퀴즈 세트 상세 조회",
+      description = "풀이 시도의 퀴즈 세트 문제 목록을 조회합니다.",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME),
+      responses =
+          @ApiResponse(
+              responseCode = "401",
+              description = "인증 실패",
+              content =
+                  @Content(
+                      mediaType = "application/json",
+                      schema = @Schema(implementation = ErrorResponse.class))))
   @GetMapping("/attempts/{attemptId}")
   public ResponseEntity<QuizDetailResponse> getQuizAttemptDetail(
       @PathVariable("attemptId") Long attemptId, @AuthenticationPrincipal String memberUuid) {
@@ -44,7 +72,18 @@ public class QuizSolveController {
     return ResponseEntity.ok(response);
   }
 
-  @Operation(summary = "퀴즈 풀이 답안 제출 및 채점", description = "제출한 답안을 채점하고 결과를 저장합니다.")
+  @Operation(
+      summary = "퀴즈 풀이 답안 제출 및 채점",
+      description = "제출한 답안을 채점하고 결과를 저장합니다.",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME),
+      responses =
+          @ApiResponse(
+              responseCode = "401",
+              description = "인증 실패",
+              content =
+                  @Content(
+                      mediaType = "application/json",
+                      schema = @Schema(implementation = ErrorResponse.class))))
   @PostMapping("/attempts/{attemptId}/submit")
   public ResponseEntity<QuizSubmitResponse> submitAnswers(
       @PathVariable("attemptId") Long attemptId,
@@ -54,7 +93,18 @@ public class QuizSolveController {
     return ResponseEntity.ok(response);
   }
 
-  @Operation(summary = "퀴즈 풀이 결과 상세 조회", description = "완료된 퀴즈 풀이 시도의 최종 결과와 정오표 및 AI 피드백을 조회합니다.")
+  @Operation(
+      summary = "퀴즈 풀이 결과 상세 조회",
+      description = "완료된 퀴즈 풀이 시도의 최종 결과와 정오표 및 AI 피드백을 조회합니다.",
+      security = @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME),
+      responses =
+          @ApiResponse(
+              responseCode = "401",
+              description = "인증 실패",
+              content =
+                  @Content(
+                      mediaType = "application/json",
+                      schema = @Schema(implementation = ErrorResponse.class))))
   @GetMapping("/attempts/{attemptId}/result")
   public ResponseEntity<QuizAttemptResultResponse> getAttemptResult(
       @PathVariable("attemptId") Long attemptId, @AuthenticationPrincipal String memberUuid) {
