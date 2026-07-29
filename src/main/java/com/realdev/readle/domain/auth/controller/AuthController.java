@@ -14,6 +14,7 @@ import com.realdev.readle.global.security.SecurityProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -116,9 +117,10 @@ public class AuthController {
 
   @Operation(summary = "Access Token 갱신", description = "리프레시 토큰 쿠키로 액세스 토큰을 발급합니다.")
   @PostMapping("/auth/refresh")
-  public ApiResponse<AccessTokenResponse> refresh(
+  public AuthApiResponse<AccessTokenResponse> refresh(
       @CookieValue(value = RefreshTokenCookie.NAME, required = false) String refreshToken) {
-    return new ApiResponse<>(new AccessTokenResponse(refreshTokenService.refresh(refreshToken)));
+    return new AuthApiResponse<>(
+        new AccessTokenResponse(refreshTokenService.refresh(refreshToken)));
   }
 
   @Operation(
@@ -126,14 +128,14 @@ public class AuthController {
       description = "현재 리프레시 토큰을 폐기하고 쿠키를 삭제합니다.",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME),
       responses = {
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        @ApiResponse(
             responseCode = "401",
             description = "인증 실패",
             content =
                 @Content(
                     mediaType = "application/json",
                     schema = @Schema(implementation = ErrorResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        @ApiResponse(
             responseCode = "403",
             description = "CSRF 토큰 누락 또는 불일치",
             content =
@@ -153,14 +155,14 @@ public class AuthController {
 
   @Operation(summary = "세션 상태 조회", description = "현재 리프레시 토큰 쿠키의 인증 상태를 조회합니다.")
   @GetMapping("/auth/session")
-  public ApiResponse<SessionResponse> session(
+  public AuthApiResponse<SessionResponse> session(
       HttpServletRequest request,
       @CookieValue(value = RefreshTokenCookie.NAME, required = false) String refreshToken) {
     // 지연 생성된 CSRF 토큰을 해석해 XSRF-TOKEN cookie를 응답에 발급한다.
     ((CsrfToken) request.getAttribute(CsrfToken.class.getName())).getToken();
     String uuid = refreshTokenService.activeMemberUuid(refreshToken).orElse(null);
     boolean authenticated = uuid != null;
-    return new ApiResponse<>(new SessionResponse(authenticated, uuid));
+    return new AuthApiResponse<>(new SessionResponse(authenticated, uuid));
   }
 
   @Operation(
@@ -168,7 +170,7 @@ public class AuthController {
       description = "인증된 회원의 기본 정보를 조회합니다.",
       security = @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH_SCHEME),
       responses =
-          @io.swagger.v3.oas.annotations.responses.ApiResponse(
+          @ApiResponse(
               responseCode = "401",
               description = "인증 실패",
               content =
@@ -176,17 +178,18 @@ public class AuthController {
                       mediaType = "application/json",
                       schema = @Schema(implementation = ErrorResponse.class))))
   @GetMapping("/users/me")
-  public ApiResponse<CurrentUserResponse> currentUser(@AuthenticationPrincipal String memberUuid) {
+  public AuthApiResponse<CurrentUserResponse> currentUser(
+      @AuthenticationPrincipal String memberUuid) {
     if (memberUuid == null) {
       throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
     }
     Member member = authService.currentMember(memberUuid);
-    return new ApiResponse<>(
+    return new AuthApiResponse<>(
         new CurrentUserResponse(
             member.getUuid(), member.getNickname(), member.getProfileImageUrl()));
   }
 
-  public record ApiResponse<T>(T data) {}
+  public record AuthApiResponse<T>(T data) {}
 
   public record SessionResponse(boolean authenticated, String uuid) {}
 
