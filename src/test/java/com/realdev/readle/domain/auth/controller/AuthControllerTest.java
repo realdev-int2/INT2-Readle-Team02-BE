@@ -560,7 +560,7 @@ class AuthControllerTest {
         .thenReturn(Optional.of("member-uuid"));
     AuthController controller = new AuthController(authService, refreshTokenService, properties);
 
-    AuthController.ApiResponse<AuthController.SessionResponse> response =
+    AuthController.AuthApiResponse<AuthController.SessionResponse> response =
         controller.session(request, "refresh-token");
 
     assertThat(response.data().authenticated()).isTrue();
@@ -577,7 +577,7 @@ class AuthControllerTest {
     when(refreshTokenService.activeMemberUuid("refresh-token")).thenReturn(Optional.empty());
     AuthController controller = new AuthController(authService, refreshTokenService, properties);
 
-    AuthController.ApiResponse<AuthController.SessionResponse> response =
+    AuthController.AuthApiResponse<AuthController.SessionResponse> response =
         controller.session(request, "refresh-token");
 
     assertThat(response.data().authenticated()).isFalse();
