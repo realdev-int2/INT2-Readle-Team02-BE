@@ -67,7 +67,8 @@ class ContentGuardrailServiceTest {
     when(contentRepository.findById(10L)).thenReturn(Optional.of(content));
     ContentValidation existingValidation =
         ContentValidation.builder().content(content).validationMethod(ValidationMethod.AI).build();
-    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(10L))
+    when(contentValidationRepository.findFirstByContentIdAndStatusOrderByCreatedAtDesc(
+            10L, ValidationStatus.PENDING))
         .thenReturn(Optional.of(existingValidation));
 
     // when
@@ -80,6 +81,7 @@ class ContentGuardrailServiceTest {
         .isEqualTo(ValidationMethod.STATIC_GUARDRAIL);
     assertThat(existingValidation.getStatus()).isEqualTo(ValidationStatus.REJECTED);
     assertThat(existingValidation.getRejectReasonCode()).isEqualTo(RejectReasonCode.EMPTY_CONTENT);
+    verify(contentValidationRepository, never()).save(any());
   }
 
   // =========================================================================
@@ -109,7 +111,8 @@ class ContentGuardrailServiceTest {
     when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
     ContentValidation existingValidation =
         ContentValidation.builder().content(content).validationMethod(ValidationMethod.AI).build();
-    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
+    when(contentValidationRepository.findFirstByContentIdAndStatusOrderByCreatedAtDesc(
+            1L, ValidationStatus.PENDING))
         .thenReturn(Optional.of(existingValidation));
 
     // when
@@ -123,6 +126,7 @@ class ContentGuardrailServiceTest {
     assertThat(existingValidation.getStatus()).isEqualTo(ValidationStatus.REJECTED);
     assertThat(existingValidation.getRejectReasonCode())
         .isEqualTo(RejectReasonCode.CONTENT_TOO_SHORT);
+    verify(contentValidationRepository, never()).save(any());
   }
 
   @Test
@@ -154,7 +158,8 @@ class ContentGuardrailServiceTest {
     when(badWordFiltering.check(anyString())).thenReturn(true); // 비속어 감지 모킹
     ContentValidation existingValidation =
         ContentValidation.builder().content(content).validationMethod(ValidationMethod.AI).build();
-    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
+    when(contentValidationRepository.findFirstByContentIdAndStatusOrderByCreatedAtDesc(
+            1L, ValidationStatus.PENDING))
         .thenReturn(Optional.of(existingValidation));
 
     // when
@@ -167,6 +172,7 @@ class ContentGuardrailServiceTest {
         .isEqualTo(ValidationMethod.STATIC_GUARDRAIL);
     assertThat(existingValidation.getStatus()).isEqualTo(ValidationStatus.REJECTED);
     assertThat(existingValidation.getRejectReasonCode()).isEqualTo(RejectReasonCode.BAD_WORD);
+    verify(contentValidationRepository, never()).save(any());
   }
 
   // =========================================================================
@@ -183,7 +189,8 @@ class ContentGuardrailServiceTest {
     when(contentRepository.findById(1L)).thenReturn(Optional.of(content));
     ContentValidation existingValidation =
         ContentValidation.builder().content(content).validationMethod(ValidationMethod.AI).build();
-    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(1L))
+    when(contentValidationRepository.findFirstByContentIdAndStatusOrderByCreatedAtDesc(
+            1L, ValidationStatus.PENDING))
         .thenReturn(Optional.of(existingValidation));
 
     // when
@@ -197,6 +204,7 @@ class ContentGuardrailServiceTest {
     assertThat(existingValidation.getStatus()).isEqualTo(ValidationStatus.REJECTED);
     assertThat(existingValidation.getRejectReasonCode())
         .isEqualTo(RejectReasonCode.PROMPT_INJECTION_DETECTED);
+    verify(contentValidationRepository, never()).save(any());
   }
 
   @Test
@@ -210,7 +218,8 @@ class ContentGuardrailServiceTest {
     when(badWordFiltering.check(anyString())).thenReturn(false);
     ContentValidation existingValidation =
         ContentValidation.builder().content(content).validationMethod(ValidationMethod.AI).build();
-    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(6L))
+    when(contentValidationRepository.findFirstByContentIdAndStatusOrderByCreatedAtDesc(
+            6L, ValidationStatus.PENDING))
         .thenReturn(Optional.of(existingValidation));
 
     // when
@@ -221,6 +230,7 @@ class ContentGuardrailServiceTest {
 
     assertThat(existingValidation.getRejectReasonCode())
         .isEqualTo(RejectReasonCode.PROMPT_INJECTION_DETECTED);
+    verify(contentValidationRepository, never()).save(any());
   }
 
   // =========================================================================
@@ -239,7 +249,8 @@ class ContentGuardrailServiceTest {
     when(contentRepository.findById(2L)).thenReturn(Optional.of(content));
     ContentValidation existingValidation =
         ContentValidation.builder().content(content).validationMethod(ValidationMethod.AI).build();
-    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(2L))
+    when(contentValidationRepository.findFirstByContentIdAndStatusOrderByCreatedAtDesc(
+            2L, ValidationStatus.PENDING))
         .thenReturn(Optional.of(existingValidation));
 
     // when
@@ -250,6 +261,7 @@ class ContentGuardrailServiceTest {
 
     assertThat(existingValidation.getValidationMethod()).isEqualTo(ValidationMethod.WHITELIST);
     assertThat(existingValidation.getStatus()).isEqualTo(ValidationStatus.PASSED);
+    verify(contentValidationRepository, never()).save(any());
   }
 
   @Test
@@ -327,7 +339,8 @@ class ContentGuardrailServiceTest {
     when(contentRepository.findById(8L)).thenReturn(Optional.of(content));
     ContentValidation existingValidation =
         ContentValidation.builder().content(content).validationMethod(ValidationMethod.AI).build();
-    when(contentValidationRepository.findFirstByContentIdOrderByCreatedAtDesc(8L))
+    when(contentValidationRepository.findFirstByContentIdAndStatusOrderByCreatedAtDesc(
+            8L, ValidationStatus.PENDING))
         .thenReturn(Optional.of(existingValidation));
 
     // when
@@ -337,18 +350,20 @@ class ContentGuardrailServiceTest {
     assertThat(existingValidation.getStatus()).isEqualTo(ValidationStatus.FAILED);
     assertThat(existingValidation.getErrorCode()).isEqualTo(ErrorCode.AI_SERVICE_ERROR);
     assertThat(existingValidation.getValidationMethod()).isEqualTo(ValidationMethod.AI);
+    verify(contentValidationRepository, never()).save(any());
   }
 
   @Test
-  @DisplayName("markAsFailed 호출 시 contentId가 없으면 저장을 시도하지 않는다")
-  void markAsFailed_contentNotFound_doesNotSave() {
+  @DisplayName("markAsFailed 호출 시 contentId가 없으면 CustomException이 발생한다")
+  void markAsFailed_contentNotFound_throwsException() {
     // given
     when(contentRepository.findById(999L)).thenReturn(Optional.empty());
 
-    // when
-    guardrailService.markAsFailed(999L, ValidationMethod.STATIC_GUARDRAIL, ErrorCode.TIMEOUT);
-
-    // then
-    verify(contentValidationRepository, never()).save(any());
+    // when & then
+    assertThatThrownBy(
+            () ->
+                guardrailService.markAsFailed(
+                    999L, ValidationMethod.STATIC_GUARDRAIL, ErrorCode.TIMEOUT))
+        .isInstanceOf(CustomException.class);
   }
 }

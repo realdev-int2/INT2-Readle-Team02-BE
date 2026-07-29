@@ -43,20 +43,20 @@ public class ContentGuardrailService {
     return GuardrailResult.needsAi(content);
   }
 
-  private ContentValidation getLatestValidationOrThrow(Long contentId) {
+  private ContentValidation getLatestPendingValidationOrThrow(Long contentId) {
     return contentValidationRepository
-        .findFirstByContentIdOrderByCreatedAtDesc(contentId)
+        .findFirstByContentIdAndStatusOrderByCreatedAtDesc(contentId, ValidationStatus.PENDING)
         .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND));
   }
 
   private void saveStaticGuardrailResult(Content content, RejectReasonCode rejectReasonCode) {
-    ContentValidation validation = getLatestValidationOrThrow(content.getId());
+    ContentValidation validation = getLatestPendingValidationOrThrow(content.getId());
     validation.updateValidationMethod(ValidationMethod.STATIC_GUARDRAIL);
     validation.markRejected(null, rejectReasonCode, null);
   }
 
   private void saveWhitelistResult(Content content) {
-    ContentValidation validation = getLatestValidationOrThrow(content.getId());
+    ContentValidation validation = getLatestPendingValidationOrThrow(content.getId());
     validation.updateValidationMethod(ValidationMethod.WHITELIST);
     validation.markPassed(null);
   }
@@ -65,17 +65,19 @@ public class ContentGuardrailService {
   public void markAsFailed(Long contentId, ValidationMethod validationMethod, ErrorCode errorCode) {
     contentRepository
         .findById(contentId)
-        .ifPresentOrElse(
-            content -> {
-              contentValidationRepository
-                  .findFirstByContentIdOrderByCreatedAtDesc(contentId)
-                  .ifPresent(
-                      validation -> {
-                        validation.updateValidationMethod(validationMethod);
-                        validation.markFailed(errorCode);
-                      });
-            },
-            () -> log.warn("[GUARDRAIL] 검증 실패 기록 중 컨텐츠 조회 실패. contentId={}", contentId));
+        .orElseThrow(() -> new CustomException(ContentErrorCode.CONTENT_NOT_FOUND));
+
+    ContentValidation validation =
+        contentValidationRepository
+            .findFirstByContentIdAndStatusOrderByCreatedAtDesc(contentId, ValidationStatus.PENDING)
+            .orElseThrow(
+                () ->
+                    new CustomException(
+                        ContentErrorCode.CONTENT_VALIDATION_NOT_FOUND,
+                        "PENDING 상태의 검증 레코드를 찾을 수 없습니다. 중복 이벤트이거나 이미 처리됨. contentId=" + contentId));
+
+    validation.updateValidationMethod(validationMethod);
+    validation.markFailed(errorCode);
   }
 
   public record GuardrailResult(
