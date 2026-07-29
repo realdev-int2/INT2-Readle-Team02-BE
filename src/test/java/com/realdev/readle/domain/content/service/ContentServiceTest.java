@@ -3,6 +3,7 @@ package com.realdev.readle.domain.content.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -245,9 +247,23 @@ class ContentServiceTest {
 
     assertThat(response.contentId()).isEqualTo(42L);
     assertThat(response.validationStatus()).isEqualTo(ValidationStatus.PENDING);
+
+    InOrder inOrder = inOrder(contentValidationRepository, eventPublisher);
+
+    ArgumentCaptor<ContentValidation> validationCaptor =
+        ArgumentCaptor.forClass(ContentValidation.class);
+    inOrder.verify(contentValidationRepository).save(validationCaptor.capture());
+
     ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    inOrder.verify(eventPublisher).publishEvent(eventCaptor.capture());
+
+    ContentValidation capturedValidation = validationCaptor.getValue();
+    assertThat(capturedValidation.getContent()).isEqualTo(savedContent);
+    assertThat(capturedValidation.getStatus()).isEqualTo(ValidationStatus.PENDING);
+    assertThat(capturedValidation.getValidationMethod()).isEqualTo(ValidationMethod.AI);
+
     ContentCreatedEvent event = (ContentCreatedEvent) eventCaptor.getValue();
+
     assertThat(event.contentId()).isEqualTo(42L);
     assertThat(event.memberUuid()).isEqualTo(memberUuid);
     assertThat(event.requestedAtNanos()).isBetween(beforeRequest, afterRequest);
